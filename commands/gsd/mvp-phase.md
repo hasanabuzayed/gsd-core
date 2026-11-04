@@ -25,7 +25,7 @@ Guide the user through MVP-mode planning for a phase. The command:
 3. Writes `**Mode:** mvp` and the reformatted `**Goal:**` to the phase's ROADMAP.md section
 4. Delegates to `/gsd:plan-phase <N>` which auto-detects MVP mode via the roadmap field
 
-Phase 1 of the vertical-mvp-slice PRD shipped the planner-side machinery; this command is the user entry point for it.
+Phase 1 of the vertical-mvp-slice PRD shipped the planner-side machinery. This command is the user entry point for it.
 </objective>
 
 <execution_context>
@@ -39,7 +39,7 @@ Phase 1 of the vertical-mvp-slice PRD shipped the planner-side machinery; this c
 </runtime_note>
 
 <context>
-Phase number: the `<arguments>` block (required — integer or decimal like `2.1`)
+Phase number: the `<arguments>` block (need — integer or decimal like `2.1`)
 
 The phase must already exist in ROADMAP.md (created via `/gsd:new-project`, `/gsd:phase`, or `/gsd:phase --insert`). This command does not create new phases — it converts an existing phase to MVP mode.
 </context>
