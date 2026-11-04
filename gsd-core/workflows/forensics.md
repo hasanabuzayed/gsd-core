@@ -2,11 +2,12 @@
 
 # Forensics Workflow
 
-Post-mortem investigation for failed or stuck GSD workflows. Analyzes git history,
-`.planning/` artifacts, and file system state to detect anomalies and generate a
-structured diagnostic report.
+This workflow investigates failed or stuck GSD workflows after an incident.
+It examines git history, `.planning/` artifacts, and file system state.
+It detects anomalies and generates a structured diagnostic report.
 
-**Principle:** This is a read-only investigation. Do not modify project files.
+
+**Principle:** This is a read-only investigation. Do not change project files.
 Only write the forensic report.
 
 ---
@@ -22,14 +23,16 @@ PROBLEM="$GSD_ARGS"
 ```
 
 If `$ARGUMENTS` is empty, ask the user:
-> "What went wrong? Describe the issue — e.g., 'autonomous mode got stuck on phase 3',
-> 'execute-phase failed silently', 'costs seem unusually high'."
+> "What went wrong? Describe the problem. For example, 'autonomous mode got stuck on phase 3',
+> 'execute-phase failed silently', or 'costs seem unusually high'."
+
 
 Record the problem description for the report.
 
 ## Step 2: Gather Evidence
 
-Collect data from all available sources. Missing sources are fine — adapt to what exists.
+Collect data from all available sources. If a source is missing, use the sources that exist.
+
 
 ### 2a. Git History
 
@@ -50,12 +53,14 @@ git diff --stat
 
 Record:
 - Commit timeline (dates, messages, frequency)
-- Most-edited files (potential stuck-loop indicator)
-- Uncommitted changes (potential crash/interruption indicator)
+- Most-edited files (a possible signal of a stuck loop)
+- Uncommitted changes (a possible crash/interruption indicator)
+
 
 ### 2b. Planning State
 
-Read these files if they exist:
+If these files exist, read them:
+
 - `.planning/STATE.md` — current milestone, phase, progress, blockers, last session
 - `.planning/ROADMAP.md` — phase list with status
 - `.planning/config.json` — workflow configuration
@@ -73,19 +78,23 @@ For each phase directory in `.planning/phases/*/`:
 ls .planning/phases/*/
 ```
 
-For each phase, check which artifacts exist:
+For each phase, identify the artifacts that exist:
+
 - `{padded}-PLAN.md` or `{padded}-PLAN-*.md` (execution plans)
 - `{padded}-SUMMARY.md` (completion summary)
 - `{padded}-VERIFICATION.md` (quality verification)
 - `{padded}-CONTEXT.md` (design decisions)
 - `{padded}-RESEARCH.md` (pre-planning research)
 
-Track: which phases have complete artifact sets vs gaps.
+Record which phases have complete artifact sets and which have gaps.
+
 
 ### 2d. Session Reports
 
-Read `.planning/reports/SESSION_REPORT.md` if it exists — extract last session outcomes,
-work completed, token estimates.
+If `.planning/reports/SESSION_REPORT.md` exists, read it.
+If it exists, extract the last session outcomes, completed work, and token estimates.
+
+
 
 ### 2e. Git Worktree State
 
@@ -93,78 +102,91 @@ work completed, token estimates.
 git worktree list
 ```
 
-Check for orphaned worktrees (from crashed agents).
+Look for orphaned worktrees from crashed agents.
+
 
 ## Step 3: Detect Anomalies
 
-Evaluate the gathered evidence against these anomaly patterns:
+Compare the evidence with these anomaly patterns:
+
 
 ### Stuck Loop Detection
 
-**Signal:** Same file appears in 3+ consecutive commits within a short time window.
+**Signal:** The same file appears in 3+ consecutive commits in a short time.
+
 
 ```bash
 # Look for files committed repeatedly in sequence
 git log --name-only --format="---COMMIT---" -20
 ```
 
-Parse commit boundaries. If any file appears in 3+ consecutive commits, flag as:
-- **Confidence HIGH** if the commit messages are similar (e.g., "fix:", "fix:", "fix:" on same file)
-- **Confidence MEDIUM** if the file appears frequently but commit messages vary
+Parse the commit boundaries. If any file appears in 3+ consecutive commits, flag it as follows:
+- **Confidence HIGH** if the commit messages are similar (for example, "fix:", "fix:", "fix:" on the same file)
+- **Confidence MEDIUM** if the file appears frequently but the commit messages vary
+
 
 ### Missing Artifact Detection
 
-**Signal:** Phase appears complete (has commits, is past in roadmap) but lacks expected artifacts.
+**Signal:** A phase appears complete but does not have the expected artifacts. The phase has commits and is past in the roadmap.
+
 
 For each phase that should be complete:
-- PLAN.md missing → planning step was skipped
-- SUMMARY.md missing → phase was not properly closed
-- VERIFICATION.md missing → quality check was skipped
+- PLAN.md missing → the planning step was skipped
+- SUMMARY.md missing → the phase was not properly closed
+- VERIFICATION.md missing → the quality check was skipped
+
 
 ### Partial-plan Drift Detection
 
 **Signal:** commits exist but SUMMARY.md is missing for the current or recently
 active plan.
 
-Run the same comparison as the execute-phase safe-resume verifier: identify the
-active plan from STATE.md/phase artifacts, search git history for that plan id,
-then compare against the expected SUMMARY.md path. If production commits exist
-but SUMMARY.md is missing, flag a high-confidence partial-plan drift anomaly.
-This usually means an executor was interrupted after implementation commits but
-before atomic close-out.
+Run the same comparison as the execute-phase safe-resume verifier:
+- Identify the active plan from STATE.md/phase artifacts.
+- Search git history for that plan id.
+- Compare the results against the expected SUMMARY.md path.
+
+If production commits exist but SUMMARY.md is missing, flag a high-confidence partial-plan drift anomaly.
+This usually means that an executor was interrupted after implementation commits but before atomic close-out.
+
 
 ### Abandoned Work Detection
 
-**Signal:** Large gap between last commit and current time, with STATE.md showing mid-execution.
+**Signal:** A large gap separates the last commit from the current time. STATE.md shows that execution is in progress.
+
 
 ```bash
 # Time since last commit
 git log -1 --format="%ai"
 ```
 
-If STATE.md shows an active phase but the last commit is >2 hours old and there are
-uncommitted changes, flag as potential abandonment or crash.
+If STATE.md shows an active phase, the last commit is >2 hours old, and uncommitted changes exist, flag potential abandonment or crash.
+
 
 ### Crash/Interruption Detection
 
-**Signal:** Uncommitted changes + STATE.md shows mid-execution + orphaned worktrees.
+**Signal:** Uncommitted changes exist, STATE.md shows that execution is in progress, and orphaned worktrees exist.
+
 
 Combine:
-- `git status` shows modified/staged files
+- `git status` shows `modified/staged` files
 - STATE.md has an active execution entry
 - `git worktree list` shows worktrees beyond the main one
 
 ### Scope Drift Detection
 
-**Signal:** Recent commits touch files outside the current phase's expected scope.
+**Signal:** Recent commits change files outside the expected scope of the current phase.
 
-Read the current phase PLAN.md to determine expected file paths. Compare against
-files actually modified in recent commits. Flag any files that are clearly outside
-the phase's domain.
+Read the current phase PLAN.md to find the expected file paths.
+Compare them with the files that recent commits changed.
+Flag any files that are clearly outside the domain of the phase.
+
 
 ### Test Regression Detection
 
-**Signal:** Commit messages containing "fix test", "revert", or re-commits of test files.
+**Signal:** Commit messages contain "fix test" or "revert", or test files have repeat commits.
+
+
 
 ```bash
 git log --oneline -20 | grep -iE "fix test|revert|broken|regression|fail"
@@ -172,7 +194,8 @@ git log --oneline -20 | grep -iE "fix test|revert|broken|regression|fail"
 
 ## Step 4: Generate Report
 
-Create the forensics directory if needed:
+If needed, create the forensics directory:
+
 ```bash
 mkdir -p .planning/forensics
 ```
@@ -233,31 +256,36 @@ Based on the evidence above, the most likely explanation is:
 ```
 
 **Redaction rules:**
-- Replace absolute paths with relative paths (strip `$HOME` prefix)
+- Replace absolute paths with relative paths (remove the `$HOME` prefix)
 - Remove any API keys, tokens, or credentials found in git diff output
-- Truncate large diffs to first 50 lines
+- Truncate large diffs to the first 50 lines
+
 
 ## Step 5: Present Report
 
-Display the full forensic report inline.
+Show the full forensic report inline.
+
 
 ## Step 6: Offer Interactive Investigation
 
 > "Report saved to `.planning/forensics/report-{timestamp}.md`.
 >
-> I can dig deeper into any finding. Want me to:
+> I can examine any finding in more detail. Do you want me to:
 > - Trace a specific anomaly to its root cause?
 > - Read specific files referenced in the evidence?
-> - Check if a similar issue has been reported before?"
+> - Find out if someone reported a similar issue before?"
+
 
 If the user asks follow-up questions, answer from the evidence already gathered.
-Read additional files only if specifically needed.
+If more files are specifically needed, read them.
+
 
 ## Step 7: Offer Issue Creation
 
-If actionable anomalies were found (HIGH or MEDIUM confidence):
+If you found actionable anomalies (HIGH or MEDIUM confidence), ask:
 
-> "Want me to create a GitHub issue for this? I'll format the findings and redact paths."
+
+> "Want me to create a GitHub issue for this? I will format the findings and redact paths."
 
 If confirmed:
 ```bash
