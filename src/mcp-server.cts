@@ -121,34 +121,34 @@ export interface JsonRpcRequest {
 const TOOLS = [
   {
     name: 'gsd_invoke_command',
-    description: 'Invoke a GSD command via the command-routing hub (interface point 1).',
+    description: 'Run a GSD command through the command-routing hub.',
     inputSchema: {
       type: 'object',
       properties: {
-        family: { type: 'string', description: 'Command family (e.g. "query", "state", "phase").' },
-        subcommand: { type: 'string', description: 'Subcommand name, if the command takes one. Omit or leave empty for family-only commands.' },
-        args: { type: 'array', items: {}, description: 'Positional args.' },
+        family: { type: 'string', description: 'Command family name (such as query, state, or phase).' },
+        subcommand: { type: 'string', description: 'Subcommand name. Omit when the command has no subcommand.' },
+        args: { type: 'array', items: {}, description: 'Positional arguments.' },
       },
       required: ['family'],
     },
   },
   {
     name: 'gsd_read_state',
-    description: 'Read a .planning state file (interface point 5).',
+    description: 'Read a state file from .planning/.',
     inputSchema: {
       type: 'object',
-      properties: { path: { type: 'string', description: 'Absolute path under .planning/.' } },
+      properties: { path: { type: 'string', description: 'Path of the file under .planning/.' } },
       required: ['path'],
     },
   },
   {
     name: 'gsd_write_state',
-    description: 'Write a .planning state file (interface point 5).',
+    description: 'Write content to a state file under .planning/.',
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string', description: 'Absolute path under .planning/.' },
-        content: { type: 'string', description: 'File content.' },
+        path: { type: 'string', description: 'Path of the file under .planning/.' },
+        content: { type: 'string', description: 'Content to write into the file.' },
       },
       required: ['path', 'content'],
     },
