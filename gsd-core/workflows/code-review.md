@@ -1,16 +1,18 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Review source files changed during a phase for bugs, security issues, and code quality problems. Computes file scope (--files override > SUMMARY.md > phase evaluation scope), checks config gate, spawns gsd-code-reviewer agent, commits REVIEW.md, and presents results to user. When --fix is passed, delegates to code-review-fix.md after review to auto-apply findings via gsd-code-fixer.
+Review source files changed during a phase for bugs, security issues, and code quality problems. Compute file scope with this precedence: --files override > SUMMARY.md > phase evaluation scope. Check the config gate. Spawn the gsd-code-reviewer agent. Commit REVIEW.md. Show the results to the user.
+
+If the user passes --fix, delegate to code-review-fix.md after the review. That workflow uses gsd-code-fixer to apply findings automatically.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
-- gsd-code-reviewer: Reviews source files for bugs and quality issues
-- gsd-code-fixer: Applies fixes to code review findings (used via dispatch_fix → code-review-fix.md when --fix is passed)
+- gsd-code-reviewer: Reviews source files for bugs and quality issues.
+- gsd-code-fixer: Applies fixes to code review findings. If the user passes --fix, dispatch_fix → code-review-fix.md uses this agent.
 </available_agent_types>
 
 <process>
@@ -90,9 +92,9 @@ If `phase_found` is false, report error and exit:
 Error: Phase ${PHASE_ARG} not found. Run /gsd:progress to see available phases.
 ```
 
-This runs BEFORE config gate check so user errors are surfaced immediately regardless of config state.
+This runs before the config gate check. It shows user errors immediately, regardless of config state.
 
-If FILES_OVERRIDE is set, split by comma into array:
+If FILES_OVERRIDE is set, split it by comma into an array:
 ```bash
 if [ -n "$FILES_OVERRIDE" ]; then
   IFS=',' read -ra FILES_ARRAY <<< "$FILES_OVERRIDE"
@@ -101,7 +103,7 @@ fi
 </step>
 
 <step name="check_config_gate">
-Check if code review is active via `workflow.code_review` (the capability's on/off toggle — independent of `workflow.code_review_point`, the loop-point selector; a manual invocation must work regardless of which automatic point is currently configured):
+Use `workflow.code_review` to make sure that code review is active. This capability's on/off toggle is independent of `workflow.code_review_point`, the loop-point selector. A manual invocation must work regardless of the configured automatic point:
 
 ```bash
 CODE_REVIEW_ENABLED=$(gsd_run query config-get workflow.code_review --raw 2>/dev/null || echo "true")
@@ -113,14 +115,13 @@ Code review skipped (code-review capability inactive)
 ```
 Exit workflow.
 
-Default is active (`workflow.code_review` schema default is `true`) — only skip when explicitly disabled. This check runs AFTER phase validation so invalid phase errors are shown first.
+The default is active. The `workflow.code_review` schema default is `true`. Only skip when explicitly disabled. This check runs after phase validation, so it shows invalid phase errors first.
 </step>
 
 <step name="compute_file_scope">
-Three-tier scoping with explicit precedence:
+Use three tiers for file scope, with explicit precedence.
 
-Compute the phase's last review commit, if any. This narrows Tiers 2 and 3 below to what
-changed since that review (wave-scoped reviews under `workflow.code_review_point=execute:wave:post`):
+If the phase has a review commit, compute its last review commit. This narrows Tiers 2 and 3 to changes after that review. This applies to wave-scoped reviews under `workflow.code_review_point=execute:wave:post`:
 
 ```bash
 # #3661: incremental scoping — when this phase has a prior review, later tiers
@@ -172,7 +173,7 @@ if [ -n "$FILES_OVERRIDE" ]; then
 fi
 ```
 
-Skip SUMMARY/git scoping entirely when --files is provided.
+If the user provides --files, skip SUMMARY/git scoping entirely.
 
 **Tier 2 — SUMMARY.md extraction (primary per D-01):**
 
@@ -261,24 +262,18 @@ fi
 
 **Tier 3 — Phase evaluation scope (per D-02, #5164) and SUMMARY/scope cross-check (per #2666):**
 
-If no SUMMARY.md files found OR no files extracted from them, fall back to the phase's evaluation scope.
-Additionally, whenever the resolver returns a scope, cross-check the SUMMARY scope against it and warn
-about (then add) any in-scope files the SUMMARY extractor did not surface — so a partial SUMMARY result
-can no longer silently mask the rest of the phase.
+If there are no SUMMARY.md files or they yield no files, use the phase's evaluation scope. If the resolver returns a scope, compare the SUMMARY scope with it. Warn about in-scope files that the SUMMARY extractor did not find. Then add those files. This prevents a partial SUMMARY result from hiding the rest of the phase.
 
 The scope is computed by the ONE resolver, `check evaluation-scope` (ADR-5057 §4, #5164) — this step
-derives no commit range of its own. The resolver returns the UNION of the phase's own commits' file
-sets (the `## Task Commits` rows of the phase's SUMMARYs), restricted to commits reachable from `HEAD`
-(a commit that lives only on another branch is named, never counted), with planning artifacts and
-lockfiles excluded. A range (`base..HEAD`) is deliberately not used: it keeps every interleaved
-non-phase commit in its window (#3926, #4563). The resolver also reports, by name rather than by
-count, what the union dropped: `outsideUnion` (changed in the phase window by other commits) and
-`unreachable` (task commits not on this branch). When the union is empty — a phase with no SUMMARY,
-no task rows, or only planning paths — the resolver widens to the phase-directory range and says so
-(`status: degraded`, `reason`); an unreadable phase or repository is `unresolvable`, never an empty
-scope that reports success. Its `rangeBase` (the parent of the commit that first added the phase
-directory, or `LAST_REVIEW_COMMIT` when a prior review exists — #3661) is `DIFF_BASE`, kept only for
-the reviewer lanes that need an anchor sha.
+derives no commit range of its own.
+
+The resolver returns the UNION of the file sets of the phase's own commits. These commits appear in the `## Task Commits` rows of the phase's SUMMARYs. The union includes only commits reachable from `HEAD`. A commit that lives only on another branch is named, never counted. Planning artifacts and lockfiles are excluded.
+
+A range (`base..HEAD`) is deliberately not used. It keeps every interleaved non-phase commit in its window (#3926, #4563). The resolver also reports what the union dropped, by name rather than by count. These are `outsideUnion` (changed in the phase window by other commits) and `unreachable` (task commits not on this branch).
+
+When the union is empty — a phase with no SUMMARY, no task rows, or only planning paths — the resolver widens the scope. It uses the phase-directory range and says so (`status: degraded`, `reason`). An unreadable phase or repository is `unresolvable`, never an empty scope that reports success.
+
+Its `rangeBase` is `DIFF_BASE`, kept only for the reviewer lanes that need an anchor sha. This is the parent of the commit that first added the phase directory. When a before review exists, it is `LAST_REVIEW_COMMIT` instead (#3661).
 ```bash
 # Exit 69 (UNAVAILABLE) is the resolver saying "could not look" (`status: unresolvable`): its JSON
 # carries the reason and is kept. Any other non-zero status means the command did not run: no JSON.
@@ -360,7 +355,7 @@ fi
 
 **Post-processing (all tiers):**
 
-1. **Expand tilde paths:** SUMMARY.md `key-files` entries may record a `~/...`-prefixed path. Bash only tilde-expands a literal `~` written in source text, never one arriving as the value of an already-expanded variable, so every later `[ -f "$file" ]` check must see a real, expanded path or it misclassifies the file as deleted.
+1. **Expand tilde paths:** SUMMARY.md `key-files` entries may record a `~/...`-prefixed path. Bash only tilde-expands a literal `~` written in source text. It never expands one from an already-expanded variable. Every later `[ -f "$file" ]` check must see a real, expanded path. Otherwise, it misclassifies the file as deleted.
 ```bash
 EXPANDED_FILES=()
 for file in "${REVIEW_FILES[@]}"; do
@@ -390,7 +385,7 @@ done
 REVIEW_FILES=("${FILTERED_FILES[@]}")
 ```
 
-3. **Filter deleted files:** Remove paths that don't exist on disk, and name each one (#5164) — a count hides whether the dropped file held the phase's entire deliverable
+3. **Filter deleted files:** Remove paths that do not exist on disk, and name each one (#5164). A count hides whether the dropped file held the phase's entire deliverable.
 ```bash
 EXISTING_FILES=()
 DELETED_FILES=()
@@ -442,7 +437,7 @@ fi
 </step>
 
 <step name="resolve_depth">
-Determine review depth via the path-scoped depth resolver (`code-review-depth.cjs`). This step runs after `compute_file_scope` because rule matching needs the final `REVIEW_FILES` set.
+Use the path-scoped depth resolver (`code-review-depth.cjs`) to determine review depth. This step runs after `compute_file_scope` because rule matching needs the final `REVIEW_FILES` set.
 
 ```bash
 CONFIG_DEPTH=$(gsd_run query config-get workflow.code_review_depth --raw 2>/dev/null || echo "")
@@ -483,7 +478,9 @@ DEPTH_JSON=$(echo "$DEPTH_PAYLOAD" | node -e "
 DEPTH_OK=$(echo "$DEPTH_JSON" | node -e "process.stdout.write(String(JSON.parse(require('fs').readFileSync('/dev/stdin','utf-8')).ok))")
 ```
 
-The guard and the extraction it protects must run as one shell control-flow decision — a prose sentence between two fenced blocks is not a guard, since fenced blocks do not share shell state. Anything other than the literal string `true` (including an empty `DEPTH_OK`, which is what a crashed or missing resolver produces) is treated as failure, and the failure branch exits before any extraction can run:
+The guard and the extraction it protects must run as one shell control-flow decision. A prose sentence between two fenced blocks is not a guard. Fenced blocks do not share shell state.
+
+Treat any value other than the literal string `true` as failure. This includes an empty `DEPTH_OK`, which a crashed or missing resolver produces. The failure branch exits before any extraction runs:
 
 ```bash
 if [ "$DEPTH_OK" = "true" ]; then
@@ -564,7 +561,9 @@ else
   exit 1
 fi
 ```
-This `if`/`else`/`fi` is the entire guard: unless `DEPTH_OK` is the literal string `true`, the `else` branch prints the errors and `exit 1`s out of the fenced block, so the `DEPTH_FIELDS`/`REVIEW_DEPTH` extraction is never reached and `REVIEW_DEPTH` is never set. Exit workflow. Do NOT spawn agent or create REVIEW.md.
+This `if`/`else`/`fi` is the entire guard. Unless `DEPTH_OK` is the literal string `true`, the `else` branch prints the errors. It then uses `exit 1` to exit the fenced block. The `DEPTH_FIELDS`/`REVIEW_DEPTH` extraction never runs, and the workflow never sets `REVIEW_DEPTH`.
+
+Exit the workflow. Do NOT spawn the agent or create REVIEW.md.
 </step>
 
 <step name="check_empty_scope">
@@ -582,18 +581,18 @@ elif [ "$FIX_FLAG" != "true" ] || [ ! -f "${REVIEW_PATH}" ]; then
 fi
 ```
 
-**`--fix` recovery:** proceed DIRECTLY to `dispatch-fix`, skipping `structural_pre_pass`, `dispatch_reviewer_lanes`, `spawn_reviewer`, `commit_review` — no fresh review, nothing to commit; `code-review-fix.md` resolves the existing REVIEW.md and owns the fix logic. The reviewer agent is not dispatched here.
+**`--fix` recovery:** proceed DIRECTLY to `dispatch-fix`, skipping `structural_pre_pass`, `dispatch_reviewer_lanes`, `spawn_reviewer`, `commit_review` — no fresh review, nothing to commit. `code-review-fix.md` resolves the existing REVIEW.md and owns the fix logic. The reviewer agent is not dispatched here.
 </step>
 
 <step name="structural_pre_pass">
 Optional structural cross-module pass powered by fallow.
 
-Parse `fallow_enabled`, `fallow_scope`, `fallow_profile`, `fallow_mcp`, `fallow_max_crap` from the init JSON as `FALLOW_ENABLED`, `FALLOW_SCOPE`, `FALLOW_PROFILE`, `FALLOW_MCP`, `FALLOW_MAX_CRAP`. These are resolved once by `init.code-review` at init time — consuming the pre-resolved values here avoids gating this section's own inclusion on a fact its own body would compute (see `state:fallow-enabled` in docs/reference/workflow-fragments.md).
+Parse `fallow_enabled`, `fallow_scope`, `fallow_profile`, `fallow_mcp`, `fallow_max_crap` from the init JSON as `FALLOW_ENABLED`, `FALLOW_SCOPE`, `FALLOW_PROFILE`, `FALLOW_MCP`, `FALLOW_MAX_CRAP`. `init.code-review` resolves these once at init time. Use the pre-resolved values here to avoid gating this section's inclusion on a fact its own body would compute. See `state:fallow-enabled` in docs/reference/workflow-fragments.md.
 
 Defaults are fail-closed and opt-in:
 - `enabled=false` (skip entirely)
 - `scope=phase`
-- `profile=standard` (maps to `--max-crap 30`; minimal=50, standard=30, strict=15 — fallow has no native profile concept)
+- `profile=standard` (maps to `--max-crap 30`. Minimal=50, standard=30, strict=15 — fallow has no native profile concept)
 - `mcp=false`
 
 <!-- gsd:section id="structural-pre-pass" when="state:fallow-enabled" -->
@@ -607,23 +606,19 @@ FALLOW_JSON_PATH=""
 </step>
 
 <step name="dispatch_reviewer_lanes">
-Optional external source-reviewer lanes (#4209, DISP-01..05). A canonical reviewer-lane flag
-(e.g. `--codex`, `--agy`) requests that lane independently review the SAME already-resolved
-scope alongside the internal `gsd-code-reviewer` agent below. **No canonical flag present is
-the default and by far the common case:** this step is then inert — and the internal reviewer
-dispatch in `spawn_reviewer` stays unchanged from before #4209 (COMP-01).
+Optional external source-reviewer lanes (#4209, DISP-01..05). A canonical reviewer-lane flag (e.g. `--codex`, `--agy`) requests an independent review by that lane. The lane reviews the SAME already-resolved scope alongside the internal `gsd-code-reviewer` agent below. **No canonical flag present is
+the default and by far the common case:** this step is then inert. The internal reviewer
+dispatch in `spawn_reviewer` also stays unchanged from before #4209 (COMP-01).
 
 This step is itself opt-in at the capability layer (see `gsd-core/references/loop-hook-dispatch.md`
 for the `supportsReviewerLanes` trait), not just the CLI-flag layer. The trait check itself lives
 inside `review-lane dispatch-step` (`--cap-id`/`--point`, below) — NOT here.
 
 Resolve the point, the roster, then dispatch (repository root, canonical file paths, review depth,
-and base SHA — SAFE-01; canonical file paths travel on stdin, never argv, per
-`compute_file_scope`). This is ONE fence, not several: `CODE_REVIEW_POINT`,
-`EXPLICIT_JOINED`/`EXPLICIT_REVIEWER_SLUGS` are bash-local state that does not survive a markdown
-fence boundary (a prose sentence between two fences is not a guard — see the depth-resolution
-guard's own rule earlier in this file), so every value this step computes and everything that
-reads it must run as a single shell control-flow decision, start to finish:
+and base SHA — SAFE-01. Canonical file paths travel on stdin, never argv, per
+`compute_file_scope`). This is ONE fence, not several. `CODE_REVIEW_POINT` and `EXPLICIT_JOINED`/`EXPLICIT_REVIEWER_SLUGS` are bash-local state. They do not survive a markdown fence boundary.
+
+A prose sentence between two fences is not a guard. See the depth-resolution guard's own rule earlier in this file. Every value this step computes and everything that reads it must run as a single shell control-flow decision, start to finish:
 ```bash
 CODE_REVIEW_POINT_STDERR=$(mktemp)
 CODE_REVIEW_POINT=$(gsd_run query config-get workflow.code_review_point --raw 2>"$CODE_REVIEW_POINT_STDERR") || {
@@ -733,7 +728,7 @@ fi
 ```
 
 Step complete when `EXTERNAL_EVIDENCE_BLOCK` is set — to the evidence block, or to the empty
-string. Both are success; there is no other outcome.
+string. Both are success. There is no other outcome.
 </step>
 
 <step name="spawn_reviewer">
@@ -743,12 +738,9 @@ REVIEW_PATH="${PHASE_DIR}/${PADDED_PHASE}-REVIEW.md"
 ```
 
 `DIFF_BASE` for agent context (in case the agent needs it) is already set by `compute_file_scope`
-above — reuse it verbatim rather than re-deriving it here. #3191/#3995/#3661: this MUST be the
-SAME value the Tier-3 file-scope step and (#4209) the external reviewer-lane dispatch both use —
-the reviewer agent consumes `diff_base` exactly when `files:` is empty, i.e. the same fail-closed
-scenario Tier 3 protects, so a second, divergent recomputation here would silently re-arm the
-mis-scoping one tier down AND make the external lane review a different diff than the internal
-reviewer (a previously-latent bug #4209 made observable — see B3 in `.wolf/buglog.json`).
+above — reuse it verbatim rather than re-deriving it here. #3191/#3995/#3661: this MUST be the SAME value the Tier-3 file-scope step and (#4209) the external reviewer-lane dispatch both use. The reviewer agent consumes `diff_base` exactly when `files:` is empty. This is the same fail-closed scenario Tier 3 protects.
+
+A second, divergent recomputation here would silently re-arm the mis-scoping one tier down. It would also make the external lane review a different diff than the internal reviewer. This was a previously-latent bug that #4209 made observable. See B3 in `.wolf/buglog.json`.
 
 Build required_reading block for agent:
 ```bash
@@ -822,7 +814,7 @@ Print: `◆ Spawning code reviewer... (runs in a subagent — no output until it
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
@@ -869,7 +861,7 @@ Do NOT proceed to commit_review step. Do NOT create a partial or empty REVIEW.md
 </step>
 
 <step name="commit_review">
-After agent completes successfully, verify REVIEW.md was created and has valid structure:
+After the agent completes successfully, make sure that REVIEW.md exists and has a valid structure:
 
 ```bash
 # #4209 R5: remove the reviewer-lane run dir now that the agent has read every evidence path it
@@ -908,7 +900,7 @@ fi
 </step>
 
 <!-- gsd:section id="dispatch-fix" when="flag:--fix" -->
-If `section_manifest` is `null` or `"dispatch-fix"` is in its `included` list: read and execute `gsd-core/workflows/code-review/steps/dispatch-fix.md`. Otherwise skip — do not read the file; proceed to `present_results`.
+If `section_manifest` is `null` or `"dispatch-fix"` is in its `included` list: read and execute `gsd-core/workflows/code-review/steps/dispatch-fix.md`. Otherwise skip — do not read the file. Proceed to `present_results`.
 <!-- /gsd:section -->
 
 <step name="present_results">
@@ -984,7 +976,7 @@ echo "Top issues:"
 grep -A 3 "^### CR-\|^### BL-\|^### WR-" "${REVIEW_PATH}" | head -n 12
 ```
 
-**Note on tests:** Automated tests for this command and workflow are planned for Phase 4 (Pipeline Integration & Testing, requirement INFR-03). Phase 2 focuses on correct implementation; Phase 4 adds regression coverage across platforms.
+**Note on tests:** Automated tests for this command and workflow are planned for Phase 4 (Pipeline Integration & Testing, requirement INFR-03). Phase 2 focuses on correct implementation. Phase 4 adds regression coverage across platforms.
 
 ---
 </step>
@@ -992,20 +984,21 @@ grep -A 3 "^### CR-\|^### BL-\|^### WR-" "${REVIEW_PATH}" | head -n 12
 </process>
 
 <platform_notes>
-**Windows:** This workflow uses bash features (arrays, process substitution). On Windows, it requires
+**Windows:** This workflow uses bash features (arrays, process substitution). On Windows, it need
 Git Bash or WSL. Native PowerShell is not supported. The CI matrix (Ubuntu/macOS/Windows)
 runs under Git Bash on Windows runners, which provides bash compatibility.
-The `--files` containment check compares the repository root with each resolved path, and Git Bash
-reports them in different forms (`git rev-parse` returns `C:/Users/...`, GNU `realpath` returns
-`/c/Users/...`), so both are normalized with `cygpath -m` (shipped with Git Bash) before the
-comparison. Relative paths and absolute paths in either form are accepted when they are inside the
+
+The `--files` containment check compares the repository root with each resolved path. Git Bash reports them in different forms. `git rev-parse` returns `C:/Users/...`, and GNU `realpath` returns `/c/Users/...`. Before the comparison, `cygpath -m` normalizes both. Git Bash ships with `cygpath -m`.
+
+Relative paths and absolute paths in either form are accepted when they are inside the
 repository (#5519).
 
 **macOS:** macOS ships with bash 3.2 (GPL licensing). This workflow does NOT use `mapfile` (bash 4+
 only) — all array construction uses portable `while IFS= read -r` loops compatible with bash 3.2.
-The `--files` path validation uses `realpath -m` which requires GNU coreutils (install via
-`brew install coreutils`). Without coreutils, the path guard falls back to fail-closed behavior
-(rejects paths it cannot verify), so security is maintained but valid relative paths may be rejected.
+The `--files` path validation uses `realpath -m` which need GNU coreutils (install via
+`brew install coreutils`).
+
+Without coreutils, the path guard falls back to fail-closed behavior. It rejects paths it cannot verify. This maintains security, but valid relative paths may be rejected.
 If `--files` validation fails unexpectedly on macOS, install coreutils or use absolute paths.
 </platform_notes>
 

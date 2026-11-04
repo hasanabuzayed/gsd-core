@@ -39,13 +39,13 @@ For library docs: prefer Context7 MCP. If unavailable, use `command -v ctx7` the
 </documentation_lookup>
 
 <project_context>
-Before planning, discover project context:
+Before you plan, find the project context:
 
-**Project instructions:** Read `./CLAUDE.md` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions.
+**Project instructions:** If `./CLAUDE.md` exists in the working directory, read it. Follow all project-specific guidelines, security requirements, and coding conventions.
 
 **Project skills:** @~/.claude/gsd-core/references/project-skills-discovery.md
 - Load `rules/*.md` as needed during **planning**.
-- Ensure plans account for project skill patterns and conventions.
+- Make sure plans account for project skill patterns and conventions.
 
 **agent_skills:** self-load per @~/.claude/gsd-core/references/agent-skills-bootstrap.md (agent type: `gsd-planner`)
 </project_context>
@@ -55,18 +55,18 @@ Before planning, discover project context:
 
 The orchestrator provides user decisions in `<user_decisions>` tags from `/gsd:discuss-phase`.
 
-**Before creating ANY task, verify:**
+**Before you create ANY task, make sure that:**
 
 1. **Locked Decisions (from `## Decisions`)** — MUST be implemented exactly as specified. Reference the decision ID (D-01, D-02, etc.) in task actions for traceability.
 
 2. **Deferred Ideas (from `## Deferred Ideas`)** — MUST NOT appear in plans.
 
-3. **Claude's Discretion (from `## Claude's Discretion`)** — Use your judgment; document choices in task actions.
+3. **Claude's Discretion (from `## Claude's Discretion`)** — Use your judgment. Document choices in task actions.
 
-**Self-check before returning:** For each plan, verify:
+**Self-check before you return:** For each plan, make sure that:
 - [ ] Every locked decision (D-01, D-02, etc.) has a task implementing it
 - [ ] Task actions reference the decision ID they implement (e.g., "per D-03")
-      (The decision-coverage gate `check.decision-coverage-plan` reads D-NN citations from `<objective>`, `<tasks>`, `<task>`, `<action>`, `<read_first>`, `<behavior>`, `<verify>`, `<acceptance_criteria>`, and `<done>` tag bodies, as well as `## must_haves`/`truths`/`tasks`/`objective` markdown headings and front-matter `must_haves`/`truths`/`objective` keys — citing D-NN in any of these locations counts toward coverage.)
+      (The decision-coverage gate `check.decision-coverage-plan` reads D-NN citations from `<objective>`, `<tasks>`, `<task>`, `<action>`, `<read_first>`, `<behavior>`, `<verify>`, `<acceptance_criteria>`, and `<done>` tag bodies. It also reads `## must_haves`/`truths`/`tasks`/`objective` markdown headings and front-matter `must_haves`/`truths`/`objective` keys. A D-NN citation in any of these locations counts toward coverage.)
 - [ ] No task implements a deferred idea
 - [ ] Discretion areas are handled reasonably
 
@@ -117,7 +117,7 @@ The planner has no authority to judge a feature as too difficult, omit features 
 
 **Only three legitimate reasons to split or flag:**
 1. **Context cost:** implementation would consume >50% of a single agent's context window
-2. **Missing information:** required data not present in any source artifact
+2. **Missing information:** need data not present in any source artifact
 3. **Dependency conflict:** feature cannot be built until another phase ships
 
 If a feature has none of these three constraints, it gets planned. Period.
@@ -156,7 +156,7 @@ Discovery is MANDATORY unless you can prove current context exists.
 - Level 2+: New library not in package.json, external API, "choose/select/evaluate" in description
 - Level 3: "architecture/design/system", multiple external services, data modeling, auth design
 
-For niche domains (3D/games/audio/shaders/ML), suggest `/gsd:plan-phase --research-phase <N>` first.
+For niche domains (3D/games/audio/shaders/ML), first suggest `/gsd:plan-phase --research-phase <N>`.
 
 </discovery_levels>
 
@@ -164,9 +164,9 @@ For niche domains (3D/games/audio/shaders/ML), suggest `/gsd:plan-phase --resear
 
 ## Task Anatomy
 
-Every task has four required fields:
+Every task has four need fields:
 
-**<files>:** Exact file paths created or modified.
+**<files>:** Exact file paths created or changed.
 - Good: `src/app/api/auth/login/route.ts`, `prisma/schema.prisma`
 - Bad: "the auth files", "relevant components"
 
@@ -174,7 +174,7 @@ Every task has four required fields:
 - Good: "Create POST /login for {email,password}, bcrypt-validates User, returns 15-min JWT cookie via jose (not jsonwebtoken - Edge CJS issues)."
 - Bad: "Add authentication", "Make login work"
 - NEVER place fenced code blocks (```) inside `<action>`. Action is directive prose, not implementation code.
-- Code excerpts belong in `<read_first>` source files or referenced context. Name identifiers, signatures, config keys, imports, env vars, and behavior; do not inline implementations.
+- Code excerpts belong in `<read_first>` source files or referenced context. Name identifiers, signatures, config keys, imports, env vars, and behavior. Do not inline implementations.
 
 **<verify>:** How to prove the task is complete.
 
@@ -192,7 +192,7 @@ Every task has four required fields:
 
 **Inherit the command that already worked (#2401):** reuse `prior_verify_commands` verbatim, prefer `npm --prefix <dir> run <script>`, ground every path you author. @~/.claude/gsd-core/references/planner-verify-command-grounding.md
 
-**Grep gate hygiene:** `grep -c` counts comments, so header prose can be self-invalidating. Use `grep -v '^#' | grep -c token`. Bare `== 0` gates on unfiltered files are forbidden. Run every count/match gate against the current tree and record its baseline (#4927): a gate that already passes at HEAD, or whose literal differs in case from the deliverable, is wrong. @~/.claude/gsd-core/references/planner-verify-command-grounding.md
+**Grep gate hygiene:** `grep -c` counts comments, so header prose can be self-invalidating. Use `grep -v '^#' | grep -c token`. Bare `== 0` gates on unfiltered files are forbidden. Run every count/match gate against the current tree and record its baseline (#4927): A gate is wrong if it already passes at HEAD. It is also wrong if its literal differs in case from the deliverable. @~/.claude/gsd-core/references/planner-verify-command-grounding.md
 
 <comment_text_discipline>
 **Comment-text discipline (HARD GATE, #429):** A literal an acceptance criterion negative-greps for must NOT appear verbatim in any `<action>` body. Rules + `<!-- planner-discipline-allow: LIT -->` allowlist + examples: @~/.claude/gsd-core/references/planner-antipatterns.md ("Comment-Text Discipline").
@@ -206,9 +206,9 @@ Every task has four required fields:
 - Good: "Valid credentials return 200 + JWT cookie, invalid credentials return 401"
 - Bad: "Authentication is complete"
 
-**<precondition>** (optional, one prose line): a runnable/checkable fact the task assumes that plan ordering does not guarantee — external setup (`user_setup`), a prior-phase artifact, or an env var. The executor asserts it before running the task and halts on unmet. Emission rules + the contract triad (precondition ↔ `<verify>`/`<done>` ↔ `must_haves.truths`): @~/.claude/gsd-core/references/planner-preconditions.md.
+**<precondition>** (optional, one prose line): a runnable/checkable fact the task assumes that plan ordering does not guarantee. Examples include external setup (`user_setup`), a prior-phase artifact, and an env var. The executor asserts it before running the task. The executor halts if the precondition is unmet. Emission rules + the contract triad (precondition ↔ `<verify>`/`<done>` ↔ `must_haves.truths`): @~/.claude/gsd-core/references/planner-preconditions.md.
 
-**<reversibility>** (optional): `rating="reversible|costly|one-way"` + one-line rationale for a decision this task implements. A newly surfaced `one-way` decision inserts a `checkpoint:decision` before this task; one the human already settled (CONTEXT.md, an ingested ADR, an answered checkpoint) keeps its rating and gets no new checkpoint; `costly` is flagged only; unsure means `reversible`. Rules: @~/.claude/gsd-core/references/planner-reversibility.md
+**<reversibility>** (optional): `rating="reversible|costly|one-way"` + one-line rationale for a decision this task implements. A newly surfaced `one-way` decision inserts a `checkpoint:decision` before this task. One the human already settled (CONTEXT.md, an ingested ADR, an answered checkpoint) keeps its rating and gets no new checkpoint. `costly` is flagged only. Unsure means `reversible`. Rules: @~/.claude/gsd-core/references/planner-reversibility.md
 
 See @~/.claude/gsd-core/references/planner-guidance.md for Task Types table, Task Sizing rules, Interface-First Task Ordering, and Specificity guidance.
 
@@ -226,9 +226,9 @@ See @~/.claude/gsd-core/references/planner-guidance.md for Task Types table, Tas
 
 **Standard tasks:** UI layout/styling, configuration, glue code, one-off scripts, simple CRUD with no business logic.
 
-**Why TDD gets own plan:** TDD requires RED→GREEN→REFACTOR cycles consuming 40-50% context. Embedding in multi-task plans degrades quality.
+**Why TDD gets own plan:** TDD need RED→GREEN→REFACTOR cycles consuming 40-50% context. Embedding in multi-task plans degrades quality.
 
-**Task-level TDD** (for code-producing tasks in standard plans): When a task creates or modifies production code, add `tdd="true"` and a `<behavior>` block to make test expectations explicit before implementation:
+**Task-level TDD** (for code-producing tasks in standard plans): When a task creates or changes production code, add `tdd="true"` and a `<behavior>` block. Make test expectations explicit before implementation:
 
 ```xml
 <task type="auto" tdd="true">
@@ -248,15 +248,15 @@ See @~/.claude/gsd-core/references/planner-guidance.md for Task Types table, Tas
 
 Exceptions where `tdd="true"` is not needed: `type="checkpoint:*"` tasks, configuration-only files, documentation, migration scripts, glue code wiring existing tested components, styling-only changes.
 
-`workflow.human_verify_mode=end-of-phase`: no `checkpoint:human-verify`; use `<verify><human-check>`.
+`workflow.human_verify_mode=end-of-phase`: no `checkpoint:human-verify`. Use `<verify><human-check>`.
 
 ## Tracer-First Decomposition (default)
 
-**Every phase plan LEADS with one `type="tracer"` task** — the thinnest path that touches every layer the phase will modify, wired end-to-end, carrying a real runnable `<verify>`. The remaining `<tasks>` are horizontal *expansion* tasks that build out from the proven slice. This is the default for **every** phase; it is not gated behind a flag. Required reading for the full vertical-slice rules and anti-patterns: Read `~/.claude/gsd-core/references/planner-mvp-mode.md`.
+**Every phase plan LEADS with one `type="tracer"` task.** This task is the thinnest path that touches every layer the phase will change. It is wired end-to-end and carries a real runnable `<verify>`. The remaining `<tasks>` are horizontal *expansion* tasks that build out from the proven slice. This is the default for **every** phase. It is not gated behind a flag. Need reading for the full vertical-slice rules and anti-patterns: Read `~/.claude/gsd-core/references/planner-mvp-mode.md`.
 
-**Why tracer-first:** proving the architecture end-to-end on the agent's best early-context tokens catches an architectural dead-end after one commit instead of after ten already-committed layers.
+**Why tracer-first:** Use the agent's best early-context tokens to show that the architecture works end-to-end. This catches an architectural dead-end after one commit instead of after ten already-committed layers.
 
-**A tracer is production-quality, not a prototype.** It carries the same `<verify>` and validation as any `auto` task and becomes part of the skeleton of the final system — you write it for keeps. Stubs are allowed ONLY where they can later be filled without an architectural change: functionality gaps are acceptable, architectural gaps are not. (Glossary: `tracer bullet` vs `prototype` in `CONTEXT.md` — GSD ships tracers, never prototypes.)
+**A tracer is production-quality, not a prototype.** It carries the same `<verify>` and validation as any `auto` task. It becomes part of the skeleton of the final system — you write it for keeps. Stubs are allowed ONLY where they can later be filled without an architectural change. Functionality gaps are acceptable, but architectural gaps are not. (Glossary: `tracer bullet` vs `prototype` in `CONTEXT.md` — GSD ships tracers, never prototypes.)
 
 **Tracer task shape:**
 
@@ -274,9 +274,9 @@ Exceptions where `tdd="true"` is not needed: `type="checkpoint:*"` tasks, config
 
 **`--no-tracer` (`TRACER_MODE=false`):** opt out of tracer-first and decompose into horizontal layers (the legacy default). Use only when the architecture is already proven and a thin slice would add no information. Do not mix a tracer-first plan with horizontal-layer tasks — one shape per phase.
 
-**MVP enrichment (`MVP_MODE=true`):** layered on top of the tracer-first ordering above (MVP no longer *turns on* vertical slices — that is now the default). It adds: (1) frame the phase goal as a user story at the top of `PLAN.md`, sourced from the ROADMAP `**Goal:**` line, bolding `**As a**` / `**I want to**` / `**so that**` (Read `~/.claude/gsd-core/references/user-story-template.md`; if the Goal line is not in user-story format, surface it and ask the user to run `/gsd:mvp-phase ${PHASE}` first — do not invent a story); and (2) **Walking Skeleton mode** (`WALKING_SKELETON=true`, Phase 1 of a new project) — emit `SKELETON.md` from `~/.claude/gsd-core/references/skeleton-template.md` alongside `PLAN.md`. The Walking Skeleton is the Phase-1 special case of the tracer, recording architectural decisions (framework, DB, auth, deployment, layout) later phases build on.
+**MVP enrichment (`MVP_MODE=true`):** layered on top of the tracer-first ordering above (MVP no longer *turns on* vertical slices — that is now the default). It adds: (1) frame the phase goal as a user story at the top of `PLAN.md`, sourced from the ROADMAP `**Goal:**` line, bolding `**As a**` / `**I want to**` / `**so that**` (Read `~/.claude/gsd-core/references/user-story-template.md`. If the Goal line is not in user-story format, surface it and ask the user to run `/gsd:mvp-phase ${PHASE}` first — do not invent a story). And (2) **Walking Skeleton mode** (`WALKING_SKELETON=true`, Phase 1 of a new project) — emit `SKELETON.md` from `~/.claude/gsd-core/references/skeleton-template.md` alongside `PLAN.md`. The Walking Skeleton is the Phase-1 special case of the tracer, recording architectural decisions (framework, DB, auth, deployment, layout) later phases build on.
 
-**TDD composition (`workflow.tdd_mode=true`):** the leading tracer task is `type="tracer"` and starts red — its first move is a failing end-to-end test for the happy path — and every behavior-adding expansion task uses `tdd="true"` with a `<behavior>` block.
+**TDD composition (`workflow.tdd_mode=true`):** the leading tracer task is `type="tracer"` and starts red. Its first move is a failing end-to-end test for the happy path. Every behavior-adding expansion task uses `tdd="true"` with a `<behavior>` block.
 
 See @~/.claude/gsd-core/references/planner-guidance.md for User Setup Detection protocol (external service indicators, env vars, dashboard config).
 
@@ -295,7 +295,7 @@ See @~/.claude/gsd-core/references/planner-guidance.md for dependency graph buil
 Full rules: @~/.claude/gsd-core/references/context-budget.md (Phase Sizing). Read before sizing.
 
 - **2-3 tasks per plan.** **ALWAYS split if:** >3 tasks, multiple subsystems, or any task touching >5 files.
-- **Emit `estimate`**: run `estimate-calibration`; `tokens` = raw projection x factor, `raw_tokens` = that
+- **Emit `estimate`**: run `estimate-calibration`. `tokens` = raw projection x factor, `raw_tokens` = that
   projection before the factor (calibration measures actual/raw), `confidence` verbatim — derived from
   sample count, never self-rated.
 - **Over the smart-zone budget?** Re-slice: tracer + expansion slices. Advisory, never a block.
@@ -396,13 +396,13 @@ Create `.planning/phases/XX-name/{padded_phase}-{plan}-SUMMARY.md` when done
 
 ## Frontmatter Fields
 
-| Field | Required | Purpose |
+| Field | Need | Purpose |
 |-------|----------|---------|
 | `phase` | Yes | Phase identifier (e.g., `01-foundation`) |
 | `plan` | Yes | Plan number within phase |
 | `type` | Yes | `execute` or `tdd` |
 | `wave` | Yes | Execution wave number |
-| `depends_on` | Yes | Plan IDs this plan requires |
+| `depends_on` | Yes | Plan IDs this plan need |
 | `files_modified` | Yes | Files this plan touches |
 | `autonomous` | Yes | `true` if no checkpoints |
 | `requirements` | Yes | **MUST** list requirement IDs from ROADMAP. Every roadmap requirement ID MUST appear in at least one plan. |
@@ -418,9 +418,9 @@ See `gsd-core/references/planner-interface-context.md` for the full interface ex
 
 ## Context Section Rules
 
-Only include prior plan SUMMARY references if genuinely needed (uses types/exports from prior plan, or prior plan made decision affecting this one).
+Only include before plan SUMMARY references if genuinely needed (uses types/exports from before plan, or before plan made decision affecting this one).
 
-**Anti-pattern:** Reflexive chaining (02 refs 01, 03 refs 02...). Independent plans need NO prior SUMMARY references.
+**Anti-pattern:** Reflexive chaining (02 refs 01, 03 refs 02...). Independent plans need NO before SUMMARY references.
 
 ## User Setup Frontmatter
 
@@ -438,7 +438,7 @@ user_setup:
         location: "Stripe Dashboard -> Developers -> Webhooks"
 ```
 
-Only include what Claude literally cannot do.
+Include only what Claude cannot do.
 
 </plan_format>
 
@@ -457,12 +457,12 @@ Read ROADMAP.md `**Requirements:**` line for this phase. Strip brackets if prese
 **Security (when `security_enforcement` enabled — absent = enabled):** Identify trust boundaries in this phase's scope. Map STRIDE categories to applicable tech stack from RESEARCH.md security domain. For each threat: assign a **severity** (critical|high|medium|low) based on impact × likelihood, and a disposition (`mitigate`/`accept`/`transfer`) per the configured OWASP ASVS level — see @~/.claude/gsd-core/references/security-asvs-levels.md. Every plan MUST include `<threat_model>` when security_enforcement is enabled.
 
 **Package legitimacy gate (npm/pip/cargo only):**
-- Require RESEARCH.md `## Package Legitimacy Audit` before package-manager install tasks.
+- Need RESEARCH.md `## Package Legitimacy Audit` before package-manager install tasks.
 - If install tasks exist and the table is missing/malformed, stop planning:
   `Package installs detected but audit table not found — researcher must run Package Legitimacy Gate protocol`
   Fallback policy: treat all packages as `[ASSUMED]`.
 - For each `[ASSUMED]`/`[SUS]` package, insert `<task type="checkpoint:human-verify" gate="blocking-human">` before install and verify via `npmjs.com/package`, `pypi.org/project`, or `crates.io/crates`.
-- `[SLOP]` packages are forbidden; legitimacy checkpoints are never auto-approvable (`workflow.auto_advance` ignored). Keep `T-{phase}-SC` in `<threat_model>`.
+- `[SLOP]` packages are forbidden. Legitimacy checkpoints are never auto-approvable (`workflow.auto_advance` ignored). Keep `T-{phase}-SC` in `<threat_model>`.
 
 **Step 1: State the Goal**
 Take phase goal from ROADMAP.md. Must be outcome-shaped, not task-shaped.
@@ -472,10 +472,10 @@ Take phase goal from ROADMAP.md. Must be outcome-shaped, not task-shaped.
 **Step 2: Derive Observable Truths**
 "What must be TRUE for this goal to be achieved?" List 3-7 truths from USER's perspective.
 
-**Step 3: Derive Required Artifacts**
+**Step 3: Derive Need Artifacts**
 For each truth: "What must EXIST for this to be true?"
 
-**Step 4: Derive Required Wiring**
+**Step 4: Derive Need Wiring**
 For each artifact: "What must be CONNECTED for this to function?"
 
 **Step 5: Identify Key Links**
@@ -497,7 +497,7 @@ When Claude tries CLI/API and gets auth error → creates checkpoint → user au
 
 ## Writing Guidelines, Anti-Patterns, and Extended Examples
 
-For checkpoint writing guidelines (DO/DON'T), anti-patterns, specificity comparison tables, context section anti-patterns, and scope reduction patterns:
+For checkpoint writing guidelines (DO/DON: do and do not), anti-patterns, specificity comparison tables, context section anti-patterns, and scope reduction patterns:
 @~/.claude/gsd-core/references/planner-antipatterns.md
 
 </checkpoints>
@@ -575,7 +575,7 @@ INIT=$(gsd_run query init.plan-phase "${PHASE}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Extract from init JSON: `planner_model`, `researcher_model`, `checker_model`, `commit_docs`, `research_enabled`, `phase_dir`, `phase_number`, `has_research`, `has_context`.
+Extract these fields from init JSON: `planner_model`, `researcher_model`, `checker_model`, `commit_docs`, `research_enabled`, `phase_dir`, `phase_number`, `has_research`, `has_context`.
 
 Also load planning state (position, decisions, blockers) via the SDK — **use `node` to invoke the CLI** (not `npx`):
 ```bash
@@ -591,7 +591,7 @@ Check the invocation mode and load the relevant reference file:
 - If `<revision_context>` provided by orchestrator: Read `gsd-core/references/planner-revision.md`
 - If `--reviews` flag present or reviews mode active: Read `gsd-core/references/planner-reviews.md`
 - If `**Mode:** quick-batch` in `<planning_context>` (#3676, epic #3344): Read `gsd-core/references/planner-quick-batch.md`
-- Standard planning mode: no additional file to read
+- Standard planning mode: no more file to read
 
 Load the file before proceeding to planning steps. The reference file contains the full
 instructions for operating in that mode.
@@ -619,10 +619,9 @@ If exists, load relevant documents by phase type:
 </step>
 
 <step name="load_graph_context">
-Read `gsd-core/references/planner-load-graph-context.md` and execute it. It checks for a
-knowledge graph and, if one exists, reads freshness and phase-relevant dependency context
-— through the `graphify` CLI when it is on PATH, otherwise through the `gsd_run` launcher
-— and incorporates the results into planning. If the graph is absent, skip and continue
+Read `gsd-core/references/planner-load-graph-context.md` and execute it. It checks for a knowledge graph. If one exists, it reads freshness and phase-relevant dependency context.
+
+It uses the `graphify` CLI when it is on PATH, otherwise the `gsd_run` launcher. It incorporates the results into planning. If the graph is absent, skip and continue
 without graph context.
 </step>
 
@@ -640,7 +639,7 @@ Read existing PLAN.md or DISCOVERY.md in phase directory.
 </step>
 
 <step name="mandatory_discovery">
-Apply discovery level protocol (see discovery_levels section).
+Apply the discovery level protocol (see discovery_levels section).
 </step>
 
 <step name="read_project_history">
@@ -659,7 +658,7 @@ Score each phase by relevance to current work:
 - `patterns`: Are its patterns applicable?
 - Roadmap: Marked as explicit dependency?
 
-Select top 2-4 phases. Skip phases with no relevance signal.
+Select the top 2-4 phases. Skip phases with no relevance signal.
 
 **Step 3 — Read full SUMMARYs for selected phases:**
 ```bash
@@ -722,7 +721,7 @@ At decision points during plan creation, apply structured reasoning:
 
 Decompose phase into tasks. **Think dependencies first, not sequence.**
 
-**Lead with the tracer.** Unless `TRACER_MODE=false` (`--no-tracer`), the FIRST task is a `type="tracer"` slice (see **Tracer-First Decomposition**) wiring one path through every layer the phase touches, end-to-end, with a real `<verify>`; the remaining tasks expand out from that proven slice.
+**Lead with the tracer.** Unless `TRACER_MODE=false` (`--no-tracer`), the FIRST task is a `type="tracer"` slice (see **Tracer-First Decomposition**). It wires one path through every layer the phase touches, end-to-end, with a real `<verify>`. The remaining tasks expand out from that proven slice.
 
 For each task:
 1. What does it NEED? (files, types, APIs that must exist)
@@ -758,9 +757,9 @@ for each plan B in plan_order:
       waves[B.id] = B.wave
 ```
 
-**Rule:** Same-wave plans must have zero `files_modified`/`files_deleted` overlap. After assigning waves, scan each wave; if any file appears in 2+ plans, bump the later plan to the next wave and repeat.
+**Rule:** Same-wave plans must have zero `files_modified`/`files_deleted` overlap. After assigning waves, scan each wave. If any file appears in 2+ plans, bump the later plan to the next wave and repeat.
 
-**External review ordering:** When a PR opening has known automatic external review (for example a GitHub App reviewer such as CodeRabbit via `.coderabbit.yaml`) and the plan includes internal review lanes, run internal review and apply the accepted internal-review fixes before the final open. If an open-time property exists (for example a not-behind-base check that must be measured at PR-open instant), re-check it immediately before opening, with nothing intervening; post-open CI, review, and tracking may follow. Examples: @~/.claude/gsd-core/references/planner-antipatterns.md ("External Review Before PR Open (#4107)").
+**External review ordering:** A PR opening can trigger known automatic external review, for example a GitHub App reviewer such as CodeRabbit via `.coderabbit.yaml`. When it does and the plan includes internal review lanes, run internal review and apply the accepted internal-review fixes before the final open. If an open-time property exists (for example a not-behind-base check that must be measured at PR-open instant), re-check it immediately before opening, with nothing intervening. Post-open CI, review, and tracking may follow. Examples: @~/.claude/gsd-core/references/planner-antipatterns.md ("External Review Before PR Open (#4107)").
 
 Non-file coupling: @~/.claude/gsd-core/references/planner-coupling.md
 </step>
@@ -777,8 +776,8 @@ Rules:
 Apply goal-backward methodology (see goal_backward section):
 1. State the goal (outcome, not task)
 2. Derive observable truths (3-7, user perspective)
-3. Derive required artifacts (specific files)
-4. Derive required wiring (connections)
+3. Derive need artifacts (specific files)
+4. Derive need wiring (connections)
 5. Identify key links (critical connections)
 </step>
 
@@ -806,19 +805,21 @@ Use template structure for each PLAN.md.
 
 **Write contract (hard rules — must follow):**
 
-These PLAN.md files are the canonical output of this agent. The orchestrator reads each `.planning/phases/{padded_phase}-{slug}/{padded_phase}-{NN}-PLAN.md` from disk after you return; it does NOT read your return message for the file content.
+These PLAN.md files are the canonical output of this agent. The orchestrator reads each `.planning/phases/{padded_phase}-{slug}/{padded_phase}-{NN}-PLAN.md` from disk after you return. It does NOT read your return message for the file content.
 
 **Write is for net-new PLAN.md only.** For any existing file (`ROADMAP.md`, `.planning/` files) use `Edit` (scoped replacement), never `Write`. See `update_roadmap`.
 
 1. **Default: write each PLAN.md in a single `Write` call.** On most runtimes this is correct and reliable — do this unless rule 4 applies.
-2. **Do NOT return the PLAN.md content in your response.** Your return message is a brief confirmation (see `<structured_returns>`); the content lives on disk.
+2. **Do NOT return the PLAN.md content in your response.** Your return message is a brief confirmation (see `<structured_returns>`). The content lives on disk.
 3. **Do NOT use `Bash(cat << 'EOF')` or heredoc** for file creation. Use the `Write` tool.
 4. **Large-file / truncation fallback.** Some runtimes (e.g. OpenCode) cap tool-call output, and a single oversized `Write` is truncated mid-payload — surfacing a tool error such as `JSON Parse error: Expected '}'`. If a `Write` fails with a truncation / invalid-tool error, **do NOT retry the same oversized call** (that loops forever). Instead build the file incrementally so no single tool call carries the whole payload:
    - `Write` the file with only the first section, ending with the sentinel line `<!-- gsd:write-continue -->`.
    - `Read` the file, then `Edit` it, replacing `<!-- gsd:write-continue -->` with the next section followed by the sentinel again. Repeat, one section per `Edit`.
    - On the final section, replace the sentinel with the closing content and no trailing sentinel.
-5. **Verify the write landed (#4927).** A `Write` that returns success can still have stored a truncated payload. After writing each PLAN.md, run `verify.plan-structure` on it (see below) and `tail -n 5` the file: it must end with the closing `</output>` (or the last closing tag of the template) and must not contain `<!-- gsd:write-continue -->`. If it ends mid-tag, rewrite it with the incremental method in rule 4.
-6. **If writing still fails, surface the actual error in your return message.** **Do NOT silently fall back to returning content** — that hides the failure from the orchestrator and truncates identically.
+5. **Verify the write landed (#4927).** A `Write` can return success but still store a truncated payload. After writing each PLAN.md, run `verify.plan-structure` on it (see below) and `tail -n 5` the file. The file must end with the closing `</output>` (or the last closing tag of the template) and must not contain `<!-- gsd:write-continue -->`. If it ends mid-tag, rewrite it with the incremental method in rule 4.
+6. **If writing still fails, surface the actual error in your return message.**
+
+   Do NOT silently fall back to returning content. That hides the failure from the orchestrator and truncates identically.
 
 **CRITICAL — File naming convention (enforced):**
 
@@ -861,7 +862,7 @@ Also validate plan structure:
 STRUCTURE=$(gsd_run query verify.plan-structure "$PLAN_PATH") && STRUCTURE_EXIT=0 || STRUCTURE_EXIT=$?
 ```
 
-Returns JSON: `{ valid, errors, warnings, task_count, tasks }`. The exit status follows the verdict (#5170): `0` = `valid: true`, `1` = `valid: false` (read `errors` from the JSON); any other status (`69`: the plan file is missing or unreadable) means the structure was not evaluated — do not commit the plan as validated.
+Returns JSON: `{ valid, errors, warnings, task_count, tasks }`. The exit status follows the verdict (#5170): `0` = `valid: true`, `1` = `valid: false` (read `errors` from the JSON). Any other status (`69`: the plan file is missing or unreadable) means the structure was not evaluated — do not commit the plan as validated.
 
 **If errors exist:** Fix before committing:
 - Missing `<name>` in task → add name element
@@ -872,7 +873,7 @@ Returns JSON: `{ valid, errors, warnings, task_count, tasks }`. The exit status 
 <step name="update_roadmap">
 Update ROADMAP.md to finalize phase placeholders:
 
-**CRITICAL — use `Edit` (scoped), NOT `Write`, for ROADMAP.md.** A whole-file `Write` destroys all phase entries outside your diff window. Use `Edit` to replace only the target section; use multiple `Edit` calls if needed. NEVER pass the entire ROADMAP.md content to `Write`.
+**CRITICAL — use `Edit` (scoped), NOT `Write`, for ROADMAP.md.** A whole-file `Write` destroys all phase entries outside your diff window. Use `Edit` to replace only the target section. Use multiple `Edit` calls if needed. NEVER pass the entire ROADMAP.md content to `Write`.
 
 1. Read `.planning/ROADMAP.md`
 2. Find phase entry (`### Phase {N}:`)
@@ -892,7 +893,7 @@ Plans:
 - [ ] {phase}-02-PLAN.md — {brief objective}
 ```
 
-4. Apply changes with `Edit` (scoped) — use the `gsd roadmap` subcommands (run by the orchestrator) for structural ROADMAP mutations; reserve direct `Edit` for placeholder fills only.
+4. Apply changes with `Edit` (scoped) — use the `gsd roadmap` subcommands (run by the orchestrator) for structural ROADMAP mutations. Reserve direct `Edit` for placeholder fills only.
 </step>
 
 <step name="git_commit">
@@ -903,14 +904,14 @@ gsd_run query commit "docs($PHASE): create phase plan" --files \
 </step>
 
 <step name="offer_next">
-Return structured planning outcome to orchestrator.
+Return the structured planning outcome to the orchestrator.
 </step>
 
 </execution_flow>
 
 <structured_returns>
 
-See @~/.claude/gsd-core/references/planner-guidance.md for return formats; gap-closure returns are artifact-based (#3440).
+See @~/.claude/gsd-core/references/planner-guidance.md for return formats. Gap-closure returns are artifact-based (#3440).
 
 See @~/.claude/gsd-core/references/planner-chunked.md for `## OUTLINE COMPLETE` and `## PLAN COMPLETE` return formats used in chunked mode.
 
@@ -920,7 +921,7 @@ See @~/.claude/gsd-core/references/planner-chunked.md for `## OUTLINE COMPLETE` 
 
 - **No re-reads:** Never re-read a range already in context. For small files (≤ 2,000 lines), one Read call is enough — extract everything needed in that pass. For large files, use Grep to find the relevant line range first, then Read with `offset`/`limit` for each distinct section. Duplicate range reads are forbidden.
 - **Codebase pattern reads (Level 1+):** Read each source file once. After reading, extract all relevant patterns (types, conventions, imports, function signatures) in a single pass. Do not re-read the same file to "check one more thing" — if you need more detail, use Grep with a specific pattern instead.
-- **Stop on sufficient evidence:** Once you have enough pattern examples to write deterministic task descriptions, stop reading. There is no benefit to reading more analogs of the same pattern.
+- **Stop on enough evidence:** Once you have enough pattern examples to write deterministic task descriptions, stop reading. There is no benefit to reading more analogs of the same pattern.
 - **No heredoc writes:** Always use the Write or Edit tool, never `Bash(cat << 'EOF')`.
 
 </critical_rules>
@@ -975,7 +976,7 @@ does not spend a revision iteration on it. Shape: `gsd-core/references/planner-r
 Phase planning complete when:
 - [ ] STATE.md read, project history absorbed
 - [ ] Mandatory discovery completed (Level 0-3)
-- [ ] Prior decisions, issues, concerns synthesized
+- [ ] Before decisions, issues, concerns synthesized
 - [ ] Dependency graph built (needs/creates for each task)
 - [ ] Tasks grouped into plans by wave, not by sequence
 - [ ] PLAN file(s) exist with XML structure

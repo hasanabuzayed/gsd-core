@@ -1,5 +1,7 @@
 <purpose>
-Generate, update, and verify all project documentation — both canonical doc types and existing hand-written docs. The orchestrator detects the project's doc structure, assembles a work manifest tracking every item, dispatches parallel doc-writer and doc-verifier agents across waves, reviews existing docs for accuracy, identifies documentation gaps, and fixes inaccuracies via a bounded fix loop. All state is persisted in a work manifest so no work item is lost between steps. Output: Complete, structure-aware documentation verified against the live codebase.
+Generate, update, and verify all project documentation — both canonical doc types and existing hand-written docs. The orchestrator detects the project's doc structure and assembles a work manifest that tracks every item. It dispatches parallel doc-writer and doc-verifier agents across waves. It reviews existing docs for accuracy, identifies documentation gaps, and fixes inaccuracies via a bounded fix loop.
+
+All state is persisted in a work manifest so no work item is lost between steps. Output: Complete, structure-aware documentation verified against the live codebase.
 </purpose>
 
 <available_agent_types>
@@ -10,7 +12,7 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 
 <process>
 
-**Compact Content Gate.** Read and follow `gsd-core/references/compact-content-gate.md` now — it states the `workflow.compact_content` check and the resolution rule this spine defers to. When it directs a Read, read `gsd-core/workflows/docs-update/detail/elaboration.md` in full before continuing past this point; its content elaborates on three steps below (sequential_generation, fix_loop, verify_only_report).
+**Compact Content Gate.** Read and follow `gsd-core/references/compact-content-gate.md` now — it states the `workflow.compact_content` check and the resolution rule this spine defers to. When it directs a Read, read `gsd-core/workflows/docs-update/detail/elaboration.md` in full before continuing past this point. Its content elaborates on three steps below (sequential_generation, fix_loop, verify_only_report).
 
 <step name="init_context" priority="first">
 Load docs-update context:
@@ -33,15 +35,15 @@ DOC_VERIFIER_MODEL=$(gsd_run query resolve-model gsd-doc-verifier --raw)
 ```
 
 Extract from init JSON:
-- `doc_writer_model` — model string for the doc-writer spawns (never hardcode a model name); the doc-verifier spawn resolves its own `DOC_VERIFIER_MODEL`
+- `doc_writer_model` — model string for the doc-writer spawns (never hardcode a model name). The doc-verifier spawn resolves its own `DOC_VERIFIER_MODEL`
 - `commit_docs` — whether to commit generated files when done
 - `existing_docs` — array of `{path, has_gsd_marker}` objects for existing Markdown files
 - `project_type` — object with boolean signals: `has_package_json`, `has_api_routes`, `has_cli_bin`, `is_open_source`, `has_deploy_config`, `is_monorepo`, `has_tests`
 - `doc_tooling` — object with booleans: `docusaurus`, `vitepress`, `mkdocs`, `storybook`
 - `monorepo_workspaces` — array of workspace glob patterns (empty if not a monorepo)
-- `section_manifest` — parsed from `INIT_DOCS_UPDATE` (not `INIT`); gates the `dispatch-monorepo-packages` section below
+- `section_manifest` — parsed from `INIT_DOCS_UPDATE` (not `INIT`). Gates the `dispatch-monorepo-packages` section below
 - `project_root` — absolute path to the project root
-- `response_language` — if set, present all user-facing output of this workflow in that language — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations; technical terms, code, file paths, and subagent prompts stay in English
+- `response_language` — if set, present all user-facing output of this workflow in that language — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English
 </step>
 
 <step name="classify_project">
@@ -75,7 +77,7 @@ Conditional docs queued: {list or "none"}
 </step>
 
 <step name="build_doc_queue">
-**Skip condition:** If `--verify-only` is present in `$ARGUMENTS`: skip this step, `resolve_modes` and `preservation_check`, and go straight to `verify_only_report` (#5050). That step fact-checks every file in `existing_docs` from the init JSON and never reads the queue, so no question asked here (the gap list, the queue confirmation, the CONTRIBUTING.md confirmation) can change its result — and none of them has a text-mode fallback, so an unattended run would stop on an answer that is discarded.
+**Skip condition:** If `--verify-only` is present in `$ARGUMENTS`: skip this step, `resolve_modes` and `preservation_check`, and go straight to `verify_only_report` (#5050). That step fact-checks every file in `existing_docs` from the init JSON and never reads the queue. No question asked here can change its result. These questions cover the gap list, the queue confirmation, and the CONTRIBUTING.md confirmation. None has a text-mode fallback. An unattended run would stop on an answer that is discarded.
 
 Assemble the complete doc queue from always-on docs plus conditional docs from classify_project.
 
@@ -92,7 +94,7 @@ Assemble the complete doc queue from always-on docs plus conditional docs from c
 - CONTRIBUTING (if `is_open_source`)
 - DEPLOYMENT (if `has_deploy_config`)
 
-**IMPORTANT: CHANGELOG.md is NEVER queued. The doc queue is built exclusively from the 9 known doc types listed above. Do not derive the queue from `existing_docs` directly — existing_docs is only used in the next step to determine create vs update mode.**
+**IMPORTANT: CHANGELOG.md is NEVER queued. The doc queue is built exclusively from the 9 known doc types listed above. Do not derive the queue from `existing_docs` directly. The next step only uses existing_docs to determine create vs update mode.**
 
 **Doc queue limit:** Maximum 9 docs. Always-on (6) + up to 3 conditional = at most 9.
 
@@ -102,7 +104,7 @@ If CONTRIBUTING.md is in the conditional queue AND does NOT appear in the `exist
 
 1. If `--force` is present in `$ARGUMENTS`: skip this check, include CONTRIBUTING.md in the queue.
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. Non-Claude runtimes (OpenAI Codex, Antigravity, etc.) need this when `AskUserQuestion` is not available.
 2. Otherwise, use AskUserQuestion to confirm:
 
 ```
@@ -122,7 +124,7 @@ If CONTRIBUTING.md already exists in `existing_docs`: skip this prompt entirely,
 
 **Existing non-canonical docs (review queue):**
 
-After assembling the canonical doc queue above, scan the `existing_docs` array from init JSON for files that do NOT match any canonical path in the queue (neither primary nor fallback path from the resolve_modes table). These are hand-written docs like `docs/api/endpoint-map.md` or `docs/frontend/pages/not-found.md`.
+After assembling the canonical doc queue above, scan the `existing_docs` array from init JSON. Find files that do NOT match any canonical path in the queue. This includes neither primary nor fallback paths from the resolve_modes table. These are hand-written docs like `docs/api/endpoint-map.md` or `docs/frontend/pages/not-found.md`.
 
 For each non-canonical existing doc found:
 - Add to a separate `review_queue`
@@ -142,18 +144,18 @@ If none found, omit this section from the queue presentation.
 
 **Documentation gap detection (missing non-canonical docs):**
 
-After assembling the canonical and review queues, analyze the codebase to identify areas that should have documentation but don't. This ensures the command creates complete project documentation, not just the 9 canonical types.
+After assembling the canonical and review queues, analyze the codebase to identify areas that should have documentation but do not. This make sure the command creates complete project documentation, not just the 9 canonical types.
 
 1. **Scan the codebase for undocumented areas:**
    - Use Glob/Grep to discover significant source directories (e.g., `src/components/`, `src/pages/`, `src/services/`, `src/api/`, `lib/`, `routes/`)
    - Compare against existing docs: for each major source directory, check if corresponding documentation exists in the docs tree
-   - Look at the project's existing doc structure for patterns — if the project has `docs/frontend/components/`, `docs/services/`, etc., these indicate the project's documentation conventions
+   - Look at the project's existing doc structure for patterns. If the project has `docs/frontend/components/`, `docs/services/`, etc., these show the project's documentation conventions
 
 2. **Identify gaps based on project conventions:**
-   - If the project has a `docs/` directory with grouped subdirectories, each source module area that has a corresponding docs subdirectory but is missing documentation files represents a gap
+   - If the project has a `docs/` directory with grouped subdirectories, check each source module area. An area is a gap if it has a corresponding docs subdirectory but is missing documentation files
    - If the project has frontend components/pages but no component docs, flag this
    - If the project has service modules but no service docs, flag this
-   - Skip areas that are already covered by canonical docs (e.g., don't flag missing API docs if `docs/API.md` is already in the canonical queue)
+   - Skip areas that are already covered by canonical docs (e.g., do not flag missing API docs if `docs/API.md` is already in the canonical queue)
 
 3. **Present discovered gaps to the user:**
 
@@ -276,7 +278,7 @@ For each doc type in the queue:
 3. If found at any path: mode = `"update"` — use the Read tool to load the current file content (will be passed as `existing_content` in the doc_assignment block). Use the found path as the output path (do not move existing docs).
 4. If not found: mode = `"create"` — no existing content to load. Use the `resolved_path`.
 
-**Ensure docs/ directory exists:**
+**Make sure docs/ directory exists:**
 Before proceeding to the next step, create the `docs/` directory and any resolved subdirectories if they do not exist:
 ```bash
 mkdir -p docs/
@@ -301,13 +303,13 @@ Mode resolution:
 | deployment | docs/guides/deployment.md | update | found, hand-written |
 ```
 
-This table MUST be shown to the user — it is the primary confirmation of where files will be written and whether existing files will be updated. It appears as part of the queue presentation BEFORE the AskUserQuestion confirmation.
+This table MUST be shown to the user. It is the primary confirmation of where files will be written and whether existing files will be updated. It appears as part of the queue presentation BEFORE the AskUserQuestion confirmation.
 
 Track the resolved mode and file path for each queued doc. For update-mode docs, store the loaded file content — it will be passed to the agent in the next steps.
 
 **CRITICAL: Persist the work manifest.**
 
-After resolve_modes completes, write ALL work items to `.planning/tmp/docs-work-manifest.json`. This is the single source of truth for every subsequent step — the orchestrator MUST read this file at each step instead of relying on memory.
+After resolve_modes completes, write ALL work items to `.planning/tmp/docs-work-manifest.json`. This is the single source of truth for every next step — the orchestrator MUST read this file at each step instead of relying on memory.
 
 ```bash
 mkdir -p .planning/tmp
@@ -345,7 +347,7 @@ Write the manifest using the Write tool:
 }
 ```
 
-Every subsequent step (dispatch, collect, verify, fix_loop, report) MUST begin by reading `.planning/tmp/docs-work-manifest.json` and update the `status` field for items it processes. This prevents the orchestrator from "forgetting" any work item across the multi-step workflow.
+Every next step (dispatch, collect, verify, fix_loop, report) MUST start by reading `.planning/tmp/docs-work-manifest.json` and update the `status` field for items it processes. This prevents the orchestrator from "forgetting" any work item across the multi-step workflow.
 </step>
 
 <step name="preservation_check">
@@ -372,7 +374,7 @@ How should this file be handled?
 
 Record each decision. Update the doc queue:
 - `preserve` decisions: remove the doc from the queue entirely
-- `supplement` decisions: set mode to `supplement` in the doc_assignment block; include `existing_content` (full file content)
+- `supplement` decisions: set mode to `supplement` in the doc_assignment block. Include `existing_content` (full file content)
 - `regenerate` decisions: set mode to `create` (treat as a fresh write)
 
 **Fallback when AskUserQuestion is unavailable:** Default all hand-written docs to `preserve` (safest default). Display message:
@@ -390,9 +392,9 @@ After all decisions recorded, continue to detect_runtime_capabilities.
 <step name="dispatch_wave_1" condition="Task tool is available">
 **Read the work manifest first:** `Read .planning/tmp/docs-work-manifest.json` — use `canonical_queue` items with `wave: 1` for this step.
 
-Spawn 3 parallel gsd-doc-writer agents for Wave 1 docs: README, ARCHITECTURE, CONFIGURATION (each runs in a subagent — no output until they return, ~1–5 min; expected, not a freeze).
+Spawn 3 parallel gsd-doc-writer agents for Wave 1 docs: README, ARCHITECTURE, CONFIGURATION (each runs in a subagent — no output until they return, ~1–5 min. Expected, not a freeze).
 
-These are foundational docs with no cross-references needed, making them ideal for parallel generation.
+These are foundational docs. They need no cross-references, so the workflow can generate them in parallel.
 
 Use `run_in_background=true` for all three to enable parallel execution.
 
@@ -400,7 +402,7 @@ Use `run_in_background=true` for all three to enable parallel execution.
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
@@ -483,7 +485,7 @@ Continue to collect_wave_1.
 
 Wait for all 3 Wave 1 background agents to finish, then read each agent's output file to collect confirmations.
 
-Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result that carries an `outputFile` path (and `canReadOutputFile: true`). Each agent's completion arrives as a message in this conversation when it finishes — do NOT issue a separate blocking call to wait. Once all 3 agents have reported completion, read their output files in parallel (single message with 3 Read calls):
+Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result that carries an `outputFile` path (and `canReadOutputFile: true`). Each agent's completion arrives as a message in this conversation when it finishes — do NOT issue a separate blocking call to wait. Once all 3 agents report completion, read their output files in parallel (single message with 3 Read calls):
 
 ```
 Read tool:
@@ -525,7 +527,7 @@ Continue to dispatch_wave_2.
 
 Spawn agents for all queued Wave 2 docs: GETTING-STARTED, DEVELOPMENT, TESTING, and any conditional docs (API, DEPLOYMENT, CONTRIBUTING) that were queued in build_doc_queue.
 
-Wave 2 agents can reference Wave 1 outputs for cross-referencing — include the `wave_1_outputs` field in each doc_assignment block.
+Wave 2 agents can reference Wave 1 outputs for cross-references. Include the `wave_1_outputs` field in each doc_assignment block.
 
 Use `run_in_background=true` for all Wave 2 agents to enable parallel execution within the wave.
 
@@ -698,7 +700,7 @@ Continue to collect_wave_2.
 
 Wait for all Wave 2 background agents to finish, then read each agent's output file to collect confirmations.
 
-Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result that carries an `outputFile` path (and `canReadOutputFile: true`). Each agent's completion arrives as a message in this conversation when it finishes — do NOT issue a separate blocking call to wait. Once all Wave 2 agents have reported completion, read their output files in parallel (single message with N Read calls — one per spawned Wave 2 agent):
+Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result that carries an `outputFile` path (and `canReadOutputFile: true`). Each agent's completion arrives as a message in this conversation when it finishes — do NOT issue a separate blocking call to wait. Once all Wave 2 agents report completion, read their output files in parallel. Use a single message with N Read calls — one per spawned Wave 2 agent:
 
 ```
 Read tool:
@@ -726,11 +728,13 @@ Continue to dispatch_monorepo_packages (if monorepo_workspaces is non-empty) or 
 </step>
 
 <!-- gsd:section id="dispatch-monorepo-packages" when="state:is-monorepo" -->
-If `section_manifest` (from `INIT_DOCS_UPDATE`) is `null` or `"dispatch-monorepo-packages"` is in its `included` list: read and execute `gsd-core/workflows/docs-update/steps/dispatch-monorepo-packages.md`. Otherwise skip — do not read the file; continue to commit_docs.
+If `section_manifest` (from `INIT_DOCS_UPDATE`) is `null` or `"dispatch-monorepo-packages"` is in its `included` list: read and execute `gsd-core/workflows/docs-update/steps/dispatch-monorepo-packages.md`. Otherwise skip — do not read the file. Continue to commit_docs.
 <!-- /gsd:section -->
 
 <step name="sequential_generation" condition="Task tool is NOT available (e.g. Antigravity, Codex, Copilot)">
-When the `Task` tool is unavailable, generate all queued docs sequentially in the current context instead of spawning subagents — this step replaces dispatch_wave_1, collect_wave_1, dispatch_wave_2, and collect_wave_2. Read `agents/gsd-doc-writer.md` once, then for each queued doc (Wave 1: README/ARCHITECTURE/CONFIGURATION, complete before Wave 2; Wave 2: GETTING-STARTED/DEVELOPMENT/TESTING plus any queued conditional docs, referencing Wave 1 outputs) construct the same doc_assignment fields the parallel path uses and write the file inline, using only file system tools (never browser-based tools). If `monorepo_workspaces` is non-empty, generate per-package READMEs sequentially afterward. Continue to verify_docs.
+When the `Task` tool is unavailable, generate all queued docs sequentially in the current context instead of spawning subagents. This step replaces dispatch_wave_1, collect_wave_1, dispatch_wave_2, and collect_wave_2. Read `agents/gsd-doc-writer.md` once. For each queued doc, construct the same doc_assignment fields the parallel path uses. Write the file inline, using only file system tools (never browser-based tools).
+
+Complete Wave 1: README/ARCHITECTURE/CONFIGURATION before Wave 2. Wave 2 covers GETTING-STARTED/DEVELOPMENT/TESTING plus any queued conditional docs, referencing Wave 1 outputs. If `monorepo_workspaces` is non-empty, generate per-package READMEs sequentially afterward. Continue to verify_docs.
 
 Exact per-doc construction and the monorepo per-package loop: `gsd-core/workflows/docs-update/detail/elaboration.md` § 1.
 </step>
@@ -748,20 +752,20 @@ Extract `canonical_queue` (items with `status: "completed"`) and `review_queue` 
 
 **Skip condition:** If `--verify-only` is present in `$ARGUMENTS`, this step was already handled by `verify_only_report` (early exit). Skip.
 
-**Result file contract (#5050).** The verifier does not choose where its result goes; the orchestrator assigns it. For each doc, compute once:
+**Result file contract (#5050).** The verifier does not choose where its result goes. The orchestrator assigns it. For each doc, compute once:
 
 - `doc_key`: the doc's path relative to `project_root`, `/`-separated, with `%` → `%25` first and then `/` → `%2F` (so `README.md` → `README.md`, `docs/product/README.md` → `docs%2Fproduct%2FREADME.md`). Escaping `%` first makes the key reversible, so two different paths can never share one.
-- `result_path`: `{project_root}/.planning/tmp/verify-{doc_key}.json`, absolute under `project_root`. A subagent's working directory is not guaranteed to be `project_root` (a run inside a `git worktree` is the common case), so every read of a result file and the final cleanup use this same absolute path — never a bare `.planning/tmp/...`.
+- `result_path`: `{project_root}/.planning/tmp/verify-{doc_key}.json`, absolute under `project_root`. A subagent's working directory is not guaranteed to be `project_root`. A run inside a `git worktree` is the common case. Every read of a result file and the final cleanup use this same absolute path — never a bare `.planning/tmp/...`.
 
 Pass `result_path` in the verifier's assignment block (the XML below) and read the result back from it.
 
-**Dispatch bound (#5050).** Verifier spawns are bounded by the host's negotiated dispatch capacity, the same query `quick-batch` and chunked planning use, which fails closed to `1` (one at a time) for a host that declares no limit:
+**Dispatch bound (#5050).** Verifier spawns are bounded by the host's negotiated dispatch capacity. This is the same query `quick-batch` and chunked planning use. For a host that declares no limit, it fails closed to `1` (one at a time):
 
 ```bash
 DISPATCH_CAPACITY=$(gsd_run query dispatch-capacity --raw 2>/dev/null || echo 1)
 ```
 
-Spawn the verifiers in batches of at most `DISPATCH_CAPACITY`, and wait for a batch to return before spawning the next, so a runtime with a concurrent-subagent cap never rejects a spawn. This applies to every verifier loop below and to `verify_only_report`.
+Spawn the verifiers in batches of at most `DISPATCH_CAPACITY`. Wait for a batch to return before spawning the next. This prevents a runtime with a concurrent-subagent cap from rejecting a spawn. This applies to every verifier loop below and to `verify_only_report`.
 
 **Phase 1: Verify canonical docs (generated/updated docs)**
 
@@ -792,7 +796,7 @@ For each doc in `review_queue` from the manifest:
 2. Read the result JSON from its `result_path`.
 3. Update the manifest: set `status: "verified"` for each review_queue doc processed.
 
-Non-canonical docs with failures ARE eligible for the fix_loop. When a non-canonical doc has `claims_failed > 0`, dispatch it to gsd-doc-writer in `fix` mode with the failures array — the writer's fix mode does surgical corrections on specific lines regardless of doc type (no template needed). The writer MUST NOT restructure, rephrase, or reformat any content beyond the failing claims.
+Non-canonical docs with failures ARE eligible for the fix_loop. When a non-canonical doc has `claims_failed > 0`, dispatch it to gsd-doc-writer in `fix` mode with the failures array. The writer's fix mode does surgical corrections on specific lines regardless of doc type (no template needed). The writer MUST NOT restructure, rephrase, or reformat any content beyond the failing claims.
 
 **Phase 3: Present combined verification summary**
 
@@ -827,7 +831,7 @@ If any doc (canonical OR non-canonical) has `claims_failed > 0`: continue to fix
 <step name="fix_loop">
 **Skip condition:** if every doc passed verification (no `claims_failed > 0`), skip this step entirely.
 
-Otherwise, correct flagged inaccuracies by re-sending failing docs to `gsd-doc-writer` in `fix` mode (one spawn per doc, never batched), for at most 2 iterations (D-06). Each spawn carries a `<doc_assignment>` block: `type` (the doc's original type), `mode: fix`, `doc_path`, `project_context`, `existing_content` (current file content), and `failures:` — a structured array of `{line, claim, expected, actual}` objects, one per failed claim.
+Otherwise, correct flagged inaccuracies by re-sending failing docs to `gsd-doc-writer` in `fix` mode. Use one spawn per doc, never batched, for at most 2 iterations (D-06). Each spawn carries a `<doc_assignment>` block: `type` (the doc's original type), `mode: fix`, `doc_path`, `project_context`, `existing_content` (current file content), and `failures:` — a structured array of `{line, claim, expected, actual}` objects, one per failed claim.
 
 For each doc with a failure, per iteration:
    a. Read the current file content from disk. Record the pre-fix line count:
@@ -843,10 +847,10 @@ For each doc with a failure, per iteration:
       If `POST_FIX_LINES` is less than 10% of `PRE_FIX_LINES` (i.e. the file shrank by more than 90%), the fix agent corrupted the file via a full-file Write. Restore it immediately:
       - Write the `existing_content` captured in step 1a back to `"{doc_path}"` using the Write tool
       - Log: `WARNING: Fix agent corrupted {doc_path} ({POST_FIX_LINES} lines after fix, was {PRE_FIX_LINES}). Restored from pre-fix content. Failures for this doc require manual correction.`
-      - Mark this doc as `"fix-corrupted"` in the manifest; it will appear in remaining failures at the end
-      - Do NOT attempt to fix this doc again this iteration. It is still included in the step 2 re-verification (so its failures are counted) but no further fix agent will be dispatched for it in this iteration.
+      - Mark this doc as `"fix-corrupted"` in the manifest. It will appear in remaining failures at the end
+      - Do NOT try to fix this doc again this iteration. It is still included in the step 2 re-verification, so its failures are counted. No further fix agent will be dispatched for it in this iteration.
 
-After each iteration's fix agents complete, re-verify ALL docs and check for regression (D-05): any doc that previously passed and now fails HALTS the loop immediately — remaining failures require manual review, no further fixes attempted. After 2 iterations with failures remaining, report them and continue.
+After each iteration's fix agents complete, re-verify ALL docs and check for regression (D-05). Any doc that previously passed and now fails HALTS the loop immediately. Remaining failures need manual review, and no further fixes are tried. After 2 iterations with failures remaining, report them and continue.
 
 Continue to scan_for_secrets either way.
 
@@ -854,15 +858,17 @@ Exact iteration bookkeeping and the regression-halt report wording: `gsd-core/wo
 </step>
 
 <step name="verify_only_report">
-**Reached when `--verify-only` is present in `$ARGUMENTS`** — an early-exit reporting mode: do not proceed to dispatch, generation, commit, or report steps after this step. Spawn `gsd-doc-verifier` (read-only) for every file in `existing_docs`, count `<!-- VERIFY:` markers in each, and present a combined claims-checked/passed/failed/markers table plus a "how to fix" pointer to `/gsd:docs-update` (or `--force` to regenerate everything). Clean up `{project_root}/.planning/tmp/verify-*.json` afterward. Compute `doc_key`/`result_path` and bound the spawns exactly as `verify_docs` § Result file contract and § Dispatch bound specify. End the workflow here.
+**Reached when `--verify-only` is present in `$ARGUMENTS`** — an early-exit reporting mode: do not proceed to dispatch, generation, commit, or report steps after this step. Spawn `gsd-doc-verifier` (read-only) for every file in `existing_docs`. Count `<!-- VERIFY:` markers in each. Present a combined claims-checked/passed/failed/markers table. Include a "how to fix" pointer to `/gsd:docs-update` (or `--force` to regenerate everything).
+
+Clean up `{project_root}/.planning/tmp/verify-*.json` afterward. Compute `doc_key`/`result_path` and bound the spawns exactly as `verify_docs` § Result file contract and § Dispatch bound specify. End the workflow here.
 
 Exact table format and failure-detail wording: `gsd-core/workflows/docs-update/detail/elaboration.md` § 3.
 </step>
 
 <step name="scan_for_secrets">
-CRITICAL SECURITY CHECK: Scan all generated/updated doc files for accidentally leaked secrets before committing. Per D-07, this runs once after the fix loop completes, before commit_docs.
+CRITICAL SECURITY CHECK: Before you commit, scan all generated/updated doc files for accidentally leaked secrets. Per D-07, this runs once after the fix loop completes, before commit_docs.
 
-Build the file list from the generation queue -- include all docs that were written to disk (created, updated, supplemented, or fixed). Do not hardcode a static list; use the actual list of files that were generated or modified.
+Build the file list from the generation queue -- include all docs that were written to disk (created, updated, supplemented, or fixed). Do not hardcode a static list. Use the actual list of files that were generated or changed.
 
 Run secret pattern detection:
 
