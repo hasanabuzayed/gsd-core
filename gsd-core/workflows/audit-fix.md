@@ -1,8 +1,8 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Autonomous audit-to-fix pipeline. Runs an audit, parses findings, classifies each as
-auto-fixable vs manual-only, spawns executor agents for fixable issues, runs tests
+Autonomous audit-to-fix pipeline. It runs an audit, parses findings, and classifies each as
+auto-fixable vs manual-only. It spawns executor agents for fixable issues, runs tests
 after each fix, and commits atomically with finding IDs for traceability.
 </purpose>
 
@@ -54,7 +54,7 @@ Parse each finding into a structured record:
 For each finding, classify as one of:
 
 - **auto-fixable** — clear code change, specific file referenced, testable fix
-- **manual-only** — requires design decisions, ambiguous scope, architectural changes, user input needed
+- **manual-only** — need design decisions, ambiguous scope, architectural changes, user input needed
 - **skip** — severity below the `--severity` threshold
 
 **Classification heuristics** (err on manual-only when uncertain):
@@ -67,9 +67,9 @@ Auto-fixable signals:
 
 Manual-only signals:
 - Uses words like "consider", "evaluate", "design", "rethink"
-- Requires new architecture or API changes
+- Need new architecture or API changes
 - Ambiguous scope or multiple valid approaches
-- Requires user input or design decisions
+- Need user input or design decisions
 - Cross-cutting concerns affecting multiple subsystems
 - Performance or scalability issues without clear fix
 
@@ -98,7 +98,7 @@ For each **auto-fixable** finding (up to `--max`, ordered by severity desc):
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
 ```bash
 EXECUTOR_MODEL=$(gsd_run query resolve-model gsd-executor --raw)
@@ -108,7 +108,7 @@ EXECUTOR_MODEL=$(gsd_run query resolve-model gsd-executor --raw)
 
 > **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`EXECUTOR_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
-**a. Spawn executor agent** (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)**:**
+**a. Spawn executor agent** (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze)**:**
 ```
 Agent(
   prompt="Fix finding {ID}: {description}. Files: {file_refs}. Make the minimal change to resolve this specific finding. Do not refactor surrounding code.",
@@ -163,7 +163,7 @@ The commit message **must** include the finding ID (e.g., F-01) for traceability
 git checkout -- {changed_files} 2>/dev/null
 ```
 Log the failure reason and stop processing — do not continue to the next finding.
-A test failure indicates the codebase may be in an unexpected state, so the pipeline
+A test failure show the codebase may be in an unexpected state, so the pipeline
 must halt to avoid cascading issues. Remaining auto-fixable findings will appear in the
 report as `not-attempted`.
 </step>

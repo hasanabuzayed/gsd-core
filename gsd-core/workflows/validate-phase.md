@@ -1,5 +1,5 @@
 <purpose>
-Audit Nyquist validation gaps for a completed phase. Generate missing tests. Update VALIDATION.md.
+Audit gaps in Nyquist validation for a completed phase. Generate missing tests. Update VALIDATION.md.
 </purpose>
 
 <required_reading>
@@ -7,8 +7,8 @@ Audit Nyquist validation gaps for a completed phase. Generate missing tests. Upd
 </required_reading>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-nyquist-auditor — Validates verification coverage
+Valid GSD subagent types (use exact names — do not use 'general-purpose' as a fallback):
+- gsd-nyquist-auditor — Examines verification coverage
 </available_agent_types>
 
 <process>
@@ -29,7 +29,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 AGENT_SKILLS_AUDITOR=$(gsd_run query agent-skills gsd-nyquist-auditor ${GSD_WS:+--ws=${GSD_WS##* }})
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Parse: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`.
 
@@ -40,9 +40,9 @@ VERIFY_POST_HOOKS_JSON=$(gsd_run loop render-hooks verify:post --raw)
 
 Resolve active step hooks from `VERIFY_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "validate-phase"`.
 
-If no active validate-phase step hook exists: exit with "Nyquist validation is disabled. Enable via /gsd:settings."
+If no active validate-phase step hook exists, exit with "Nyquist validation is disabled. Enable via /gsd:settings."
 
-Display banner: `GSD > VALIDATE PHASE {N}: {name}`
+Show the banner: `GSD > VALIDATE PHASE {N}: {name}`
 
 ## 1. Detect Input State
 
@@ -51,15 +51,15 @@ VALIDATION_FILE=$(ls "${PHASE_DIR}"/*-VALIDATION.md 2>/dev/null | head -1)
 SUMMARY_FILES=$(ls "${PHASE_DIR}"/*-SUMMARY.md 2>/dev/null)
 ```
 
-- **State A** (`VALIDATION_FILE` non-empty): Audit existing
-- **State B** (`VALIDATION_FILE` empty, `SUMMARY_FILES` non-empty): Reconstruct from artifacts
-- **State C** (`SUMMARY_FILES` empty): Exit — "Phase {N} not executed. Run /gsd:execute-phase {N} ${GSD_WS} first."
+- **State A** (`VALIDATION_FILE` non-empty): Audit the existing file.
+- **State B** (`VALIDATION_FILE` empty, `SUMMARY_FILES` non-empty): Reconstruct from artifacts.
+- **State C** (`SUMMARY_FILES` empty): Exit with "Phase {N} not executed. Run /gsd:execute-phase {N} ${GSD_WS} first."
 
 ## 2. Discovery
 
 ### 2a. Read Phase Artifacts
 
-Read all PLAN and SUMMARY files. Extract: task lists, requirement IDs, key-files changed, verify blocks.
+Read all PLAN and SUMMARY files. Extract task lists, requirement IDs, key-files changed, and verify blocks.
 
 ### 2b. Build Requirement-to-Task Map
 
@@ -67,8 +67,8 @@ Per task: `{ task_id, plan_id, wave, requirement_ids, has_automated_command }`
 
 ### 2c. Detect Test Infrastructure
 
-State A: Parse from existing VALIDATION.md Test Infrastructure table.
-State B: Filesystem scan:
+State A: Parse the existing VALIDATION.md Test Infrastructure table.
+State B: Scan the filesystem:
 
 ```bash
 find . -name "pytest.ini" -o -name "jest.config.*" -o -name "vitest.config.*" -o -name "pyproject.toml" 2>/dev/null | head -10
@@ -77,7 +77,7 @@ find . \( -name "*.test.*" -o -name "*.spec.*" -o -name "test_*" \) -not -path "
 
 ### 2d. Cross-Reference
 
-Match each requirement to existing tests by filename, imports, test descriptions. Record: requirement → test_file → status.
+Match each requirement to existing tests by filename, imports, and test descriptions. Record: requirement → test_file → status.
 
 ## 3. Gap Analysis
 
@@ -85,18 +85,19 @@ Classify each requirement:
 
 | Status | Criteria |
 |--------|----------|
-| COVERED | Test exists, targets behavior, runs green |
-| PARTIAL | Test exists, failing or incomplete |
+| COVERED | A test exists, targets behavior, and passes |
+| PARTIAL | A test exists but fails or is incomplete |
 | MISSING | No test found |
 
 Build: `{ task_id, requirement, gap_type, suggested_test_path, suggested_command }`
 
-No gaps → skip to Step 6, set `nyquist_compliant: true`.
+If there are no gaps, skip to Step 6 and set `nyquist_compliant: true`.
 
 ## 4. Present Gap Plan
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
-Call AskUserQuestion with gap table and options:
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes, such as OpenAI Codex and Antigravity, need this because `AskUserQuestion` is not available.
+
+Call AskUserQuestion with the gap table and options:
 1. "Fix all gaps" → Step 5
 2. "Skip — mark manual-only" → add to Manual-Only, Step 6
 3. "Cancel" → exit
@@ -107,11 +108,11 @@ Print: `◆ Spawning nyquist auditor... (runs in a subagent — no output until 
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatch on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in with `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…), the command returns the role unchanged. On kimi-code, the command maps the role to `coder`/`explore`/`plan` by role-suffix. The persona uses `${AGENT_SKILLS_<ROLE>}` (Phase 3) in both cases. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`AUDITOR_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value for `model` (`AUDITOR_MODEL`) is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases, the default on non-Claude runtimes. If you omit the parameter, the subagent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 ```
 Agent(
@@ -127,7 +128,7 @@ Agent(
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately. While the subagent is active, follow this rule. Do not read more files, edit code, or run tests related to this task. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. When the subagent result is available, resume work only then.
 
 Handle return:
 - `## GAPS FILLED` → record tests + map updates, Step 6
@@ -138,12 +139,14 @@ Handle return:
 
 **State B (create):**
 1. Read template from `~/.claude/gsd-core/templates/VALIDATION.md`
-2. Fill: frontmatter (**set `status: validated`**), Test Infrastructure, Per-Task Map, Manual-Only, Sign-Off
+2. Fill the frontmatter (**set `status: validated`**), Test Infrastructure, Per-Task Map, Manual-Only, and Sign-Off
 3. Write to `${PHASE_DIR}/${PADDED_PHASE}-VALIDATION.md`
 
 **State A (update):**
-1. Update Per-Task Map statuses, add escalated to Manual-Only, update frontmatter (**set `status: validated`**)
-2. Append to the audit trail through the owning verb — it compares against the LAST `## Validation Audit` block and skips the write entirely when nothing material changed (#5105 R3; #4981: idempotence alone is insufficient for VALIDATION, whose content legitimately changes with the plan/SUMMARY set, so this call is made AFTER the Per-Task Map update above, not instead of it):
+1. Update Per-Task Map statuses. Add escalated items to Manual-Only. Update frontmatter (**set `status: validated`**).
+2. Append to the audit trail through the owning verb after the Per-Task Map update above, not instead of it.
+
+   The verb compares against the LAST `## Validation Audit` block. When nothing material changed, the verb skips the write entirely (#5105 R3). For VALIDATION, idempotence alone is not enough (#4981). VALIDATION content legitimately changes with the plan/SUMMARY set:
 
 ```bash
 gsd_run query verification.append-audit "${PHASE_DIR}/${PADDED_PHASE}-VALIDATION.md" \
@@ -177,21 +180,21 @@ GSD > PHASE {N} VALIDATED (PARTIAL)
 ▶ Retry: /gsd:validate-phase {N} ${GSD_WS}
 ```
 
-Display `/clear` reminder.
+Show the `/clear` reminder.
 
 </process>
 
 <success_criteria>
-- [ ] Nyquist config checked (exit if disabled)
-- [ ] Input state detected (A/B/C)
-- [ ] State C exits cleanly
-- [ ] PLAN/SUMMARY files read, requirement map built
-- [ ] Test infrastructure detected
-- [ ] Gaps classified (COVERED/PARTIAL/MISSING)
-- [ ] User gate with gap table
-- [ ] Auditor spawned with complete context
-- [ ] All three return formats handled
-- [ ] VALIDATION.md created or updated
-- [ ] Test files committed separately
-- [ ] Results with routing presented
+- [ ] Examine Nyquist config (exit if disabled)
+- [ ] Detect input state (A/B/C)
+- [ ] Exit cleanly for State C
+- [ ] Read PLAN/SUMMARY files and build the requirement map
+- [ ] Detect test infrastructure
+- [ ] Classify gaps (COVERED/PARTIAL/MISSING)
+- [ ] Show the user gate with the gap table
+- [ ] Spawn the auditor with complete context
+- [ ] Handle all three return formats
+- [ ] Create or update VALIDATION.md
+- [ ] Commit test files separately
+- [ ] Show results with routing
 </success_criteria>

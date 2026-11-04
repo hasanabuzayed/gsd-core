@@ -1,9 +1,11 @@
 <purpose>
-Analyze freeform text from the user and route to the most appropriate GSD command. This is a dispatcher — it never does the work itself. Match user intent to the best command, confirm the routing, and hand off.
+Analyze freeform text from the user. Route the request to the most appropriate GSD command. This dispatcher never does the work itself.
+
+Match the user intent to the best command. Confirm the route. Pass control to the command.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before starting, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -13,35 +15,40 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English. Only user-facing output is translated.
 
 <step name="validate">
-**Check for input.**
+**Make sure that input exists.**
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
+
+Non-Claude runtimes, such as OpenAI Codex and Antigravity, need this because `AskUserQuestion` is not available.
+
 If `$ARGUMENTS` is empty, ask via AskUserQuestion:
 
 ```
 What would you like to do? Describe the task, bug, or idea and I'll route it to the right GSD command.
 ```
 
-Wait for response before continuing.
+Wait for the response before you continue.
 </step>
 
 <step name="check_project">
-**Check if project exists.**
+**Check if the project exists.**
 
 ```bash
 INIT=$(gsd_run query state.load 2>/dev/null)
 ```
 
-Track whether `.planning/` exists — some routes require it, others don't.
+Track whether `.planning/` exists. Some routes need it, but others do not.
 </step>
 
 <step name="route">
 **Match intent to command.**
 
-Evaluate `$ARGUMENTS` against these routing rules. Rules are ordered **most-specific first**: apply the **first matching** rule, and never let a generic keyword rule ("set up", "spike", "review") preempt a more specific operation that also matches ("set up this existing codebase", "wrap up the spike findings", "review the changed source code").
+Compare `$ARGUMENTS` with these routing rules. The rules are in **most-specific first** order. Apply the **first matching** rule. Never let a generic keyword rule override a more specific operation that also matches.
+
+Generic keywords include "set up", "spike", and "review". More specific operations include "set up this existing codebase", "wrap up the spike findings", and "review the changed source code".
 
 | If the text describes... | Route to | Why |
 |--------------------------|----------|-----|
@@ -75,9 +82,9 @@ Evaluate `$ARGUMENTS` against these routing rules. Rules are ordered **most-spec
 | Completing a milestone, shipping, releasing | `/gsd:complete-milestone` | Milestone lifecycle |
 | A specific, actionable, small task (add feature, fix typo, update config) | `/gsd:quick` | Self-contained, single executor |
 
-**Requires `.planning/` directory:** All routes except `/gsd:new-project`, `/gsd:onboard`, `/gsd:map-codebase`, `/gsd:spike`, `/gsd:sketch`, and `/gsd:help`. If the project doesn't exist and the route requires it, suggest `/gsd:onboard` for existing codebases or `/gsd:new-project` for greenfield projects.
+**Need `.planning/` directory:** All routes need it except `/gsd:new-project`, `/gsd:onboard`, `/gsd:map-codebase`, `/gsd:spike`, `/gsd:sketch`, and `/gsd:help`. If the project does not exist and the route needs it, suggest `/gsd:onboard` for existing codebases or `/gsd:new-project` for greenfield projects.
 
-**Ambiguity handling:** If the text could reasonably match multiple routes, ask the user via AskUserQuestion with the top 2-3 options. For example:
+**Ambiguity handling:** If the text could reasonably match multiple routes, ask the user via AskUserQuestion. Give the top 2-3 options. For example:
 
 ```
 "Refactor the authentication system" could be:
@@ -101,9 +108,9 @@ Which approach fits better?
 </step>
 
 <step name="confirm">
-**Confirm the route before dispatching (REQ-DO-03).**
+**Confirm the route before dispatch (REQ-DO-03).**
 
-Before invoking anything, ask the user to confirm the displayed route via AskUserQuestion:
+Before you invoke anything, ask the user to confirm the route shown via AskUserQuestion:
 
 ```
 Route to {chosen command}?
@@ -112,34 +119,37 @@ Route to {chosen command}?
 3. Cancel — do not dispatch
 ```
 
-- **Yes / proceed:** continue to the dispatch step.
-- **Choose a different command:** present the 2-3 next-best routes from the routing table as options and loop back through display + confirm with the new selection.
-- **Cancel:** stop. Do not invoke any command.
+- **Yes / proceed:** Continue to the dispatch step.
+- **Choose a different command:** Present the 2-3 next-best routes from the routing table as options. Return to display + confirm with the new selection.
+- **Cancel:** Stop. Do not invoke any command.
 
-**TEXT_MODE:** present the same choices as a plain-text numbered list and ask the user to type their choice number, exactly like other AskUserQuestion calls in this workflow.
+**TEXT_MODE:** Present the same choices as a plain-text numbered list. Ask the user to type their choice number, exactly like other AskUserQuestion calls in this workflow.
 </step>
 
 <step name="dispatch">
 **Invoke the chosen command with only the arguments it accepts.**
 
-Read the chosen command's frontmatter `argument-hint` (in `commands/gsd/<name>.md`) and forward **only arguments that command accepts**. Do NOT pass the full freeform sentence wholesale.
+Read the chosen command's frontmatter `argument-hint` in `commands/gsd/<name>.md`. Forward **only arguments that command accepts**. Do NOT pass the full freeform sentence.
 
-- If the command expects a phase number or flags only (e.g. `/gsd:verify-work [phase number]`, `/gsd:plan-phase`, `/gsd:execute-phase`), extract the phase number / flags from the input; if none was provided, extract it from context or ask via AskUserQuestion. Drop the surrounding prose.
-- If the command explicitly accepts a freeform task description (e.g. `/gsd:quick`, `/gsd:debug`, `/gsd:spike`, `/gsd:sketch`), forward the relevant portion of `$ARGUMENTS` as the description.
+- If the command expects a phase number or flags only, extract the phase number / flags from the input. Examples include `/gsd:verify-work [phase number]`, `/gsd:plan-phase`, and `/gsd:execute-phase`. If none was provided, extract it from context or ask via AskUserQuestion. Remove the surrounding prose.
+
+- If the command explicitly accepts a freeform task description, forward the relevant portion of `$ARGUMENTS` as the description. Examples include `/gsd:quick`, `/gsd:debug`, `/gsd:spike`, and `/gsd:sketch`.
+
 - If the command takes no arguments, invoke it without arguments.
 
-After invoking the command, stop. The dispatched command handles everything from here.
+After you invoke the command, stop. The dispatched command handles everything from here.
 </step>
 
 </process>
 
 <success_criteria>
-- [ ] Input validated (not empty)
-- [ ] Intent matched to exactly one GSD command
-- [ ] Ambiguity resolved via user question (if needed)
-- [ ] Project existence checked for routes that require it
-- [ ] Routing decision displayed before dispatch
-- [ ] Route confirmed by the user before dispatch (REQ-DO-03), with TEXT_MODE equivalent
-- [ ] Command invoked with only the arguments it accepts (argument-hint aware; freeform text only where the command takes a freeform description)
-- [ ] No work done directly — dispatcher only
+- [ ] Make sure that input is not empty
+- [ ] Match intent to exactly one GSD command
+- [ ] If needed, resolve ambiguity through a user question
+- [ ] For routes that need the project, make sure that it exists
+- [ ] Show the routing decision before dispatch
+- [ ] The user confirms the route before dispatch (REQ-DO-03), with a TEXT_MODE equivalent
+- [ ] Invoke the command with only the arguments it accepts, as specified by argument-hint
+- [ ] Use freeform text only where the command takes a freeform description
+- [ ] Do no work directly — dispatcher only
 </success_criteria>
