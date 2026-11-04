@@ -6,16 +6,16 @@ produces:
 consumes: UAT.md
 -->
 <purpose>
-Create a pull request from completed phase/milestone work, generate a rich PR body from planning artifacts, optionally run code review, and prepare for merge. Closes the plan → execute → verify → ship loop.
+Create a pull request from completed phase/milestone work. Generate a detailed PR body from planning artifacts. Optionally run a code review. Prepare for merge. This closes the plan → execute → verify → ship loop.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
 Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-mempalace-curator — Ship-time MemPalace curation (diary, KG mirror, cross-project tunnels, wing-scoped prune); dispatched at ship:post when the mempalace capability is enabled.
+- gsd-mempalace-curator — Ship-time MemPalace curation (diary, KG mirror, cross-project tunnels, wing-scoped prune). Dispatched at ship:post when the mempalace capability is enabled.
 </available_agent_types>
 
 <process>
@@ -36,7 +36,7 @@ INIT=$(gsd_run query init.phase-op ${GSD_WS:+--ws=${GSD_WS##* }} "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be presented in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
 Parse from init JSON: `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `padded_phase`, `commit_docs`.
 
@@ -54,7 +54,7 @@ BASE_BRANCH=$(gsd_run query git.base-branch)
 </step>
 
 <step name="preflight_checks">
-Verify the work is ready to ship:
+Make sure that the work is ready to ship:
 
 1. **Verification passed?**
    ```bash
@@ -64,14 +64,14 @@ Verify the work is ready to ship:
    # #5118: stderr is kept; a failed read stops shipping — it is never "no status".
    STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status) || { echo "verification.status refused this phase's report — see the error above. Fix it before shipping." >&2; exit 1; }
    ```
-   Only `passed` may ship. If `$STATUS` is `passed`, verification is complete — continue to the next preflight check; do not read any further verification field. A non-zero exit above is a hard error (a report `status` outside `passed | gaps_found | human_needed`): present the error and stop.
+   Only `passed` may ship. If `$STATUS` is `passed`, verification is complete — continue to the next preflight check. Do not read any further verification field. A non-zero exit above is a hard error (a report `status` outside `passed | gaps_found | human_needed`): present the error and stop.
 
    Any other value (including `gaps_found`, `human_needed`, `stale`, `missing`, and `phase_dir_not_found`) blocks with `PHASE_VERIFICATION_INCOMPLETE`. Only then, read the two message fields:
    ```bash
    NEXT_ACTION=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_action) || exit 1
    NEXT_COMMAND=$(gsd_run query verification.status "${PHASE_DIR}" --pick next_command) || exit 1
    ```
-   Present `$NEXT_ACTION` to the user and, when `$NEXT_COMMAND` is non-empty, show it as the command to run next. These two are message text only — the block/allow decision has already been made from `$STATUS`, so a concurrent write between the reads cannot change the gate's verdict. The query already covers every status in its closed set, so no per-status arm is needed.
+   Present `$NEXT_ACTION` to the user. When `$NEXT_COMMAND` is non-empty, show it as the command to run next. These two are message text only. The block/allow decision has already been made from `$STATUS`, so a concurrent write between the reads cannot change the gate's verdict. The query already covers every status in its closed set, so no per-status arm is needed.
 
 1a. **Phase marked complete?** (#5221) Verified is not complete: `/gsd:verify-work` completes the phase.
    ```bash
@@ -83,13 +83,15 @@ Verify the work is ready to ship:
    [ "$VERDICT" != unrecorded ] || { echo "PHASE_NOT_RECORDED: ROADMAP.md has no checklist entry or progress-table row for phase ${PHASE_NUMBER}; add one, run /gsd:verify-work ${PHASE_NUMBER}, then re-run /gsd:ship" >&2; exit 1; }
    [ "$VERDICT" != incomplete ] || { echo "PHASE_NOT_COMPLETE: Run /gsd:verify-work ${PHASE_NUMBER} (completes the phase), then re-run /gsd:ship" >&2; [[ $PHASE_NUMBER =~ ^[A-Za-z]?[0-9] ]] || echo "Custom-id phase: the phase tools cannot find its directory yet, so after verifying, tick its ROADMAP.md checklist entry by hand" >&2; exit 1; }
    ```
-   Only a phase whose every ROADMAP record (checklist entry, progress-table Status) reads complete ships; a phase with no record blocks. A missing ROADMAP.md skips the check; an analyze failure stops. This reads the record to catch a missed write-back — it is not a completion verdict (ADR-3180 §7.4, Amendment 10; step 1 already holds the disk verdict). `roadmap_record` keys use `foldPhaseId`; `def n` above must fold the same way.
+   Only a phase whose every ROADMAP record (checklist entry, progress-table Status) reads complete ships. A phase with no record blocks. A missing ROADMAP.md skips the check. An analyze failure stops.
+
+   This reads the record to catch a missed write-back — it is not a completion verdict (ADR-3180 §7.4, Amendment 10. Step 1 already holds the disk verdict). `roadmap_record` keys use `foldPhaseId`. `def n` above must fold the same way.
 
 2. **Clean working tree?**
    ```bash
    git status --short
    ```
-   If uncommitted changes exist: ask user to commit or stash first.
+   If uncommitted changes exist, ask the user to commit or stash them first.
 
 3. **On correct branch?**
    ```bash
@@ -101,14 +103,14 @@ Verify the work is ready to ship:
      echo "⚠ Could not determine whether '$CURRENT_BRANCH' is protected — the query failed. Continuing." >&2
    fi
    ```
-   If `IS_PROTECTED` is `true`: warn — should be on a feature branch.
-   If branching_strategy is `none`: offer to create a branch now.
+   If `IS_PROTECTED` is `true`, warn that the work should be on a feature branch.
+   If branching_strategy is `none`, offer to create a branch now.
 
 4. **Remote configured?**
    ```bash
    git remote -v | head -2
    ```
-   Detect `origin` remote. If no remote: error — can't create PR.
+   Find the `origin` remote. If there is no remote, show an error. You cannot create a PR.
 
 5. **`gh` CLI available?**
    ```bash
@@ -127,11 +129,11 @@ Verify the work is ready to ship:
 
    Read the `activeHooks` array from `SHIP_PRE_HOOKS_JSON` in-context (do NOT pipe it through a shell parser).
 
-   **If `activeHooks` is empty or absent:** skip this check silently and continue to the next preflight step. A capability whose `when` is off contributes no entry, and one that failed to load fails OPEN with its own warning from the resolver — neither is a block.
+   **If `activeHooks` is empty or absent:** skip this check silently and continue to the next preflight step. A capability whose `when` is off contributes no entry. A capability that failed to load fails OPEN with its own warning from the resolver. Neither is a block.
 
-   **For each active entry where `kind == "gate"`** (process in array order), following `gsd-core/references/loop-hook-dispatch.md`. Every gate is visited exactly once by this loop — the named branches below are specializations *within* it, never a separate pass, so no gate is evaluated twice.
+   **For each active entry where `kind == "gate"`** (process in array order), following `gsd-core/references/loop-hook-dispatch.md`. Every gate is visited exactly once by this loop. The named branches below are specializations *within* it, never a separate pass. No gate is evaluated twice.
 
-   **Step 1 — evaluate the gate's `check`.** Dispatch by check shape; read the hook's `check` object in-context to pick the branch (the registry validates exactly one of `query`/`predicate`/`agentVerdict`). Two capability IDs carry a bespoke evaluation whose fail-closed semantics the declared predicate alone does not reproduce — take their branch, then rejoin at step 2:
+   **Step 1 — evaluate the gate's `check`.** Dispatch by check shape. Read the hook's `check` object in-context to pick the branch (the registry validates exactly one of `query`/`predicate`/`agentVerdict`). Two capability IDs carry a bespoke evaluation whose fail-closed semantics the declared predicate alone does not reproduce — take their branch, then rejoin at step 2:
 
    - **`capId == "security"`** — enforce against `SECURITY_FILE`:
      - **`SECURITY_FILE` is empty** → `block: true`, `SECURITY_SHIP_GATE_NO_REVIEW`:
@@ -139,7 +141,7 @@ Verify the work is ready to ship:
        ⚠ Security enforcement is enabled but no SECURITY.md exists for this phase.
        Run /gsd:secure-phase {phase} and resolve findings before shipping.
        ```
-     - **`SECURITY_FILE` exists** → read its frontmatter `threats_open`. The gate passes **only** when `threats_open` is exactly `0`. For any other value — `threats_open` > 0, or a missing / non-numeric / unparsable field — **fail closed** with `block: true` and `SECURITY_SHIP_GATE_OPEN_THREATS` (the predicate is strict equality to `0`; never ship on an ambiguous value):
+     - **`SECURITY_FILE` exists** → read its frontmatter `threats_open`. The gate passes **only** when `threats_open` is exactly `0`. For any other value — `threats_open` > 0, or a missing / non-numeric / unparsable field — **fail closed** with `block: true` and `SECURITY_SHIP_GATE_OPEN_THREATS` (the predicate is strict equality to `0`. Never ship on an ambiguous value):
        ```
        ⚠ Security ship gate: SECURITY.md does not assert threats_open == 0 (found: {threats_open|unset}).
        Resolve open threats (or re-run /gsd:secure-phase {phase}) before shipping.
@@ -152,7 +154,7 @@ Verify the work is ready to ship:
      WINDOWS_OPEN_COUNT=$(printf '%s' "$WINDOWS_STATUS_JSON" | jq -r '.ledger.open_count // "?"' 2>/dev/null || echo '?')
      ```
 
-     - **`WINDOWS_OPEN_COUNT == "0"`** → `block: false`; the gate passes.
+     - **`WINDOWS_OPEN_COUNT == "0"`** → `block: false`. The gate passes.
      - **`WINDOWS_OPEN_COUNT` is a positive integer** → `block: true`, `WINDOWS_SHIP_GATE_OPEN`:
        ```
        ⚠ Broken-windows ship gate: WINDOWS.md has {WINDOWS_OPEN_COUNT} open window(s).
@@ -161,7 +163,7 @@ Verify the work is ready to ship:
          gsd_run windows waive <id> "<reason>"   # justified deferral (reason required)
        Then re-run /gsd:ship.
        ```
-     - **`WINDOWS_OPEN_COUNT` is `"?"`, empty, or non-numeric** → **fail closed** with `block: true` and `WINDOWS_SHIP_GATE_READ_FAILED` (the gate is strict equality to `0`; never ship on an unreadable ledger):
+     - **`WINDOWS_OPEN_COUNT` is `"?"`, empty, or non-numeric** → **fail closed** with `block: true` and `WINDOWS_SHIP_GATE_READ_FAILED` (the gate is strict equality to `0`. Never ship on an unreadable ledger):
        ```
        ⚠ Broken-windows ship gate: could not read open_count from .planning/WINDOWS.md.
        Inspect the file or run `gsd_run windows status --raw` to diagnose. The ledger
@@ -170,7 +172,7 @@ Verify the work is ready to ship:
 
      The ledger is **optional and backward-compatible**: on a project where `gsd_run windows status` returns `open_count: 0` (no `.planning/WINDOWS.md` yet, or an empty ledger), the gate passes silently. It only blocks when at least one entry is `open`.
 
-   - **Every other `capId`** — run the gate's own declared check through the generic evaluator. This arm is what makes a third-party capability's declared gate enforceable at all (#3559); before it existed, a gate whose `capId` was not named above was resolved and then silently dropped.
+   - **Every other `capId`** — run the gate's own declared check through the generic evaluator. This arm is what makes a third-party capability's declared gate enforceable at all (#3559). Before it existed, a gate whose `capId` was not named above was resolved and then silently dropped.
 
      ⚠ **Validate `check` before shell use** (third-party manifest input; wherever `${hook.check.query}` appears, write the dot-normalized query, each `.` as `-`, and validate and pass that same value) — `loop-hook-dispatch.md` § `gate`.
 
@@ -201,7 +203,7 @@ Verify the work is ready to ship:
    - **`blocking == false`** (advisory) → never halts. If `block == true` or the result carries a non-empty message, print `⚠ {hook.capId} advisory: {message}`, then continue.
    - **`blocking == true` and `block == false`** → continue silently.
 
-   **Step dispatch** (unless a blocking gate halted): `kind == "step"` per @gsd-core/references/loop-hook-dispatch.md; honor `consumes` (skip the hook if a consumed artifact is absent) and treat `onError: halt` as `skip` with a warning, since steps never block ship. ⚠ Validate `ref.command` and `ref.agent` (against `^[A-Za-z0-9][A-Za-z0-9._-]*$`) in-context before any shell use or dispatch; skip a hook that fails. Then continue to the `push_branch` step.
+   **Step dispatch** (unless a blocking gate halted): `kind == "step"` per @gsd-core/references/loop-hook-dispatch.md. Honor `consumes` (skip the hook if a consumed artifact is absent) and treat `onError: halt` as `skip` with a warning, since steps never block ship. ⚠ Validate `ref.command` and `ref.agent` (against `^[A-Za-z0-9][A-Za-z0-9._-]*$`) in-context before any shell use or dispatch. Skip a hook that fails. Then continue to the `push_branch` step.
 </step>
 
 <step name="push_branch">
@@ -292,9 +294,9 @@ Use these sections for lean/agile PRD material that should travel with the PR wi
 
 Rules:
 
-- Treat configured sections as append-only. They are rendered after `Key Decisions` and cannot replace, remove, or reorder the required core sections: `Summary`, `Changes`, `Requirements Addressed`, `Verification`, and `Key Decisions`.
+- Treat configured sections as append-only. They are rendered after `Key Decisions` and cannot replace, remove, or reorder the need core sections: `Summary`, `Changes`, `Requirements Addressed`, `Verification`, and `Key Decisions`.
 - Each entry must have `heading` plus at least one of `source`, `template`, or `fallback`.
-- `enabled` defaults to `true`; when `enabled` is `false`, skip the section without warning. This lets onboarding seed optional sections that a project can enable later.
+- `enabled` defaults to `true`. When `enabled` is `false`, skip the section without warning. This lets onboarding seed optional sections that a project can enable later.
 - `source` is a fallback chain of planning artifact headings: `PLAN.md ## Risks || VERIFICATION.md ## Manual Checks`. Allowed artifacts are `ROADMAP.md`, `PLAN.md`, `SUMMARY.md`, `VERIFICATION.md`, `STATE.md`, `REQUIREMENTS.md`, and `CONTEXT.md`.
 - `template` is literal Markdown with a closed token namespace only: `{phase_number}`, `{phase_name}`, `{phase_dir}`, `{base_branch}`, `{padded_phase}`.
 - `fallback` is literal Markdown used when `source` finds no content and no `template` is present.
@@ -326,7 +328,7 @@ Example configured sections:
 
 **8. TDD Audit section:**
 
-Reconstruct the per-commit TDD gate trail before squash-merge discards it. Walk the PR branch's own commits (merges excluded) and read each commit's `gate-status:` trailer with Git's native trailer machinery — never a raw `%B` grep, which would also match the string written in prose:
+Reconstruct the per-commit TDD gate trail before squash-merge discards it. Walk the PR branch's own commits (merges excluded). Read each commit's `gate-status:` trailer with Git's native trailer machinery. Never use a raw `%B` grep, which would also match the string written in prose:
 
 ```bash
 # Anchor on the merge-base so a stale local ${BASE_BRANCH} ref cannot over-count.
@@ -335,15 +337,15 @@ git log "${RANGE_BASE}..HEAD" --no-merges --reverse \
   --format='%H%x1f%s%x1f%(trailers:key=gate-status,valueonly,separator=%x2c)%x1e'
 ```
 
-Records are separated by `\x1e`; the fields inside each are `\x1f`-separated — `<sha>`, `<subject>`, `<gate-status value>`.
+Records are separated by `\x1e`. The fields inside each are `\x1f`-separated — `<sha>`, `<subject>`, `<gate-status value>`.
 
 Pair commits by their conventional-commit type (the `type:` prefix of the subject):
 
-- A `test:` commit is the RED row. Pair it with the next following **implementation** commit — a `feat:` or `fix:` — as its **Impl commit** (the GREEN step), skipping over any intervening `refactor:`, `docs:`, or `chore:` commits so they are never mistaken for the GREEN step.
+- A `test:` commit is the RED row. Pair it with the next following **implementation** commit as its **Impl commit** (the GREEN step). The implementation commit is a `feat:` or `fix:`. Skip any intervening `refactor:`, `docs:`, or `chore:` commits so they are never mistaken for the GREEN step.
 - A `refactor:`, `docs:`, or `chore:` commit that is not consumed as an Impl pairing is a standalone row with Impl commit `—`.
 - A `feat:`/`fix:` commit with no preceding unpaired `test:` is a standalone row.
 
-Surface each commit's `gate-status:` value, normalized to exactly one of `skill`, `fallback`, `exempt`, or `missing` — never the raw trailer text. A commit whose trailer is absent, whose value is none of the first three, or which carries more than one `gate-status:` trailer (ambiguous) is counted as **missing** and still listed. This section is informational; it never blocks the ship.
+Surface each commit's `gate-status:` value, normalized to exactly one of `skill`, `fallback`, `exempt`, or `missing` — never the raw trailer text. A commit is counted as **missing** and still listed if its trailer is absent or its value is none of the first three. This also applies if it carries more than one `gate-status:` trailer (ambiguous). This section is informational. It never blocks the ship.
 
 **Self-suppress when every commit is missing (#2431):** the execute pipeline only writes `gate-status:` trailers when TDD mode is active. If every commit in the scan normalizes to `missing`, skip this section and the aggregate trailer (step 9) entirely — a 100%-missing table is pure noise. Only emit when at least one commit carries a real value (`skill`, `fallback`, or `exempt`).
 
@@ -361,17 +363,17 @@ Harden every table cell against injection, not just subjects: escape `|` as `\|`
 Aggregate: 2 skill, 1 fallback, 1 exempt — 0 missing.
 ```
 
-This `## TDD Audit` section is the final body section — it renders after the configured `pr_body_sections`, immediately before the aggregate trailer — so the frozen core sections and the append-only configured sections both keep their existing order.
+This `## TDD Audit` section is the final body section. It renders after the configured `pr_body_sections`, immediately before the aggregate trailer. The frozen core sections and the append-only configured sections both keep their existing order.
 
 **9. Aggregate gate-status trailer (final line)** (only when step 8 was emitted — i.e., at least one real `gate-status` value exists):
 
-After every other section — including any configured `pr_body_sections` — emit the audit aggregate as a single Git trailer on the **final line** of the PR body, preceded by a blank line so it parses as a valid trailer:
+Emit the audit aggregate after every other section, including any configured `pr_body_sections`. Use a single Git trailer on the **final line** of the PR body. Put a blank line before it so it parses as a valid trailer:
 
 ```
 gate-status: skill=2, fallback=1, exempt=1, missing=0
 ```
 
-Use the exact key order `skill=`, `fallback=`, `exempt=`, `missing=` so downstream tooling parses it stably. Keeping it last means a GitHub squash-merge that defaults its commit message to the PR description carries the aggregate into `${BASE_BRANCH}`, preserving the audit footprint in `git log` after the PR branch is deleted. (Best-effort: it depends on the repo's squash-message default; the in-body `## TDD Audit` section is the source of truth regardless.)
+Use the exact key order `skill=`, `fallback=`, `exempt=`, `missing=` so downstream tooling parses it stably. Keeping it last means a GitHub squash-merge that defaults its commit message to the PR description carries the aggregate into `${BASE_BRANCH}`. This preserves the audit footprint in `git log` after the PR branch is deleted. (Best-effort: it depends on the repo's squash-message default. The in-body `## TDD Audit` section is the source of truth regardless.)
 </step>
 
 <step name="create_pr">
@@ -463,9 +465,9 @@ If `REVIEW_CMD` is non-empty and not `"null"`, run the external review:
 
 **Manual review options:**
 
-Ask if user wants to trigger a code review:
+Ask if the user wants to trigger a code review:
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. Non-Claude runtimes need this (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
 
 ```
 AskUserQuestion:
@@ -489,7 +491,7 @@ Report the PR URL and suggest: "Review the diff at {url}/files"
 </step>
 
 <step name="track_shipping">
-Update STATE.md to reflect the shipping action. Write the activity line only, with its description; do not write `Status`. At ship time the Current Position block already describes the next phase, and `Status` feeds the frontmatter `status` field, so a free-text value such as "Phase N shipped" does not belong there (#5165).
+Update STATE.md to reflect the shipping action. Write the activity line only, with its description. Do not write `Status`. At ship time the Current Position block already describes the next phase, and `Status` feeds the frontmatter `status` field. A free-text value such as "Phase N shipped" does not belong there (#5165).
 
 ```bash
 gsd_run query state.update "Last Activity" "$(date +%Y-%m-%d) -- Phase ${PHASE_NUMBER} shipped as PR #${PR_NUMBER}"
@@ -542,7 +544,7 @@ fi
 
 <step name="ship_post_capability_dispatch">
 
-> Capability-driven dispatch. Resolves active `ship:post` hooks via the capability registry; each hook's `when` is evaluated by the registry — no inline `config-get`. All `ship:post` hooks are post-ship and additive (`onError: skip`); a failure here never affects the already-created PR.
+> Capability-driven dispatch. Resolves active `ship:post` hooks via the capability registry. Each hook's `when` is evaluated by the registry — no inline `config-get`. All `ship:post` hooks are post-ship and additive (`onError: skip`). A failure here never affects the already-created PR.
 
 ```bash
 SHIP_POST_HOOKS_JSON=$(gsd_run loop render-hooks ship:post --raw)
@@ -553,7 +555,7 @@ Read the `activeHooks` array directly from `SHIP_POST_HOOKS_JSON` in-context (do
 **Branch 1 — no active `ship:post` step hooks (`activeHooks` has no entry with `kind == "step"`):** Skip silently to the report.
 
 **Generic step hook dispatch contract:** For each active entry where `kind == "step"`:
-- Honor `consumes`: if it lists `UAT.md`, resolve `ls "${PHASE_DIR}"/*-UAT.md 2>/dev/null | head -1` and pass it to the dispatch; if a consumed artifact is absent, skip that hook.
+- Honor `consumes`: if it lists `UAT.md`, resolve `ls "${PHASE_DIR}"/*-UAT.md 2>/dev/null | head -1` and pass it to the dispatch. If a consumed artifact is absent, skip that hook.
 - If `ref.agent` is set, first show the spawn banner, then dispatch the agent named by `ref.agent` (use the exact `ref.agent` value as the subagent type — e.g. `gsd-mempalace-curator` — never `general-purpose`):
 
   ```
@@ -562,23 +564,25 @@ Read the `activeHooks` array directly from `SHIP_POST_HOOKS_JSON` in-context (do
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in. Use `gsd_run query resolve-dispatch-type --requested <role> --raw`.
+
+> On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
   **#2684 model resolution.** `init.phase-op` emits no model field, and `ref.agent` is only known at runtime, so resolve it per hook before dispatching.
 
-  **Input validation (defense-in-depth) — do this IN-CONTEXT, before any shell use.** `ref.agent` originates in a capability manifest, which may be third-party. Check the value you read from `activeHooks` against `^[A-Za-z0-9][A-Za-z0-9._-]*$` yourself, the same way you read `activeHooks` itself — **never** by pasting it into a shell command to be tested there. A value carrying a quote, `;`, `` ` ``, `$(`, or a newline would terminate the assignment and run as its own statement *before* any shell-side check could execute, so a shell-side check is no protection at all.
+  **Input validation (defense-in-depth) — do this IN-CONTEXT, before any shell use.** `ref.agent` start in a capability manifest, which may be third-party. Check the value you read from `activeHooks` against `^[A-Za-z0-9][A-Za-z0-9._-]*$` yourself, the same way you read `activeHooks` itself. **Never** paste it into a shell command to test it there. A value carrying a quote, `;`, `` ` ``, `$(`, or a newline would terminate the assignment and run as its own statement *before* any shell-side check could execute, so a shell-side check is no protection at all.
 
   A value that fails the check is a malformed manifest: record a warning, **skip that hook entirely**, and move to the next `activeHooks` entry. Do not dispatch it and do not place it in a command line.
 
-  Only once the value has passed, resolve its model — substituting the validated value for `<agent>`:
+  Only once the value passes, resolve its model — substituting the validated value for `<agent>`:
 
   ```bash
   HOOK_AGENT_MODEL=$(gsd_run query resolve-model "<agent>" --raw 2>/dev/null || true)
   ```
 
-  **#2517: omit the `model=` parameter entirely when `HOOK_AGENT_MODEL` is `inherit` or empty** — a capability may name an agent absent from the model-profile table, which resolves to the empty string, and passing an empty model 404s on non-Claude runtimes. Omitting inherits the orchestrator's model.
+  **#2517: omit the `model=` parameter entirely when `HOOK_AGENT_MODEL` is `inherit` or empty** — a capability may name an agent absent from the model-profile table. This resolves to the empty string, and passing an empty model 404s on non-Claude runtimes. Omitting inherits the orchestrator's model.
 
-  With a resolved model (`{HOOK_AGENT_MODEL}` is the value the command above printed; `${…}` are bound shell variables):
+  With a resolved model (`{HOOK_AGENT_MODEL}` is the value the command above printed. `${…}` are bound shell variables):
 
   `Agent(subagent_type=ref.agent, prompt="Ship-time capability hook for phase ${PHASE_NUMBER}. Phase dir: ${PHASE_DIR}. Consume: ${consumed_files}. Follow your agent instructions.", model="{HOOK_AGENT_MODEL}")`
 

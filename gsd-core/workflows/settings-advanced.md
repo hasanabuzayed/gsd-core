@@ -1,26 +1,25 @@
-Apply response_language to all user-facing prose — narration between tool calls, status updates, progress notes, and findings included; preserve code, paths, and identifiers.
+Apply response_language to all user-facing prose. This includes narration between tool calls, status updates, progress notes, and findings. Preserve code, paths, and identifiers.
 
 <purpose>
-Interactive configuration of GSD power-user knobs — plan bounce, planner stall detection and timing, node repair, subagent timeouts, inline plan threshold, cross-AI execution, base branch, branch templates, response language,
-context window, gitignored search, graphify build timeout, runtime model tier overrides, and
-model policy configuration (provider + budget → canonical tier mapping, or manual model ID
-assignment per cost tier).
+This workflow configures advanced GSD settings interactively. These include plan bounce, planner stall detection and timing, node repair, subagent timeouts, and the inline plan threshold. They also include cross-AI execution, base branch, branch templates, response language, context window, and gitignored search. They include graphify build timeout and runtime model tier overrides.
 
-This is a companion to `/gsd:settings` — the common-case prompt there covers model profile,
-research/plan_check/verifier toggles, branching strategy, UI/AI phase gates, and worktree
-isolation. This advanced command covers everything else that is user-settable, grouped into
-eight sections so each prompt batch stays cognitively scoped. Every answer pre-selects the
-current value; numeric-input answers that are non-numeric are rejected and re-prompted.
+Model policy configuration maps provider + budget → canonical tier, or assigns model IDs manually per cost tier.
+
+This workflow is a companion to `/gsd:settings`. The common-case prompt covers model profile, research/plan_check/verifier toggles, branching strategy, UI/AI phase gates, and worktree isolation. This advanced command covers all other user-settable settings. It groups them into eight sections to limit the scope of each prompt batch.
+
+Each answer pre-selects the current value. The workflow rejects non-numeric answers to numeric inputs and prompts the user again.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
+
 </required_reading>
 
 <process>
 
 <step name="ensure_and_load_config">
-Ensure config exists and resolve the workstream-aware config path (mirrors `settings.md`):
+Make sure that the config exists. Resolve the workstream-aware config path as in `settings.md`:
+
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@opengsd/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @opengsd/gsd-core - it is either a different package or an @opengsd/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
@@ -35,8 +34,8 @@ if [[ -z "${GSD_CONFIG_PATH:-}" ]]; then
 fi
 ```
 
-All subsequent reads and writes go through `$GSD_CONFIG_PATH`. Never hardcode
-`.planning/config.json` — workstream installs must route to their own config file.
+Use `$GSD_CONFIG_PATH` for all next reads and writes. Never hardcode `.planning/config.json`. Workstream installs must route to their own config file.
+
 </step>
 
 <step name="read_current">
@@ -44,8 +43,8 @@ All subsequent reads and writes go through `$GSD_CONFIG_PATH`. Never hardcode
 cat "$GSD_CONFIG_PATH"
 ```
 
-Parse the following current values. If a key is absent, fall back to the documented default
-shown in parentheses:
+Parse the current values that follow. If a key is absent, use the documented default in parentheses:
+
 
 Planning Tuning:
 - `planner.stall_detection_enabled` (default: `true`)
@@ -90,47 +89,39 @@ Runtime Model Tiers:
 Model Policy:
 - `model_policy.provider` (default: `null` — known values: anthropic, anthropic-fable, openai, google, qwen)
 - `model_policy.budget` (default: `null` — known values: high, medium, low)
-- `model_policy.high` (default: `null` — model ID for the high-cost tier; used by generic provider path)
-- `model_policy.medium` (default: `null` — model ID for the medium-cost tier; used by generic provider path)
-- `model_policy.low` (default: `null` — model ID for the low-cost tier; used by generic provider path)
+- `model_policy.high` (default: `null` — model ID for the high-cost tier. Used by generic provider path)
+- `model_policy.medium` (default: `null` — model ID for the medium-cost tier. Used by generic provider path)
+- `model_policy.low` (default: `null` — model ID for the low-cost tier. Used by generic provider path)
 
-Each field's **current value is pre-selected** in the prompt rendering below. When the
-current value is absent from the config, render the documented default as the pre-selected
-option so the user sees what the effective value is.
+The prompts below **pre-select the current value** of each field. If the current value is absent from the config, pre-select the documented default. This shows the user the effective value.
+
 </step>
 
 <step name="present_settings">
 
-**Text mode (`workflow.text_mode: true` or `--text` flag):** Set `TEXT_MODE=true` if `--text` is
-in `$ARGUMENTS` OR `text_mode` is true in config. When `TEXT_MODE=true`, replace every
-`AskUserQuestion` call below with a plain-text numbered list and ask the user to type the
-choice number or free-text value.
+**Text mode (`workflow.text_mode: true` or `--text` flag):** If `--text` is in `$ARGUMENTS` OR `text_mode` is true in config, set `TEXT_MODE=true`. If `TEXT_MODE=true`, replace every `AskUserQuestion` call below with a plain-text numbered list. Ask the user to type the choice number or free-text value.
 
-**Numeric-input validation.** For any numeric field (`*_passes`, `*_budget`, `*_timeout`,
-`*_threshold`, `*_minutes`, `context_window`, `graphify.build_timeout`), if the user types a value that
-is not a non-negative integer, the workflow MUST reject it, state which value was invalid,
-and re-prompt that single field. The minimum accepted value is field-specific and is stated
-in each field's prompt below — the `*_passes` fields and the `planner.stall_*_minutes` fields
-require `>= 1`; all other numeric fields accept `>= 0`. An empty input means "keep current"
-— the existing value is retained. Non-numeric input is never silently coerced.
 
-**Free-text validation.** For branch template fields (`git.phase_branch_template`,
-`git.milestone_branch_template`), if the user supplies a non-default value, it MUST be
-non-empty and SHOULD contain at least one `{placeholder}`. A template missing placeholders
-is rejected with a message explaining the available variables (`{phase}`, `{slug}`,
-`{milestone}`) and re-prompted. An empty input means "keep current."
+**Numeric-input validation.** Numeric fields are `*_passes`, `*_budget`, `*_timeout`, `*_threshold`, `*_minutes`, `context_window`, and `graphify.build_timeout`. If the user types a value that is not a non-negative integer, the workflow MUST reject it. It states which value was invalid. It prompts again for that single field.
 
-**Null-allowed fields.** For `response_language`, `workflow.plan_bounce_script`,
-`workflow.cross_ai_command`: an empty input clears the field (`null`). A non-empty input is
-stored verbatim as a string.
+Each field's prompt below states its minimum accepted value. The `*_passes` fields and the `planner.stall_*_minutes` fields need `>= 1`. All other numeric fields accept `>= 0`. An empty input means "keep current". The workflow keeps the existing value. Never silently coerce non-numeric input.
+
+
+**Free-text validation.** The branch template fields are `git.phase_branch_template` and `git.milestone_branch_template`. If the user supplies a non-default value, it MUST be non-empty and SHOULD contain at least one `{placeholder}`. If a template has no placeholders, reject it. Explain the available variables (`{phase}`, `{slug}`, `{milestone}`) in the message. Prompt the user again. An empty input means "keep current."
+
+
+**Null-allowed fields.** An empty input clears `response_language`, `workflow.plan_bounce_script`, or `workflow.cross_ai_command` to `null`. Store a non-empty input verbatim as a string.
+
 
 ---
 
 ### Section 1 — Planning Tuning
 
-Asked as four calls, 1a–1d (`AskUserQuestion` takes at most 4 questions per call).
+Ask in four calls, 1a–1d. `AskUserQuestion` takes at most 4 questions per call.
 
-**1a — Planner watchdog.** Before offering the disabled choice, display this warning verbatim:
+
+**1a — Planner watchdog.** Before you offer the disabled choice, show this warning verbatim:
+
 
 `Warning: disabling planner stall detection gives up bounded automatic recovery if the runtime loses an agent completion handoff. Planning still waits through the runtime-native completion mechanism, but you may need to interrupt and use the filesystem fallback.`
 
@@ -148,8 +139,10 @@ AskUserQuestion([
 ])
 ```
 
-**1b — Stall timing.** Ask only when `planner.stall_detection_enabled` is effectively `true` after 1a (anything but boolean `false`); otherwise skip 1b.
-`planner.stall_threshold_minutes`: idle time before plan-phase offers recovery; raise it for slow models. `planner.stall_detect_interval_minutes`: check cadence. Both integer `>= 1`.
+**1b — Stall timing.** Only when `planner.stall_detection_enabled` is effectively `true` after 1a, ask this question. This means any value except boolean `false`. Otherwise, skip 1b.
+
+`planner.stall_threshold_minutes` is the idle time before plan-phase offers recovery. Increase it for slow models. `planner.stall_detect_interval_minutes` is the check interval. Both are integers `>= 1`.
+
 
 ```text
 AskUserQuestion([
@@ -399,14 +392,13 @@ AskUserQuestion([
 
 ### Section 7 — Runtime Model Tiers
 
-This section lets the user inspect and override the built-in model IDs GSD resolves for each
-profile tier (`opus` / `sonnet` / `haiku`) on their configured runtime.
+This section lets the user examine and override the built-in model IDs that GSD resolves. GSD resolves them for each profile tier (`opus` / `sonnet` / `haiku`) on the configured runtime.
+
 
 **Step A — Show current runtime and built-in defaults:**
 
-Read `runtime` from the config (or treat as `"claude"` if absent). Look up the built-in
-tier map from the table below. For each tier, also read the current override from
-`model_profile_overrides.<runtime>.<tier>` if present.
+Read `runtime` from the config. If `runtime` is absent, treat it as `"claude"`. Find the built-in tier map in the table below. For each tier, if an override is present, also read it from `model_profile_overrides.<runtime>.<tier>`.
+
 
 Built-in tier defaults by runtime:
 
@@ -422,7 +414,8 @@ Built-in tier defaults by runtime:
 | `pi`       | `claude-opus-4-8`             | `claude-sonnet-5`             | `claude-haiku-4-5`            |
 | Group B (`cline`, `cursor`, `windsurf`, `augment`, `trae`, `codebuddy`, `antigravity`) | (no built-in default — your runtime handles model selection) | | |
 
-Display a table to the user showing the effective configuration:
+Show the user a table of the effective config:
+
 
 ```text
 Runtime model tiers — runtime: <current runtime or "claude (default)">
@@ -454,7 +447,8 @@ AskUserQuestion([
 ])
 ```
 
-If "Common runtimes" is selected, ask:
+If the user selects "Common runtimes", ask:
+
 
 ```text
 AskUserQuestion([
@@ -471,7 +465,8 @@ AskUserQuestion([
 ])
 ```
 
-If "Additional runtimes" is selected, ask:
+If the user selects "More runtimes", ask:
+
 
 ```text
 AskUserQuestion([
@@ -489,9 +484,9 @@ AskUserQuestion([
 ])
 ```
 
-If "Other (Group B or custom)" is selected, prompt the user to enter the runtime name as a free-text string.
-If the selected runtime differs from the stored `runtime` key, update `runtime` via
-`gsd_run query config-set runtime <value>` before proceeding to Step C.
+If the user selects "Other (Group B or custom)", prompt the user to enter the runtime name as a free-text string.
+If the selected runtime differs from the stored `runtime` key, update `runtime` with `gsd_run query config-set runtime <value>`. Do this before you proceed to Step C.
+
 
 **Step C — Configure tier overrides for the selected runtime:**
 
@@ -532,28 +527,28 @@ AskUserQuestion([
 
 **Step D — Apply the changes:**
 
-For each tier where the user chose "Enter model ID":
+For each tier for which the user chose "Enter model ID", run:
+
 ```bash
 gsd_run query config-set model_profile_overrides.<runtime>.<tier> "<model-id>"
 ```
 
-For each tier where the user chose "Clear override", remove the key by setting it to null:
+For each tier for which the user chose "Clear override", set the key to null to remove it:
+
 ```bash
 gsd_run query config-set model_profile_overrides.<runtime>.<tier> null
 ```
 
-"Keep current" selections are skipped entirely. Never write a key the user did not explicitly
-change.
+Skip "Keep current" selections entirely. Never write a key that the user did not explicitly change.
+
 
 </step>
 
 <step name="update_config">
-Merge the new settings into the existing config at `$GSD_CONFIG_PATH`. This merge is the
-core correctness invariant: **preserve every unrelated key** — do not clobber siblings.
+Merge the new settings into the existing config at `$GSD_CONFIG_PATH`. The core correctness invariant for this merge is: **preserve every unrelated key**. Do not overwrite sibling keys.
 
-Apply each selected value via `gsd_run query config-set <key> <value>` so the central
-validator (`isValidConfigKey`) accepts the write and the deep-merge preserves unrelated
-keys and sibling sub-objects.
+Apply each selected value with `gsd_run query config-set <key> <value>`. The central validator (`isValidConfigKey`) accepts the write. The deep-merge preserves unrelated keys and sibling sub-objects.
+
 
 ```bash
 # Example — only write keys the user changed. "Keep current" selections are skipped.
@@ -569,9 +564,8 @@ gsd_run query config-set model_profile_overrides.antigravity.opus gemini-3.1-pro
 gsd_run query config-set model_profile_overrides.antigravity.haiku null
 ```
 
-Conceptual shape after merge (unchanged top-level keys like `model_profile`,
-`granularity`, `mode`, `brave_search`, `agent_skills.*`, `hooks.context_warnings`, and
-anything not listed in Sections 1–8 MUST survive the update):
+The conceptual shape after the merge follows. Unchanged top-level keys MUST survive the update. These include `model_profile`, `granularity`, `mode`, `brave_search`, `agent_skills.*`, and `hooks.context_warnings`. They also include anything not listed in Sections 1–8:
+
 
 ```json
 {
@@ -631,22 +625,19 @@ anything not listed in Sections 1–8 MUST survive the update):
 }
 ```
 
-Never emit a full overwrite of the file that omits keys the user did not touch. Always
-route each write through `gsd_run query config-set` so sibling preservation is handled by
-the central setter.
+Never emit a full overwrite of the file that omits keys the user did not touch. Always use `gsd_run query config-set` for each write. The central setter preserves sibling keys.
+
 </step>
 
 <step name="model_policy">
 
 ### Section 8 — Model Policy
 
-This section configures the `model_policy` key in `.planning/config.json`. Model policy
-defines which AI models GSD uses at each cost tier (low / medium / high), independently
-of the `runtime` and `model_profile` selections above. Two paths are offered:
+This section configures the `model_policy` key in `.planning/config.json`. Model policy defines which AI models GSD uses at each cost tier (low / medium / high). It does not depend on the `runtime` and `model_profile` selections above. There are two paths:
 
-- **Known provider:** choose a provider and a budget level; GSD materializes the canonical
-  tier mapping for that provider.
-- **Generic provider:** enter low / medium / high model IDs manually.
+- **Known provider:** Choose a provider and a budget level. GSD writes the canonical tier mapping for that provider.
+- **Generic provider:** Enter low / medium / high model IDs manually.
+
 
 **Step A — Read and display the current model policy:**
 
@@ -654,7 +645,8 @@ of the `runtime` and `model_profile` selections above. Two paths are offered:
 cat "$GSD_CONFIG_PATH" | python3 -c "import sys,json; c=json.load(sys.stdin); mp=c.get('model_policy',{}); print(json.dumps(mp,indent=2))" 2>/dev/null || echo "{}"
 ```
 
-Display the current values (or "(unset)" for any absent field) before asking:
+Before you ask, show the current values. Show "(unset)" for any absent field:
+
 
 ```text
 Current model_policy:
@@ -682,7 +674,8 @@ AskUserQuestion([
 ])
 ```
 
-**If "Keep current" is selected:** skip Steps C–E and move on to the confirm step.
+**If the user selects "Keep current":** Skip Steps C–E. Go to the confirm step.
+
 
 **Step C — Known-provider path:**
 
@@ -703,7 +696,8 @@ AskUserQuestion([
 ```
 
 If the user selects "Other known provider", ask them to type `google` or `qwen`.
-Use the typed value as the provider. After the user picks or types a provider, ask:
+Use the typed value as the provider. After the user selects or types a provider, ask:
+
 
 ```text
 AskUserQuestion([
@@ -740,15 +734,15 @@ Canonical tier mappings by provider and budget:
 | qwen      | medium | qwen3-max-2026-01-23       | qwen3-coder-plus           | qwen3-coder-next           |
 | qwen      | low    | qwen3-coder-next           | qwen3-coder-next           | qwen3-coder-next           |
 
-Look up the selected (provider, budget) row and proceed to Step E to write those values.
+Find the selected (provider, budget) row. Proceed to Step E to write those values.
 
-> **claude runtime note:** On the default `claude` runtime, policy-resolved model IDs (e.g. `claude-fable-5`) are mapped to Claude Code agent aliases (`fable`, `opus`, `sonnet`, `haiku`); an ID with no corresponding alias emits a stderr warning and falls back to the configured tier alias.
+> **claude runtime note:** On the default `claude` runtime, GSD maps policy-resolved model IDs to Claude Code agent aliases. An example model ID is `claude-fable-5`. The aliases are `fable`, `opus`, `sonnet`, and `haiku`. An ID with no corresponding alias emits a stderr warning and uses the configured tier alias.
+
 
 **Step D — Generic-provider path:**
 
-Prompt the user to enter each model ID as a free-text input. An empty input means "keep
-the current value for that tier." Validate that non-empty inputs are non-blank strings
-(no whitespace-only values); if validation fails, re-prompt that single field.
+Prompt the user to enter each model ID as a free-text input. An empty input means "keep the current value for that tier." Make sure that non-empty inputs are non-blank strings (no whitespace-only values). If validation fails, prompt again for that single field.
+
 
 ```text
 AskUserQuestion([
@@ -782,8 +776,9 @@ AskUserQuestion([
 ])
 ```
 
-Set `provider = "custom"` and `budget = null` when writing the generic-provider result.
+When you write the generic-provider result, set `provider = "custom"` and `budget = null`.
 Proceed to Step E.
+
 
 **Step E — Write model_policy to config:**
 
@@ -804,12 +799,12 @@ gsd_run query config-set model_policy.medium   "<medium-id>" # omit if user chos
 gsd_run query config-set model_policy.low      "<low-id>"    # omit if user chose "Keep current"
 ```
 
-Never write a tier the user explicitly chose to keep; the existing value must survive.
+Never write a tier the user explicitly chose to keep. The existing value must survive.
 
 </step>
 
 <step name="confirm">
-Display:
+Show:
 
 ```text
 ### GSD ► ADVANCED SETTINGS UPDATED
@@ -869,21 +864,21 @@ UI/AI phase gates), use /gsd:settings.
 </process>
 
 <success_criteria>
-- [ ] Current config read from resolved `$GSD_CONFIG_PATH`
-- [ ] Eight sections rendered (Planning, Execution, Discussion, Cross-AI, Git, Runtime/Output, Runtime Model Tiers, Model Policy)
-- [ ] Every field pre-selected to its current value (or documented default if absent)
-- [ ] Disabling planner stall detection shows the bounded-recovery warning before writing `false`
-- [ ] Stall threshold/interval asked only while stall detection is on; no call exceeds 4 questions
-- [ ] Numeric inputs validated — non-numeric rejected and re-prompted
-- [ ] Branch-template inputs validated — non-default must contain a placeholder
-- [ ] Null-allowed fields accept an empty input as a clear
-- [ ] Writes routed through `gsd_run query config-set` so unrelated keys are preserved
-- [ ] Section 7 shows current runtime and built-in tier table
-- [ ] Group B runtimes display "(no built-in default — your runtime handles model selection)"
-- [ ] Override set/clear/keep paths all work correctly for each tier
-- [ ] Section 8 (Model Policy) offers three top-level choices: Known provider, Generic provider, Keep current
-- [ ] Known-provider path: provider + budget → canonical tier mapping written to model_policy.{provider,budget,high,medium,low}
-- [ ] Generic-provider path: per-tier manual model IDs; "Keep current" tiers are never written; provider=custom budget=null
-- [ ] model_policy written under the model_policy key in config.json, never as a top-level flat key
-- [ ] Confirmation table rendered listing all fields including model_policy.{provider,budget,high,medium,low}
+- [ ] Read the current config from the resolved `$GSD_CONFIG_PATH`.
+- [ ] Show eight sections (Planning, Execution, Discussion, Cross-AI, Git, Runtime/Output, Runtime Model Tiers, Model Policy).
+- [ ] Pre-select the current value for every field. If it is absent, pre-select the documented default.
+- [ ] Before you write `false` to disable planner stall detection, show the bounded-recovery warning.
+- [ ] Ask for stall threshold/interval only while stall detection is on. Do not exceed 4 questions per call.
+- [ ] Validate numeric inputs. Reject non-numeric inputs and prompt again.
+- [ ] Validate branch-template inputs. A non-default value must contain a placeholder.
+- [ ] Accept an empty input as a clear for null-allowed fields.
+- [ ] Use `gsd_run query config-set` for writes to preserve unrelated keys.
+- [ ] Show the current runtime and built-in tier table in Section 7.
+- [ ] Show "(no built-in default — your runtime handles model selection)" for Group B runtimes.
+- [ ] Make sure that override set/clear/keep paths work correctly for each tier.
+- [ ] Offer three top-level choices in Section 8 (Model Policy): Known provider, Generic provider, Keep current.
+- [ ] For the known-provider path, write provider + budget → canonical tier mapping to model_policy.{provider,budget,high,medium,low}.
+- [ ] For the generic-provider path, use manual model IDs per tier. Never write "Keep current" tiers. Provider=custom budget=null.
+- [ ] Write model_policy under the model_policy key in config.json, never as a top-level flat key.
+- [ ] Show the confirmation table with all fields, including model_policy.{provider,budget,high,medium,low}.
 </success_criteria>
