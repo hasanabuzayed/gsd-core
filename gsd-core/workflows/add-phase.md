@@ -77,7 +77,7 @@ Update STATE.md to reflect the new phase:
    - Phase {N} added: {description}
    ```
 
-If "Roadmap Evolution" section doesn't exist, create it.
+If "Roadmap Evolution" section does not exist, create it.
 </step>
 
 <step name="completion">
