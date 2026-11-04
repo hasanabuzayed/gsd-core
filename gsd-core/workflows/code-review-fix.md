@@ -1,11 +1,13 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Auto-fix issues from REVIEW.md. Validates phase, checks config gate, verifies REVIEW.md exists and has fixable issues, spawns gsd-code-fixer agent, handles --auto iteration loop (capped at 3), commits REVIEW-FIX.md once at the end, and presents results.
+Automatically fix issues from REVIEW.md. Validate the phase and check the config gate. Make sure that REVIEW.md exists and contains fixable issues.
+
+Spawn the gsd-code-fixer agent. Run the --auto iteration loop with a limit of 3 iterations. Commit REVIEW-FIX.md once at the end. Show the results.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
@@ -49,12 +51,12 @@ fi
 ```
 
 **Phase validation (before config gate):**
-If `phase_found` is false, report error and exit:
+If `phase_found` is false, report the error and exit:
 ```
 Error: Phase ${PHASE_ARG} not found. Run /gsd:progress to see available phases.
 ```
 
-This runs BEFORE config gate check so user errors are surfaced immediately regardless of config state.
+This runs before the config gate check. The workflow shows user errors immediately, regardless of the config state.
 
 Parse optional flags from $ARGUMENTS:
 
@@ -86,13 +88,13 @@ FIX_REPORT_PATH="${PHASE_DIR}/${PADDED_PHASE}-REVIEW-FIX.md"
 </step>
 
 <step name="check_config_gate">
-Check if code review is active via the capability registry:
+Use the capability registry to find out if code review is active:
 
 ```bash
 EXECUTE_POST_HOOKS_JSON=$(gsd_run loop render-hooks execute:post --raw)
 ```
 
-Resolve active step hooks from `EXECUTE_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "code-review"`.
+Resolve only active step hooks from `EXECUTE_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "code-review"`.
 
 If no active code-review step hook exists:
 ```
@@ -100,13 +102,13 @@ Code review fix skipped (code-review capability inactive)
 ```
 Exit workflow.
 
-Default is active through the Capability Registry schema — only skip when the registry resolves no active code-review step hook. This check runs AFTER phase validation so invalid phase errors are shown first.
+The Capability Registry schema makes code review active by default. Only skip when the registry resolves no active code-review step hook. This check runs after phase validation. The workflow shows invalid phase errors first.
 
-Note: This reuses the code-review capability activation rather than introducing a separate code-review-fix capability. Rationale: fixes are meaningless without review, so a single activation boundary makes sense. If independent control is needed later, a separate key can be added in v2.
+Note: This uses the code-review capability activation, not a separate code-review-fix capability. Fixes have no meaning without review, so they share one activation boundary. If independent control is needed later, a separate key can be added in v2.
 </step>
 
 <step name="check_review_exists">
-Verify that REVIEW.md exists:
+Make sure that REVIEW.md exists:
 
 ```bash
 if [ ! -f "${REVIEW_PATH}" ]; then
@@ -115,11 +117,11 @@ if [ ! -f "${REVIEW_PATH}" ]; then
 fi
 ```
 
-Do NOT auto-run code-review. Require explicit user action to ensure review intent is clear.
+If REVIEW.md is missing, exit the workflow. Do NOT auto-run code-review. Explicit user action makes the review intent clear.
 </step>
 
 <step name="check_review_status">
-Parse REVIEW.md frontmatter to check status and extract context for --auto loop:
+Parse REVIEW.md frontmatter to find the status. Extract context for the --auto loop:
 
 ```bash
 # Parse status field
@@ -191,11 +193,11 @@ done < <(REVIEW_PATH="${REVIEW_PATH}" node -e "
 " 2>/dev/null)
 ```
 
-If REVIEW.md contains a `files_reviewed_list` frontmatter field, use that as the re-review scope. If not present, fall back to re-reviewing the full phase (same behavior as initial code-review).
+If REVIEW.md contains a `files_reviewed_list` frontmatter field, use it as the re-review scope. If the field is not present, re-review the full phase. This is the same behavior as the initial code-review.
 </step>
 
 <step name="spawn_fixer">
-Spawn the gsd-code-fixer agent with config (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
+Spawn the gsd-code-fixer agent with config. It runs in a subagent and gives no output until it returns, ~1–5 min. This is expected and is not a freeze:
 
 ```bash
 # Build config for agent
@@ -207,11 +209,11 @@ Use Agent() to spawn agent:
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatch on a built-in-only runtime (kimi-code — three built-ins only), resolve the role with `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…), the role returns unchanged. On kimi-code, it maps only to `coder`/`explore`/`plan` by role-suffix. The persona uses `${AGENT_SKILLS_<ROLE>}` (Phase 3) in each case. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`FIXER_MODEL`, `REVIEWER_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value for `model` (`FIXER_MODEL`, `REVIEWER_MODEL`) is `"inherit"` or empty, omit the parameter entirely. An empty value 404s on runtimes without native tier aliases. This is the default on non-Claude runtimes. If you omit the parameter, the agent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 ```text
 Agent(subagent_type="gsd-code-fixer", model="{FIXER_MODEL}", prompt="
@@ -232,7 +234,7 @@ Read REVIEW.md findings, apply fixes, commit each atomically, write REVIEW-FIX.m
 ${AGENT_SKILLS_FIXER}")
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After the Agent() call above, stop work on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume after the subagent result is available.
 
 **Agent failure handling:**
 
@@ -241,7 +243,7 @@ If Agent() fails:
 Error: Code fix agent failed: ${error_message}
 ```
 
-Check if FIX_REPORT_PATH exists:
+Find out if FIX_REPORT_PATH exists:
 - If yes: "Partial success — some fixes may have been committed."
 - If no: "No fixes applied."
 
@@ -255,7 +257,7 @@ Exit workflow (skip auto loop).
 </step>
 
 <step name="auto_iteration_loop">
-Only runs if AUTO_MODE is true. If AUTO_MODE is false, skip this step entirely.
+This step runs only if AUTO_MODE is true. If AUTO_MODE is false, skip this step entirely.
 
 ```bash
 if [ "$AUTO_MODE" = "true" ]; then
@@ -429,14 +431,18 @@ fi
 ```
 
 Key design decisions for --auto (addresses ALL review HIGH concerns):
-1. **Re-review scope**: Uses REVIEW_FILES_ARRAY from original REVIEW.md frontmatter, falling back to full phase scope. Scope is NOT lost between iterations. Uses portable while-read loop (bash 3.2+ compatible, handles spaces in paths).
-2. **Artifact semantics**: REVIEW.md is overwritten by each re-review (latest review state). REVIEW-FIX.md is overwritten by each fixer iteration (latest fix state with iteration count). There is ONE final version of each artifact, not per-iteration copies.
-   Backup files (.iterN.md) preserve history for post-mortem analysis if iterations degrade. On successful convergence (#3190) the backups are spent scratch and removed; on degradation (hit MAX_ITERATIONS / fixer failure) they are retained for post-mortem. The removal happens in `cleanup_iteration_backups`, after `record_disposition` has read them — they are the only surviving record of what an earlier iteration fixed, since this artifact keeps one final version rather than per-iteration copies.
-3. **Commit timing**: Fix commits happen per-finding inside the agent. REVIEW-FIX.md is NOT committed until step 7 (after ALL iterations complete). Only ONE docs commit, not one per iteration. In --auto that single commit also stages the converged REVIEW.md alongside REVIEW-FIX.md (#3190), so the two committed artifacts agree — the initial code-review commit held iteration-1 REVIEW.md content, and the --auto re-review loop overwrote it each iteration.
+1. **Re-review scope**: The loop uses REVIEW_FILES_ARRAY from the original REVIEW.md frontmatter. If the list is absent, it uses the full phase scope. The scope is NOT lost between iterations. The portable while-read loop supports bash 3.2+ and spaces in paths.
+2. **Artifact semantics**: Each re-review overwrites REVIEW.md with the latest review state. Each fixer iteration overwrites REVIEW-FIX.md with the latest fix state and iteration count. There is ONE final version of each artifact, not per-iteration copies.
+   If iterations degrade, backup files (.iterN.md) preserve history for post-mortem analysis. On successful convergence (#3190), the workflow removes the backups as scratch files. On degradation (hit MAX_ITERATIONS / fixer failure), it retains them for post-mortem analysis.
+
+   `cleanup_iteration_backups` removes them after `record_disposition` reads them. They are the only surviving record of fixes from an earlier iteration. This artifact keeps one final version rather than per-iteration copies.
+3. **Commit timing**: The agent makes fix commits per finding. The workflow does NOT commit REVIEW-FIX.md until step 7, after ALL iterations complete. There is only ONE docs commit, not one per iteration.
+
+   In --auto, that commit also stages the converged REVIEW.md alongside REVIEW-FIX.md (#3190). The two committed artifacts agree. The initial code-review commit held iteration-1 REVIEW.md content. The --auto re-review loop overwrote that content each iteration.
 </step>
 
 <step name="commit_fix_report">
-After ALL iterations complete (or single pass in non-auto mode), validate and commit REVIEW-FIX.md:
+After ALL iterations complete (or the single pass in non-auto mode completes), make sure that REVIEW-FIX.md is valid. Commit REVIEW-FIX.md:
 
 ```bash
 if [ -f "${FIX_REPORT_PATH}" ]; then
@@ -478,54 +484,35 @@ else
 fi
 ```
 
-This commit happens ONCE at the end of the workflow, after all iterations (if --auto) complete. Not per-iteration.
+This commit happens ONCE at the end of the workflow. If --auto is active, it happens after all iterations complete. It does not happen per iteration.
 </step>
 
 <step name="record_disposition">
-**Reconcile the per-finding disposition ledger, now that REVIEW-FIX.md exists.** Read and execute
-`gsd-core/workflows/execute-phase/steps/code-review-disposition.md`. It consumes `PHASE_DIR` and
-`PHASE_NUMBER` and derives everything else, and it is advisory throughout: it never blocks.
+**Now that REVIEW-FIX.md exists, reconcile the per-finding disposition ledger.** Read and execute `gsd-core/workflows/execute-phase/steps/code-review-disposition.md`. The step uses `PHASE_DIR` and `PHASE_NUMBER` and derives everything else. It is advisory throughout and never blocks.
 
-This is the step's second and final call site, and without it REQ-REVIEW-10 is unreachable in every
-shipped path. `execute-phase.md`'s `code_review_gate` runs the same step immediately after review,
-where `<NN>-REVIEW-FIX.md` cannot yet exist — the gate invokes review with neither `--fix` nor
-`--auto` — so every row it writes is `open` by construction. The reconciliation logic that turns
-those rows into `fixed` / `skipped` is reachable only once a fix report is on disk, which is here.
-Wired anywhere earlier and it reads a report that has not been written; wired into `code-review.md`
-instead, it is unreachable — that workflow delegates through `code-review/steps/dispatch-fix.md`,
-which exits the workflow after invoking this one, so there is no point in it that is after
-REVIEW-FIX.md exists. Placing it here also covers a direct invocation of this workflow, which a
-wiring in `code-review.md` would miss.
+This is the step's second and final call site. Without it, REQ-REVIEW-10 is unreachable in every shipped path. The `code_review_gate` in `execute-phase.md` runs the same step immediately after review. At that point, `<NN>-REVIEW-FIX.md` cannot yet exist. The gate invokes review with neither `--fix` nor `--auto`. Every row it writes is `open` by construction.
 
-Placed AFTER `commit_fix_report` deliberately: the fix report must be on disk and committed before
-the ledger claims anything about it, and the step's own reconciliation reads
-`${PHASE_DIR}/${PADDED_PHASE}-REVIEW-FIX.md` directly.
+The reconciliation logic changes those rows to `fixed` / `skipped`. It is reachable only once a fix report is on disk, which is here. If the workflow calls it earlier, it reads a report that does not yet exist. If `code-review.md` calls it instead, it is unreachable. That workflow delegates through `code-review/steps/dispatch-fix.md`. That step exits the workflow after it invokes this one.
 
-Safe to run twice. The step is idempotent — a re-render that changes nothing reports `unchanged` and
-rewrites no file — so a phase that reaches the gate and then a fix run ends with one ledger reflecting
-both, not two competing ones.
+The workflow `code-review.md` has no point after REVIEW-FIX.md exists. This call site also covers a direct invocation of this workflow. A call in `code-review.md` would miss that case.
+
+This call site is deliberately AFTER `commit_fix_report`. The fix report must be on disk and committed before the ledger claims anything about it. The step's reconciliation reads `${PHASE_DIR}/${PADDED_PHASE}-REVIEW-FIX.md` directly.
+
+The step is safe to run twice and is idempotent. If a re-render changes nothing, the step reports `unchanged` and rewrites no file. A phase that reaches the gate and then a fix run ends with one ledger that reflects both, not two competing ones.
 </step>
 
 <step name="cleanup_iteration_backups">
-Only runs if AUTO_MODE is true. If AUTO_MODE is false, skip this step entirely.
+This step runs only if AUTO_MODE is true. If AUTO_MODE is false, skip this step entirely.
 
-**Removes the `.iterN.md` scratch — deliberately AFTER `record_disposition`, not at the end of the
-loop.** #3190's rule is unchanged: on convergence the backups are spent scratch and go; on degradation
-they are retained for post-mortem. What changed is the timing, and it was load-bearing. This workflow
-keeps ONE final version of `REVIEW.md` and `REVIEW-FIX.md` rather than per-iteration copies, so the
-backups are the only surviving record of what an earlier iteration fixed — and the re-review drops a
-finding once it is fixed, so the final review does not carry it either. Deleting them inside the loop
-meant the disposition ledger reached a converged `--auto` run with every early fix already erased, and
-recorded those findings as `open (not in the current review)`: indistinguishable from never triaged,
-which is the one distinction #3829 exists to make.
+**Remove the `.iterN.md` scratch files deliberately AFTER `record_disposition`, not at the end of the loop.** #3190's rule is unchanged. On convergence, the workflow removes the backups as scratch files. On degradation, it retains them for post-mortem analysis. The timing changed and was necessary.
 
-Convergence is re-derived here rather than carried. Shell state does not survive the loop's fence, so
-a flag set there would be gone by this step — and once nothing in the loop consumed it, keeping it
-would have left a variable set in one place and read in none. The loop breaks on exactly one
-condition that counts as convergence, a re-review returning clean, and that leaves `REVIEW.md` at
-`status: clean`: the final review's status IS the converged case. Its other stop, nothing left in
-fix scope (#4100), leaves out-of-scope findings in a non-clean review, so the backups are kept. Hitting `MAX_ITERATIONS` leaves the last re-review non-clean,
-and the backups are kept.
+This workflow keeps ONE final version of `REVIEW.md` and `REVIEW-FIX.md`, not per-iteration copies. The backups are the only surviving record of fixes from an earlier iteration. The re-review removes a finding once it is fixed, so the final review does not contain it either.
+
+Previously, deletion inside the loop erased every early fix before the disposition ledger reached a converged `--auto` run. The ledger recorded those findings as `open (not in the current review)`. This was indistinguishable from findings that were never triaged. That distinction is the reason for #3829.
+
+This step derives convergence again rather than carrying it from the loop. Shell state does not survive the loop's fence, so a flag set there would be gone by this step. Once nothing in the loop used the flag, it would be set in one place and read in none.
+
+The loop breaks on exactly one condition that counts as convergence: a re-review returns clean. That leaves `REVIEW.md` at `status: clean`. The final review's status IS the converged case. The other stop condition is nothing left in fix scope (#4100). It leaves out-of-scope findings in a non-clean review, so the workflow keeps the backups. If the loop hits `MAX_ITERATIONS`, the last re-review remains non-clean and the workflow keeps the backups.
 
 ```bash
 if [ "$AUTO_MODE" = "true" ]; then
@@ -550,9 +537,9 @@ fi
 </step>
 
 <step name="present_results">
-Parse REVIEW-FIX.md frontmatter and present formatted summary to user.
+Parse REVIEW-FIX.md frontmatter. Show the user a formatted summary.
 
-First check if fix report exists:
+First, find out if the fix report exists:
 
 ```bash
 if [ ! -f "${FIX_REPORT_PATH}" ]; then
@@ -593,7 +580,7 @@ SKIPPED_COUNT=$(echo "$FIX_FRONTMATTER" | grep "^skipped:" | cut -d: -f2 | xargs
 ITERATION_COUNT=$(echo "$FIX_FRONTMATTER" | grep "^iteration:" | cut -d: -f2 | xargs)
 ```
 
-Display formatted inline summary:
+Show a formatted inline summary:
 
 ```bash
 echo ""
@@ -661,19 +648,21 @@ echo "════════════════════════�
 </process>
 
 <platform_notes>
-**Windows:** This workflow uses bash features (arrays, variable expansion, while loops). On Windows, it requires Git Bash or WSL. Native PowerShell is not supported. The CI matrix (Ubuntu/macOS/Windows) runs under Git Bash on Windows runners, which provides bash compatibility.
+**Windows:** This workflow uses bash features (arrays, variable expansion, while loops). On Windows, it needs Git Bash or WSL. It does not support native PowerShell.
+
+On Windows runners, the CI matrix (Ubuntu/macOS/Windows) runs under Git Bash. Git Bash provides bash compatibility.
 </platform_notes>
 
 <success_criteria>
-- [ ] Phase validated before config gate check
-- [ ] Capability gate checked (execute:post code-review hook)
-- [ ] REVIEW.md existence verified (error if missing)
-- [ ] REVIEW.md status checked (skip if clean/skipped)
-- [ ] Agent spawned with correct config (review_path, fix_scope, fix_report_path)
-- [ ] Agent failure handled with partial-success awareness (some fix commits may exist)
-- [ ] --auto iteration loop respects 3-iteration cap
-- [ ] --auto re-review uses persisted file scope (not lost between iterations)
-- [ ] REVIEW-FIX.md committed ONCE after all iterations (not per-iteration)
-- [ ] Missing fix report handled with explicit error message in present_results
-- [ ] Results presented inline with next step suggestion
+- [ ] The phase is valid before the config gate check
+- [ ] The capability gate check is complete (execute:post code-review hook)
+- [ ] REVIEW.md exists (error if missing)
+- [ ] The REVIEW.md status check is complete (skip if clean/skipped)
+- [ ] The agent starts with the correct config (review_path, fix_scope, fix_report_path)
+- [ ] Agent failure handling accounts for partial success (some fix commits may exist)
+- [ ] The --auto iteration loop respects the 3-iteration cap
+- [ ] The --auto re-review uses persisted file scope (not lost between iterations)
+- [ ] The workflow commits REVIEW-FIX.md ONCE after all iterations (not per-iteration)
+- [ ] present_results handles a missing fix report with an explicit error message
+- [ ] The workflow shows results inline with a next step suggestion
 </success_criteria>
