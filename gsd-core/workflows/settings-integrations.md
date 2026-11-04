@@ -1,50 +1,47 @@
 <purpose>
-Interactive configuration of third-party integrations for GSD — search API keys
-(Brave / Firecrawl / Exa), code-review CLI routing (`review.models.<cli>`), and
-agent-skill injection (`agent_skills.<agent-type>`). Writes to
-`.planning/config.json` via `gsd-tools` so unrelated keys are
-preserved, never clobbered.
+This workflow configures third-party integrations for GSD:
 
-This command is deliberately separate from `/gsd:settings` (workflow toggles)
-and any `/gsd-settings-advanced` tuning surface. It exists because API keys and
-cross-tool routing are *connectivity* concerns, not workflow or tuning knobs.
+- Search API keys (Brave / Firecrawl / Exa)
+- Code-review CLI routing (`review.models.<cli>`)
+- Agent-skill injection (`agent_skills.<agent-type>`)
+
+The workflow uses `gsd-tools` to write to `.planning/config.json`.
+It preserves unrelated keys and never overwrites them.
+
+This command is separate from `/gsd:settings` (workflow toggles) and any `/gsd-settings-advanced` tuning surface.
+API keys and cross-tool routing relate to *connectivity*, not workflow or tuning settings.
 </purpose>
 
 <security>
-**API keys are secrets.** They are written as plaintext to
-`.planning/config.json` — that is where secrets live on disk, and file
-permissions are the security boundary. The UI must never display, echo, or
-log the plaintext value. The workflow follows these rules:
+**API keys are secrets.** The workflow writes them as plaintext to `.planning/config.json`.
+Secrets are on disk at that path. File permissions are the security boundary.
+The UI must never show, echo, or log the plaintext value. The workflow follows these rules:
 
-- **Masking convention: `****<last-4>`** (e.g. `sk-abc123def456` → `****f456`).
-  Strings shorter than 8 characters render as `****` with no tail so a short
-  secret does not leak a meaningful fraction of its bytes. Unset values render
-  as `(unset)`.
-- **Plaintext is never echoed by AskUserQuestion descriptions, confirmation
-  tables, or any log line.** It is not written to any file under `.planning/`
-  other than `config.json` itself.
-- **`config-set` output is masked** for keys in the secret set
-  (`brave_search`, `firecrawl`, `exa_search`) — see
-  `gsd-core/bin/lib/secrets.cjs`.
-- **Agent-type and CLI slug validation.** `agent_skills.<agent-type>` slug
-  inputs are checked against `^[a-zA-Z0-9_-]+$` before any write; inputs
-  containing path separators (`/`, `\`, `..`), whitespace, or shell
-  metacharacters are rejected. This closes off skill-injection attacks on
-  that open namespace (dynamic key pattern). For `review.models.<cli>` no
-  slug-shape check is needed or performed: the gate is membership in the
-  closed, registry-derived settable set (see the review-models section
-  below), which subsumes slug shape — slug shape alone never makes a
-  `review.models.*` key writable.
+- **Masking convention: `****<last-4>`** (for example, `sk-abc123def456` → `****f456`).
+  The UI shows strings shorter than 8 characters as `****` with no tail.
+  This prevents disclosure of a meaningful fraction of the bytes of a short secret.
+  The UI shows unset values as `(unset)`.
+- **AskUserQuestion descriptions, confirmation tables, and log lines never echo plaintext.**
+  The workflow does not write plaintext to any file under `.planning/` other than `config.json` itself.
+- **`config-set` masks output** for keys in the secret set
+  (`brave_search`, `firecrawl`, `exa_search`). See `gsd-core/bin/lib/secrets.cjs`.
+- **Agent-type and CLI slug validation.** Before any write, make sure that `agent_skills.<agent-type>` slug inputs match `^[a-zA-Z0-9_-]+$`.
+  Reject inputs that contain path separators (`/`, `\`, `..`), whitespace, or shell metacharacters.
+  This prevents skill-injection attacks on that open namespace (dynamic key pattern).
+
+  For `review.models.<cli>`, do not examine slug shape. Membership in the closed, registry-derived settable set is the gate.
+  See the review-models section below. This gate includes slug shape.
+  Slug shape alone never makes a `review.models.*` key writable.
 </security>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
 
 <step name="ensure_and_load_config">
-Ensure config exists and resolve the active config path (flat vs workstream, #2282):
+Make sure that the config exists. Resolve the active config path (flat vs workstream, #2282):
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@opengsd/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @opengsd/gsd-core - it is either a different package or an @opengsd/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
@@ -60,17 +57,19 @@ if [[ -z "${GSD_CONFIG_PATH:-}" ]]; then
 fi
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be in `{response_language}`.
+This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+Technical terms, code, file paths, and subagent prompts stay in English. Translate only user-facing output.
 
-Store `$GSD_CONFIG_PATH`. Every subsequent read/write uses it.
+Store `$GSD_CONFIG_PATH`. Use it for every next read/write.
 </step>
 
 <step name="read_current">
-Read the current config and compute a masked view for display. For each
-integration field, compute one of:
+Read the current config. Compute a masked view to show the user.
+For each integration field, compute one of:
 
-- `(unset)` — field is null / missing
-- `****<last-4>` — secret field that is populated (plaintext never shown)
+- `(unset)` — the field is null / missing
+- `****<last-4>` — the secret field has a value (never show plaintext)
 - `<value>` — non-secret routing/skill string, shown as-is
 
 ```bash
@@ -80,20 +79,18 @@ EXA=$(gsd_run query config-get exa_search --raw --default null)
 SEARCH_GITIGNORED=$(gsd_run query config-get search_gitignored --raw --default false)
 ```
 
-For each secret key (`brave_search`, `firecrawl`, `exa_search`) the displayed
-value is `****<last-4>` when set, never the raw string. Never echo the
-plaintext to stdout, stderr, or any log.
+For each secret key (`brave_search`, `firecrawl`, `exa_search`), show `****<last-4>` when set, never the raw string.
+Never echo the plaintext to stdout, stderr, or any log.
 </step>
 
 <step name="section_1_search_integrations">
 
-**Text mode (`workflow.text_mode: true` or `--text` flag):** Set
-`TEXT_MODE=true` and replace every `AskUserQuestion` call with a plain-text
-numbered list. Required for non-Claude runtimes.
+**Text mode (`workflow.text_mode: true` or `--text` flag):** Set `TEXT_MODE=true`.
+Replace every `AskUserQuestion` call with a plain-text numbered list. Non-Claude runtimes need this mode.
 
-Ask the user what they want to do for each search API key. For keys that are
-already set, show `**** already set` and offer Leave / Replace / Clear. For
-unset keys, offer Skip / Set.
+Ask the user what they want to do for each search API key.
+For keys that are already set, show `**** already set`. Offer Leave / Replace / Clear.
+For unset keys, offer Skip / Set.
 
 ```text
 AskUserQuestion([
@@ -133,9 +130,8 @@ AskUserQuestion([
 ])
 ```
 
-For each "Set" or "Replace", follow with a text-input prompt that asks for the
-key value. **The answer must not be echoed back** in subsequent question
-descriptions or confirmation text. Write the value via:
+For each "Set" or "Replace", ask for the key value in a text-input prompt.
+**You must not echo the answer** in next question descriptions or confirmation text. Write the value via:
 
 ```bash
 gsd_run query config-set brave_search "<value>"     # masked in output
@@ -153,12 +149,11 @@ gsd_run query config-set brave_search null
 
 <step name="section_2_review_models">
 
-`review.models.<cli>` is a closed, registry-derived map that tells the review
-workflow which model id a reviewer lane uses. It is not an open namespace: a
-`review.models.<cli>` key is settable only when that lane's capability
-declares a `modelConfigKey`, and `config-set` accepts exactly those keys
-(federated from the capability registry). No dynamic-key regex governs this
-namespace — any other slug fails with `Unknown config key`.
+`review.models.<cli>` is a closed, registry-derived map. It tells the review workflow which model id a reviewer lane uses.
+It is not an open namespace. A `review.models.<cli>` key is settable only when that lane's capability declares a `modelConfigKey`.
+
+`config-set` accepts exactly those keys (federated from the capability registry).
+No dynamic-key regex governs this namespace. Any other slug fails with `Unknown config key`.
 
 Settable keys (the shipped registry's model-bearing lanes):
 
@@ -167,9 +162,8 @@ Settable keys (the shipped registry's model-bearing lanes):
 `review.models.llama_cpp`, `review.models.lm_studio`, `review.models.ollama`,
 `review.models.opencode`.
 
-Reviewer lanes `qwen` and `coderabbit` declare no `modelConfigKey` — there is
-nothing to configure for them here (whether they should have a per-lane model
-key is a separate question, out of scope for this workflow).
+Reviewer lanes `qwen` and `coderabbit` declare no `modelConfigKey`. There is nothing to configure for them here.
+Whether they should have a per-lane model key is a separate question, out of scope for this workflow.
 If the user asks for one of those, say exactly that and skip.
 
 ```text
@@ -186,7 +180,7 @@ AskUserQuestion([
 ])
 ```
 
-If "Configure CLI" is selected, ask:
+If the user selects "Configure CLI", ask:
 
 ```text
 AskUserQuestion([
@@ -203,7 +197,7 @@ AskUserQuestion([
 ])
 ```
 
-For a slug received as free text, check it against the settable set above.
+For a slug received as free text, make sure that it is in the settable set above.
 If it is not one of the settable keys, print:
 
 ```text
@@ -212,11 +206,10 @@ keys are enumerated above can be configured here. (qwen and coderabbit have no
 per-lane model key.)
 ```
 
-and re-prompt.
+Then prompt again.
 
-For the selected lane, show the current value (or `(unset)`) and offer
-Leave / Replace / Clear, followed by a text-input prompt for the model id
-string. Write via:
+For the selected lane, show the current value (or `(unset)`). Offer Leave / Replace / Clear.
+Then prompt for the model id string with a text input. Write via:
 
 ```bash
 gsd_run query config-set review.models.<cli> "<model id>"
@@ -228,10 +221,9 @@ Loop until the user selects "Done".
 
 <step name="section_3_agent_skills">
 
-`agent_skills.<agent-type>` injects extra skill names into an agent's spawn
-frontmatter. The slug is user-extensible, so input is free-text validated
-against `^[a-zA-Z0-9_-]+$`. Inputs with path separators, spaces, or shell
-metacharacters are rejected.
+`agent_skills.<agent-type>` injects extra skill names into an agent's spawn frontmatter.
+The user can extend the slug. Make sure that the free-text input matches `^[a-zA-Z0-9_-]+$`.
+Reject inputs with path separators, spaces, or shell metacharacters.
 
 ```text
 AskUserQuestion([
@@ -247,7 +239,7 @@ AskUserQuestion([
 ])
 ```
 
-If "Configure agent" is selected, ask:
+If the user selects "Configure agent", ask:
 
 ```text
 AskUserQuestion([
@@ -265,41 +257,41 @@ AskUserQuestion([
 ])
 ```
 
-For "Custom…", prompt for a slug and validate it matches
-`^[a-zA-Z0-9_-]+$`. If it fails validation, print:
+For "Custom…", prompt for a slug. Make sure that it matches `^[a-zA-Z0-9_-]+$`.
+If it fails validation, print:
 
 ```text
 Rejected: agent-type '<slug>' must match [a-zA-Z0-9_-]+ (no path separators,
 spaces, or shell metacharacters).
 ```
 
-and re-prompt.
+Then prompt again.
 
-For a selected slug, prompt for the skill list (text input; a comma-separated
-reply is fine). Show the current value if any, offer Leave / Replace / Clear.
+For a selected slug, prompt for the skill list with a text input. A comma-separated reply is fine.
+If a current value exists, show it. Offer Leave / Replace / Clear.
 
-Split the reply before writing: the resolver never splits strings, so a
-comma-joined string would be stored as ONE skill path that silently fails
-resolution at spawn time (#3651 — `gsd-core/references/planning-config.md`:
-"Paths cannot be comma-joined into one string; each path must be its own
-array element"). Split on commas, trim each entry, drop empty entries, reject
-any entry containing a quote character (`'` or `"` — it cannot be written
-safely through the single-quoted form), and write the JSON array form:
+Before you write, split the reply. The resolver never splits strings.
+A comma-joined string would be stored as ONE skill path that silently fails resolution at spawn time.
+See #3651 — `gsd-core/references/planning-config.md`:
+"Paths cannot be comma-joined into one string. Each path must be its own
+array element".
+
+Split on commas. Trim each entry. Remove empty entries.
+Reject any entry that contains a quote character (`'` or `"`). You cannot write it safely through the single-quoted form.
+Write the JSON array form:
 
 ```bash
 gsd_run query config-set agent_skills.<slug> '["skills/alpha","skills/beta"]'
 ```
 
-A single skill may be written as one bare string or a one-element array —
-both resolve identically.
+You may write a single skill as one bare string or a one-element array. Both resolve identically.
 
 After each update, return to the "Agent skills mapping — what next?" question.
 Loop until "Done".
 </step>
 
 <step name="confirm">
-Display the masked confirmation table. **No plaintext API keys appear in this
-output under any circumstance.**
+Show the masked confirmation table. **No plaintext API keys appear in this output under any circumstance.**
 
 ```text
 ### GSD ► INTEGRATIONS UPDATED
@@ -339,10 +331,12 @@ Quick commands:
 </process>
 
 <success_criteria>
-- [ ] Current config read from `$GSD_CONFIG_PATH`
-- [ ] User presented with three sections: Search Integrations, Review CLI Routing, Agent Skills Injection
-- [ ] API keys written plaintext only to `config.json`; never echoed, never logged, never displayed
-- [ ] Masked confirmation table uses `****<last-4>` for set keys and `(unset)` for null
-- [ ] `agent_skills.<agent-type>` slugs validated against `[a-zA-Z0-9_-]+` before write; `review.models.<cli>` slugs accepted only from the registry-derived settable set; skill lists written as JSON arrays (never comma-joined strings)
-- [ ] Config merge preserves all keys outside the three sections this workflow owns
+- [ ] Read the current config from `$GSD_CONFIG_PATH`
+- [ ] Show the user three sections: Search Integrations, Review CLI Routing, Agent Skills Injection
+- [ ] Write API keys as plaintext only to `config.json`. Never echo, log, or show them
+- [ ] Use `****<last-4>` for set keys and `(unset)` for null in the masked confirmation table
+- [ ] Before writing, make sure that `agent_skills.<agent-type>` slugs match `[a-zA-Z0-9_-]+`
+- [ ] Accept `review.models.<cli>` slugs only from the registry-derived settable set
+- [ ] Write skill lists as JSON arrays (never comma-joined strings)
+- [ ] Preserve all keys outside the three sections this workflow owns when merging the config
 </success_criteria>

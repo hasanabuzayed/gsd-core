@@ -1,23 +1,23 @@
 <purpose>
-Generate unit and E2E tests for a completed phase based on its SUMMARY.md, CONTEXT.md, and implementation. Classifies each changed file into TDD (unit), E2E (browser), or Skip categories, presents a test plan for user approval, then generates tests following RED-GREEN conventions.
+Generate unit and E2E tests for a completed phase. Use its SUMMARY.md, CONTEXT.md, and implementation. Classify each changed file as TDD (unit), E2E (browser), or Skip. Present a test plan for user approval. Then generate tests that follow RED-GREEN conventions.
 
-Users currently hand-craft `/gsd:quick` prompts for test generation after each phase. This workflow standardizes the process with proper classification, quality gates, and gap reporting.
+Users currently write `/gsd:quick` prompts by hand to generate tests after each phase. This workflow standardizes the process with classification, quality gates, and gap reporting.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
 
 <step name="parse_arguments">
 Parse `$ARGUMENTS` for:
-- Phase number (integer, decimal, or letter-suffix) → store as `$PHASE_ARG`
-- Remaining text after phase number → store as `$EXTRA_INSTRUCTIONS` (optional)
+- Store the phase number (integer, decimal, or letter-suffix) as `$PHASE_ARG`.
+- Store the text after the phase number as `$EXTRA_INSTRUCTIONS` (optional).
 
 Example: `/gsd:add-tests 12 focus on edge cases` → `$PHASE_ARG=12`, `$EXTRA_INSTRUCTIONS="focus on edge cases"`
 
-If no phase argument provided:
+If the user does not provide a phase argument, show:
 
 ```
 ERROR: Phase number required
@@ -43,45 +43,45 @@ INIT=$(gsd_run query init.phase-op ${GSD_WS:+--ws=${GSD_WS##* }} "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Extract from init JSON: `phase_dir`, `phase_number`, `phase_name`, `response_language`.
+Extract these values from init JSON: `phase_dir`, `phase_number`, `phase_name`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST present all user-facing output of this workflow in `{response_language}`. This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
-Verify the phase directory exists. If not:
+Make sure that the phase directory exists. If it does not exist, show:
 ```
 ERROR: Phase directory not found for phase ${PHASE_ARG}
 Ensure the phase exists in .planning/phases/
 ```
 Exit.
 
-Read the phase artifacts (in order of priority):
-1. `${phase_dir}/*-SUMMARY.md` — what was implemented, files changed
-2. `${phase_dir}/CONTEXT.md` — acceptance criteria, decisions
-3. `${phase_dir}/*-VERIFICATION.md` — user-verified scenarios (if UAT was done)
+Read the phase artifacts in this order of priority:
+1. `${phase_dir}/*-SUMMARY.md` — the implementation and changed files
+2. `${phase_dir}/CONTEXT.md` — acceptance criteria and decisions
+3. `${phase_dir}/*-VERIFICATION.md` — scenarios that the user verified, if UAT was done
 
-If no SUMMARY.md exists:
+If no SUMMARY.md exists, show:
 ```
 ERROR: No SUMMARY.md found for phase ${PHASE_ARG}
 This command works on completed phases. Run /gsd:execute-phase first.
 ```
 Exit.
 
-Present banner:
+Present the banner:
 ```
 ### GSD ► ADD TESTS — Phase ${phase_number}: ${phase_name}
 ```
 </step>
 
 <step name="analyze_implementation">
-Extract the list of files modified by the phase from SUMMARY.md ("Files Changed" or equivalent section).
+Find the "Files Changed" section of SUMMARY.md or an equivalent section. Extract its list of files that the phase changed.
 
-For each file, classify into one of three categories:
+For each file, select one of three categories:
 
 | Category | Criteria | Test Type |
 |----------|----------|-----------|
-| **TDD** | Pure functions where `expect(fn(input)).toBe(output)` is writable | Unit tests |
-| **E2E** | UI behavior verifiable by browser automation | Playwright/E2E tests |
-| **Skip** | Not meaningfully testable or already covered | None |
+| **TDD** | Pure functions for which you can write `expect(fn(input)).toBe(output)` | Unit tests |
+| **E2E** | UI behavior that browser automation can test | Playwright/E2E tests |
+| **Skip** | Files that tests cannot meaningfully test or that tests already cover | None |
 
 **TDD classification — apply when:**
 - Business logic: calculations, pricing, tax rules, validation
@@ -108,13 +108,15 @@ For each file, classify into one of three categories:
 - Simple CRUD: basic create/read/update/delete with no business logic
 - Type definitions: records, DTOs, interfaces with no logic
 
-Read each file to verify classification. Don't classify based on filename alone.
+Read each file to make sure that its classification is correct. Do not classify a file based on its filename alone.
 </step>
 
 <step name="present_classification">
-Present the classification to the user for confirmation before proceeding:
+Present the classification to the user for confirmation before you continue:
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
+
+Non-Claude runtimes such as OpenAI Codex and Antigravity need this because `AskUserQuestion` is not available.
 
 ```
 AskUserQuestion(
@@ -141,12 +143,12 @@ AskUserQuestion(
 )
 ```
 
-If user selects "Adjust classification": apply their changes and re-present.
-If user selects "Cancel": exit gracefully.
+If the user selects "Adjust classification", apply their changes and present the classification again.
+If the user selects "Cancel", exit gracefully.
 </step>
 
 <step name="discover_test_structure">
-Before generating the test plan, discover the project's existing test structure:
+Before you generate the test plan, find the project's existing test structure:
 
 ```bash
 # Find existing test directories
@@ -158,12 +160,12 @@ ls package.json *.sln 2>/dev/null || true
 ```
 
 Identify:
-- Test directory structure (where unit tests live, where E2E tests live)
-- Naming conventions (`.test.ts`, `.spec.ts`, `*Tests.fs`, etc.)
-- Test runner commands (how to execute unit tests, how to execute E2E tests)
-- Test framework (xUnit, NUnit, Jest, Playwright, etc.)
+- Test directory structure (where to find unit tests and E2E tests)
+- Naming conventions (such as `.test.ts`, `.spec.ts`, `*Tests.fs`)
+- Test runner commands (how to run unit tests and E2E tests)
+- Test framework (such as xUnit, NUnit, Jest, Playwright)
 
-If test structure is ambiguous, ask the user:
+If the test structure is ambiguous, ask the user:
 ```
 AskUserQuestion(
   header: "Test Structure",
@@ -176,15 +178,15 @@ AskUserQuestion(
 <step name="generate_test_plan">
 For each approved file, create a detailed test plan.
 
-**For TDD files**, plan tests following RED-GREEN-REFACTOR:
-1. Identify testable functions/methods in the file
-2. For each function: list input scenarios, expected outputs, edge cases
-3. Note: since code already exists, tests may pass immediately — that's OK, but verify they test the RIGHT behavior
+**For TDD files**, plan tests that follow RED-GREEN-REFACTOR:
+1. Identify functions/methods in the file that tests can test.
+2. For each function, list input scenarios, expected outputs, and edge cases.
+3. The code already exists, so tests may pass immediately. That is OK. Make sure that they test the RIGHT behavior.
 
-**For E2E files**, plan tests following RED-GREEN gates:
-1. Identify user scenarios from CONTEXT.md/VERIFICATION.md
-2. For each scenario: describe the user action, expected outcome, assertions
-3. Note: RED gate means confirming the test would fail if the feature were broken
+**For E2E files**, plan tests that follow RED-GREEN gates:
+1. Identify user scenarios from CONTEXT.md/VERIFICATION.md.
+2. For each scenario, describe the user action, expected outcome, and assertions.
+3. A RED gate means that you make sure that the test would fail if the feature were broken.
 
 Present the complete test plan:
 
@@ -212,16 +214,16 @@ AskUserQuestion(
 )
 ```
 
-If "Cherry-pick": ask user which tests to include.
-If "Adjust plan": apply changes and re-present.
+If the user selects "Cherry-pick", ask which tests to include.
+If the user selects "Adjust plan", apply the changes and present the plan again.
 </step>
 
 <step name="execute_tdd_generation">
 For each approved TDD test:
 
-1. **Create test file** following discovered project conventions (directory, naming, imports)
+1. Before you write the test, **create test file** that follows the project conventions you found (directory, naming, imports).
 
-2. **Write test** with clear arrange/act/assert structure:
+2. **Write test** with a clear arrange/act/assert structure:
    ```
    // Arrange — set up inputs and expected outputs
    // Act — call the function under test
@@ -234,28 +236,28 @@ For each approved TDD test:
    ```
 
 4. **Evaluate result:**
-   - **Test passes**: Good — the implementation satisfies the test. Verify the test checks meaningful behavior (not just that it compiles).
-   - **Test fails with assertion error**: This may be a genuine bug discovered by the test. Flag it:
+   - **Test passes**: The implementation satisfies the test. After the test passes, make sure that it tests meaningful behavior, not just that the code compiles.
+   - **Test fails with assertion error**: This may be a genuine bug that the test found. Flag it:
      ```
      ⚠️ Potential bug found: {test name}
      Expected: {expected}
      Actual: {actual}
      File: {implementation file}
      ```
-     Do NOT fix the implementation — this is a test-generation command, not a fix command. Record the finding.
-   - **Test fails with error (import, syntax, etc.)**: This is a test error. Fix the test and re-run.
+     Do NOT fix the implementation. This is a test-generation command, not a fix command. Record the finding.
+   - **Test fails with error (such as import or syntax)**: This is a test error. Fix the test and run it again.
 </step>
 
 <step name="execute_e2e_generation">
 For each approved E2E test:
 
-1. **Check for existing tests** covering the same scenario:
+1. **Check for existing tests** that cover the same scenario:
    ```bash
    grep -r "{scenario keyword}" {e2e test directory} 2>/dev/null || true
    ```
-   If found, extend rather than duplicate.
+   If you find a test, extend it rather than duplicate it.
 
-2. **Create test file** targeting the user scenario from CONTEXT.md/VERIFICATION.md
+2. **Create test file** for the user scenario from CONTEXT.md/VERIFICATION.md.
 
 3. **Run the E2E test**:
    ```bash
@@ -263,23 +265,23 @@ For each approved E2E test:
    ```
 
 4. **Evaluate result:**
-   - **GREEN (passes)**: Record success
-   - **RED (fails)**: Determine if it's a test issue or a genuine application bug. Flag bugs:
+   - **GREEN (passes)**: Record success.
+   - **RED (fails)**: Determine whether the cause is a test problem or a genuine application bug. Flag bugs:
      ```
      ⚠️ E2E failure: {test name}
      Scenario: {description}
      Error: {error message}
      ```
-   - **Cannot run**: Report blocker. Do NOT mark as complete.
+   - **Cannot run**: Report the blocker. Do NOT mark the test as complete.
      ```
      🛑 E2E blocker: {reason tests cannot run}
      ```
 
-**No-skip rule:** If E2E tests cannot execute (missing dependencies, environment issues), report the blocker and mark the test as incomplete. Never mark success without actually running the test.
+**No-skip rule:** If E2E tests cannot run because of missing dependencies or environment problems, report the blocker. Mark the test as incomplete. Never mark success without running the test.
 </step>
 
 <step name="summary_and_commit">
-Create a test coverage report and present to user:
+Create a test coverage report and present it to the user:
 
 ```
 ### GSD ► TEST GENERATION COMPLETE
@@ -306,7 +308,7 @@ Record test generation in project state:
 gsd_run query state-snapshot
 ```
 
-If there are passing tests to commit:
+If there are tests to commit that pass:
 
 ```bash
 git add {test files}
@@ -342,16 +344,16 @@ Present next steps:
 </process>
 
 <success_criteria>
-- [ ] Phase artifacts loaded (SUMMARY.md, CONTEXT.md, optionally VERIFICATION.md)
-- [ ] All changed files classified into TDD/E2E/Skip categories
-- [ ] Classification presented to user and approved
-- [ ] Project test structure discovered (directories, conventions, runners)
-- [ ] Test plan presented to user and approved
-- [ ] TDD tests generated with arrange/act/assert structure
-- [ ] E2E tests generated targeting user scenarios
-- [ ] All tests executed — no untested tests marked as passing
-- [ ] Bugs discovered by tests flagged (not fixed)
-- [ ] Test files committed with proper message
-- [ ] Coverage gaps documented
-- [ ] Next steps presented to user
+- [ ] Load phase artifacts (SUMMARY.md, CONTEXT.md, optionally VERIFICATION.md).
+- [ ] Classify all changed files into TDD/E2E/Skip categories.
+- [ ] Present the classification to the user and get approval.
+- [ ] Find the project test structure (directories, conventions, runners).
+- [ ] Present the test plan to the user and get approval.
+- [ ] Generate TDD tests with arrange/act/assert structure.
+- [ ] Generate E2E tests for user scenarios.
+- [ ] Run all tests. Do not mark untested tests as passing.
+- [ ] Flag bugs that tests find. Do not fix them.
+- [ ] Commit test files with the proper message.
+- [ ] Document coverage gaps.
+- [ ] Present next steps to the user.
 </success_criteria>

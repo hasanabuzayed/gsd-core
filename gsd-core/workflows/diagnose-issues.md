@@ -1,31 +1,35 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Orchestrate parallel debug agents to investigate UAT gaps and find root causes.
+Coordinate parallel debug agents to investigate UAT gaps and find root causes.
 
-After UAT finds gaps, spawn one debug agent per gap. Each agent investigates autonomously with symptoms pre-filled from UAT. Collect root causes, update UAT.md gaps with diagnosis, then hand off to plan-phase --gaps with actual diagnoses.
+After UAT finds gaps, spawn one debug agent per gap. Each agent investigates independently with symptoms filled from UAT. Collect root causes. Update UAT.md gaps with the diagnosis. Then pass the diagnoses to plan-phase --gaps.
 
-Orchestrator stays lean: parse gaps, spawn agents, collect results, update UAT.
+Keep the orchestrator limited to these tasks:
+- Parse gaps
+- Spawn agents
+- Collect results
+- Update UAT
 </purpose>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-debugger — Diagnoses and fixes issues
+Valid GSD subagent types: Use the exact names. Do not use 'general-purpose' instead.
+- gsd-debugger — Diagnoses and fixes problems
 </available_agent_types>
 
 <paths>
 DEBUG_DIR=.planning/debug
 
-Debug files use the `.planning/debug/` path (hidden directory with leading dot).
+Debug files use the `.planning/debug/` path. This hidden directory has a leading dot.
 </paths>
 
 <core_principle>
 **Diagnose before planning fixes.**
 
-UAT tells us WHAT is broken (symptoms). Debug agents find WHY (root cause). plan-phase --gaps then creates targeted fixes based on actual causes, not guesses.
+UAT shows what is broken (symptoms). Debug agents find the cause (root cause). plan-phase --gaps then creates fixes based on actual causes, not guesses.
 
-Without diagnosis: "Comment doesn't refresh" → guess at fix → maybe wrong
-With diagnosis: "Comment doesn't refresh" → "useEffect missing dependency" → precise fix
+Without diagnosis: "Comment does not refresh" → guess at fix → maybe wrong
+With diagnosis: "Comment does not refresh" → "useEffect missing dependency" → fix for the cause
 </core_principle>
 
 <process>
@@ -44,9 +48,9 @@ Read the "Gaps" section (YAML format):
   missing: []
 ```
 
-For each gap, also read the corresponding test from "Tests" section to get full context.
+For each gap, also read the related test from the "Tests" section to get the full context.
 
-Build gap list:
+Build the gap list:
 ```
 gaps = [
   {truth: "Comment appears immediately...", severity: "major", test_num: 2, reason: "..."},
@@ -65,11 +69,12 @@ USE_WORKTREES=$(gsd_run query config-get workflow.use_worktrees --raw 2>/dev/nul
 RUNTIME=$(gsd_run query config-get runtime --default claude --raw 2>/dev/null || echo "claude")
 ```
 
-**Resolve isolation now (#2584/#2652).** Read @gsd-core/references/dispatch-isolation-gate.md
-and run its `Resolve ISOLATION`, `Single-agent dispatch sites`, and `Resolve the harness flag`
-blocks in order; they set `ISOLATION`/`HARNESS_FLAG` via `query dispatch-isolation`.
-`ISOLATION` — not `RUNTIME` — gates the worktree decision at spawn; the `spawn_agents` step
-below consumes both variables.
+**Resolve isolation now (#2584/#2652).** Read @gsd-core/references/dispatch-isolation-gate.md.
+Run its `Resolve ISOLATION`, `Single-agent dispatch sites`, and `Resolve the harness flag` blocks in order.
+
+The blocks set `ISOLATION`/`HARNESS_FLAG` through `query dispatch-isolation`.
+`ISOLATION`, not `RUNTIME`, controls the worktree decision at spawn.
+The `spawn_agents` step below uses both variables.
 
 **Report diagnosis plan to user:**
 
@@ -107,14 +112,15 @@ EXPECTED_BASE=$(git rev-parse HEAD)
 ```
 
 **Pre-dispatch worktree base-check (#2649, mirrors execute-phase #683/#1369 and quick #1941).**
-Claude Code's `isolation="worktree"` forks new worktrees from `origin/HEAD`, not the live local
-HEAD. If local HEAD has advanced without an intervening `git push` (the documented GSD steady
-state — commit every step, push only on request), `origin/HEAD` is pinned to a stale ancestor
-and the debug agent's `worktree_branch_check` guard halts with a base-mismatch fatal *after* the
-worktree already exists, with no automatic degrade. Run the same pre-dispatch check the four
-sibling dispatch sites run, and auto-degrade to sequential (main-tree) debug-agent dispatch when
-the fork base cannot be reliably resolved. The verify-only `<worktree_branch_check>` guard below
-stays active as a backstop in both cases.
+Claude Code uses `isolation="worktree"` to fork new worktrees from `origin/HEAD`, not the current local HEAD.
+The documented GSD steady state is to commit every step and push only on request.
+If local HEAD advances without an intervening `git push`, `origin/HEAD` stays at an old ancestor.
+
+In that case, the debug agent's `worktree_branch_check` guard stops with a fatal base-mismatch error *after* the worktree exists.
+It does not automatically switch modes.
+Run the same pre-dispatch check that the four sibling dispatch sites run.
+If the fork base cannot be resolved reliably, automatically switch to sequential (main-tree) debug-agent dispatch.
+The verify-only `<worktree_branch_check>` guard below stays active as a backstop in both cases.
 
 ```bash
 if [ "$ISOLATION" = "harness-worktree" ]; then
@@ -136,18 +142,20 @@ gsd_run query dispatch-isolation --raw --force-isolation "$ISOLATION" >/dev/null
 DEBUGGER_MODEL=$(gsd_run query resolve-model gsd-debugger --raw)
 ```
 
-**Spawn debug agents — parallel only when each one is isolated:**
+**Spawn debug agents — use parallel dispatch only when each agent is isolated:**
 
-**`ISOLATION` decides the fan-out, not just the flag (#2652).** When
-`ISOLATION = "harness-worktree"`, spawn all agents in a single message: each gets its own
-worktree, so concurrent edits cannot collide. When `ISOLATION = "none"` — including after the
-`orchestrator-worktree` fallback and after the #2649 base-check degrade — the agents would all
-run against the **primary checkout**, so spawn them **one at a time**, waiting for each to
-return before spawning the next. Fanning out unisolated debuggers is the outcome the
-`orchestrator-worktree` degrade exists to avoid; degrading the flag while keeping the
-parallelism would announce sequential mode and then do the opposite.
+**`ISOLATION` decides the fan-out, not only the flag (#2652).** If `ISOLATION = "harness-worktree"`, spawn all agents in a single message.
+Each agent gets its own worktree, so concurrent edits cannot collide.
 
-For each gap, fill this prompt (the `Template placeholders` below define every `{…}` field) as `filled_debug_prompt`, then spawn:
+If `ISOLATION = "none"`, spawn agents **one at a time**.
+Wait for each agent to return before you spawn the next agent.
+This condition includes the `orchestrator-worktree` fallback and the #2649 base-check degrade.
+In these cases, all agents run against the **primary checkout**.
+
+The `orchestrator-worktree` degrade prevents parallel dispatch of unisolated debuggers.
+A flag degrade with parallel dispatch would announce sequential mode but do the opposite.
+
+For each gap, fill this prompt as `filled_debug_prompt`. The `Template placeholders` below define every `{…}` field. Then spawn:
 
 ```markdown
 <objective>
@@ -176,25 +184,39 @@ Create: .planning/debug/{slug}.md
 
 Print: `◆ Spawning diagnostics agent... (each runs in a subagent — no output until they return, ~1–5 min; expected, not a freeze)`
 
-Before spawning, materialize the guard into WORKTREE_GUARD: read `gsd-core/references/worktree-branch-check.md`, substitute `{EXPECTED_BASE}` with `$EXPECTED_BASE`, and use the resulting `<worktree_branch_check>` block (the runnable guard) as WORKTREE_GUARD below.
+If `ISOLATION = "harness-worktree"`, prepare WORKTREE_GUARD before you spawn the agent.
+Read `gsd-core/references/worktree-branch-check.md`.
+Replace `{EXPECTED_BASE}` with `$EXPECTED_BASE`.
+Use the resulting `<worktree_branch_check>` block (the runnable guard) as WORKTREE_GUARD below.
 
-**Only when `ISOLATION = "harness-worktree"`.** When `ISOLATION = "none"` the agent runs on
-the main working tree, where the guard's HEAD assertion cannot hold — set `WORKTREE_GUARD` to
-the empty string instead, or every diagnostic agent halts on a base mismatch it was never
-meant to check (#2652).
+If `ISOLATION = "none"`, set `WORKTREE_GUARD` to the empty string instead.
+The agent runs on the main working tree, where the guard's HEAD assertion cannot hold.
+Otherwise, every diagnostic agent stops on a base mismatch that it was not meant to check (#2652).
 
-**Substitute `{harnessFlag}` in the `Agent()` call below** with `$HARNESS_FLAG` followed by a
-comma when `ISOLATION = "harness-worktree"`, and with the empty string otherwise — the same
-build-time substitution `execute-phase.md` performs. `{harnessFlag}` is a template
-placeholder, not a shell variable.
+If `ISOLATION = "harness-worktree"`, **replace `{harnessFlag}` in the `Agent()` call below** with `$HARNESS_FLAG` followed by a comma.
+Otherwise, replace it with the empty string.
+This is the same build-time substitution that `execute-phase.md` uses.
+`{harnessFlag}` is a template placeholder, not a shell variable.
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role.
+> kimi-code is a built-in-only runtime with three built-ins only.
+> Before dispatch on a built-in-only runtime, resolve the role to a built-in with `gsd_run query resolve-dispatch-type --requested <role> --raw`.
+
+> On named-dispatch runtimes (Claude/OpenCode/…), the command returns the role unchanged.
+> On kimi-code, the command maps the role to `coder`/`explore`/`plan` by role-suffix.
+> In both cases, the persona uses `${AGENT_SKILLS_<ROLE>}` (Phase 3).
+> See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`DEBUGGER_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If `DEBUGGER_MODEL` is `"inherit"` or empty, omit the `model` parameter entirely.
+> An empty value causes a 404 on runtimes without native tier aliases.
+> This is the default on non-Claude runtimes.
+
+> If you omit the parameter, the agent inherits the orchestrator's model.
+> See @gsd-core/references/model-profile-resolution.md.
 
 ```
 Agent(
@@ -206,9 +228,14 @@ Agent(
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above to spawn debug agent(s), stop working on this task immediately. Do not read more files, edit code, or run tests related to these gaps while the subagent(s) are active. Wait for all subagents to return before proceeding. This prevents duplicate work, conflicting edits, and wasted context.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above to spawn debug agent(s), stop work on this task immediately.
+> While the subagent(s) are active, do not read more files, edit code, or run tests related to these gaps.
+> Wait for all subagents to return before you continue.
+> This prevents duplicate work, conflicting edits, and wasted context.
 
-**All agents spawn in a single message (parallel execution) ONLY when `ISOLATION = "harness-worktree"`.** When `ISOLATION = "none"`, spawn one agent per message and wait for each to return — see the fan-out rule above (#2652).
+**Only if `ISOLATION = "harness-worktree"`, spawn all agents in a single message (parallel execution).**
+If `ISOLATION = "none"`, spawn one agent per message. Wait for each agent to return.
+See the fan-out rule above (#2652).
 
 Template placeholders:
 - `{truth}`: The expected behavior that failed
@@ -246,21 +273,20 @@ Each agent returns with:
 Parse each return to extract:
 - root_cause: The diagnosed cause
 - files: Files involved
-- debug_path: Path to debug session file
-- fix_hint: NON-BINDING example route for the gap closure plan — the binding payload is
-  `root_cause`; a gap plan that removes the root cause by a smaller or different mechanism has
-  closed the gap in full
+- debug_path: Path to the debug session file
+- fix_hint: A NON-BINDING example route for the gap closure plan. The binding payload is `root_cause`.
+  A gap plan that removes the root cause by a smaller or different mechanism closes the gap in full.
 
-If agent returns `## INVESTIGATION INCONCLUSIVE`:
-- root_cause: "Investigation inconclusive - manual review needed"
-- Note which issue needs manual attention
-- Include remaining possibilities from agent return
+If an agent returns `## INVESTIGATION INCONCLUSIVE`:
+- Set root_cause to "Investigation inconclusive - manual review needed"
+- Note which problem needs manual attention
+- Include the remaining possibilities from the agent return
 </step>
 
 <step name="update_uat">
 **Update UAT.md gaps with diagnosis:**
 
-For each gap in the Gaps section, add artifacts and missing fields:
+For each gap in the Gaps section, add the artifacts and missing fields:
 
 ```yaml
 - truth: "Comment appears immediately after submission"
@@ -287,9 +313,9 @@ gsd_run query commit "docs({phase_num}): add root causes from diagnosis" --files
 </step>
 
 <step name="report_results">
-**Report diagnosis results and hand off:**
+**Report diagnosis results and pass control:**
 
-Display:
+Show:
 ```
 ### GSD ► DIAGNOSIS COMPLETE
 
@@ -304,38 +330,38 @@ Debug sessions: ${DEBUG_DIR}/
 Proceeding to plan fixes...
 ```
 
-Return to verify-work orchestrator for automatic planning.
-Do NOT offer manual next steps - verify-work handles the rest.
+Return to the verify-work orchestrator for automatic planning.
+Do NOT offer manual next steps. verify-work handles the rest.
 </step>
 
 </process>
 
 <context_efficiency>
-Agents start with symptoms pre-filled from UAT (no symptom gathering).
-Agents only diagnose—plan-phase --gaps handles fixes (no fix application).
+Agents start with symptoms filled from UAT (no symptom gathering).
+Agents only diagnose. plan-phase --gaps handles fixes (no fix application).
 </context_efficiency>
 
 <failure_handling>
-**Agent fails to find root cause:**
-- Mark gap as "needs manual review"
+**If an agent fails to find the root cause:**
+- Mark the gap as "needs manual review"
 - Continue with other gaps
-- Report incomplete diagnosis
+- Report the incomplete diagnosis
 
-**Agent times out:**
-- Check .planning/debug/{slug}.md for partial progress
-- Can resume with /gsd:debug
+**If an agent times out:**
+- Examine .planning/debug/{slug}.md for partial progress
+- You can resume with /gsd:debug
 
-**All agents fail:**
-- Something systemic (permissions, git, etc.)
+**If all agents fail:**
+- The cause is systemic, for example permissions or git
 - Report for manual investigation
-- Fall back to plan-phase --gaps without root causes (less precise)
+- Use plan-phase --gaps without root causes instead (less precise)
 </failure_handling>
 
 <success_criteria>
-- [ ] Gaps parsed from UAT.md
-- [ ] Debug agents spawned in parallel
-- [ ] Root causes collected from all agents
-- [ ] UAT.md gaps updated with artifacts and missing
-- [ ] Debug sessions saved to ${DEBUG_DIR}/
-- [ ] Hand off to verify-work for automatic planning
+- [ ] Parse gaps from UAT.md
+- [ ] Spawn debug agents in parallel
+- [ ] Collect root causes from all agents
+- [ ] Update UAT.md gaps with artifacts and missing
+- [ ] Save debug sessions to ${DEBUG_DIR}/
+- [ ] Return to verify-work for automatic planning
 </success_criteria>
