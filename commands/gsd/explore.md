@@ -11,9 +11,7 @@ allowed-tools:
   - AskUserQuestion
 ---
 <objective>
-Open-ended Socratic ideation session. Guides the developer through exploring an idea via
-probing questions, optionally spawns research, then routes outputs to the appropriate GSD
-artifacts (notes, todos, seeds, research questions, requirements, or new phases).
+Open ended Socratic ideation session. Guide developer through idea exploration with probing questions. Optionally start research tasks. Direct results to GSD notes, todos, seeds, research questions, requirements, or new phases.
 
 Accepts an optional topic argument: `/gsd:explore authentication strategy`
 </objective>
@@ -23,5 +21,5 @@ Accepts an optional topic argument: `/gsd:explore authentication strategy`
 </execution_context>
 
 <process>
-Execute end-to-end.
+Execute end to end.
 </process>

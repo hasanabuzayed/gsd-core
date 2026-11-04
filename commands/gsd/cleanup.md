@@ -11,8 +11,7 @@ requires: [phase]
 ---
 <objective>
 Archive phase directories from completed milestones into `.planning/milestones/v{X.Y}-phases/`.
-
-Use when `.planning/phases/` has accumulated directories from past milestones.
+If `.planning/phases/` contains directories from past milestones, use this command.
 </objective>
 
 <execution_context>
@@ -20,6 +19,8 @@ Use when `.planning/phases/` has accumulated directories from past milestones.
 </execution_context>
 
 <process>
-Execute end-to-end.
-Identify completed milestones, show a dry-run summary, and archive on confirmation.
+Run the command end to end.
+Identify completed milestones.
+Show a dry-run summary.
+Archive the phase directories on confirmation.
 </process>

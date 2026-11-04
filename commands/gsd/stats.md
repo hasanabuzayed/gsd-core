@@ -1,6 +1,6 @@
 ---
 name: gsd:stats
-description: Display project statistics — phases, plans, requirements, git metrics, and timeline
+description: Show project statistics: phases, plans, requirements, git data, timeline
 effort: low
 allowed-tools:
   - Read
@@ -9,7 +9,7 @@ allowed-tools:
 requires: [phase, progress]
 ---
 <objective>
-Display comprehensive project statistics including phase progress, plan execution metrics, requirements completion, git history stats, and project timeline.
+Show full project stats: phase progress, plan metrics, requirement status, git history, and timeline.
 </objective>
 
 <execution_context>
@@ -17,5 +17,5 @@ Display comprehensive project statistics including phase progress, plan executio
 </execution_context>
 
 <process>
-Execute end-to-end.
+Run complete process.
 </process>

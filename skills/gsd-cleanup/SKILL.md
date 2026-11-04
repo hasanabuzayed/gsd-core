@@ -1,6 +1,6 @@
 ---
 name: gsd-cleanup
-description: "Archive accumulated phase directories from completed milestones"
+description: "Archive phase directories that belong to completed milestones"
 allowed-tools:
   - Read
   - Write
@@ -10,9 +10,9 @@ allowed-tools:
 ---
 
 <objective>
-Archive phase directories from completed milestones into `.planning/milestones/v{X.Y}-phases/`.
+Move phase directories from completed milestones into `.planning/milestones/v{X.Y}-phases/`.
 
-Use when `.planning/phases/` has accumulated directories from past milestones.
+Use this skill when `.planning/phases/` contains directories from past milestones.
 </objective>
 
 <execution_context>
@@ -20,6 +20,8 @@ Use when `.planning/phases/` has accumulated directories from past milestones.
 </execution_context>
 
 <process>
-Execute end-to-end.
-Identify completed milestones, show a dry-run summary, and archive on confirmation.
+Run the complete process.
+Identify completed milestones.
+Show a dry‑run summary.
+Archive directories after confirmation.
 </process>
