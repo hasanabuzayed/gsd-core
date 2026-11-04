@@ -2,8 +2,8 @@
 
 # Milestone Summary Workflow
 
-Generate a comprehensive, human-friendly project summary from completed milestone artifacts.
-Designed for team onboarding — a new contributor can read the output and understand the entire project.
+Generate a complete project summary from completed milestone artifacts. Make the summary easy for people to read.
+The summary helps team onboarding. A new contributor can read it and understand the entire project.
 
 ---
 
@@ -18,16 +18,16 @@ VERSION="$GSD_ARGS"
 ```
 
 If `$ARGUMENTS` is empty:
-1. Check `.planning/STATE.md` for current milestone version
-2. Check `.planning/milestones/` for the latest archived version
-3. If neither found, check if `.planning/ROADMAP.md` exists (project may be mid-milestone)
-4. If nothing found: error "No milestone found. Run /gsd:new-project or /gsd:new-milestone first."
+1. Examine `.planning/STATE.md` for the current milestone version
+2. Examine `.planning/milestones/` for the latest archived version
+3. If neither version exists, examine if `.planning/ROADMAP.md` exists (the project may be mid-milestone)
+4. If you find nothing: error "No milestone found. Run /gsd:new-project or /gsd:new-milestone first."
 
-Set `VERSION` to the resolved version (e.g., "1.0").
+Set `VERSION` to the version you found, for example, "1.0".
 
-## Step 2: Locate Artifacts
+## Step 2: Find Artifacts
 
-Determine whether the milestone is **archived** or **current**:
+Find out whether the milestone is **archived** or **current**:
 
 **Archived milestone** (`.planning/milestones/v{VERSION}-ROADMAP.md` exists):
 ```
@@ -43,7 +43,7 @@ REQUIREMENTS_PATH=".planning/REQUIREMENTS.md"
 AUDIT_PATH=".planning/v${VERSION}-MILESTONE-AUDIT.md"
 ```
 
-Note: The audit file moves to `.planning/milestones/` on archive (per `complete-milestone` workflow). Check both locations as a fallback.
+Note: The `complete-milestone` workflow moves the audit file to `.planning/milestones/` during archive. As a fallback, examine both locations.
 
 **Always available:**
 ```
@@ -52,7 +52,7 @@ RETRO_PATH=".planning/RETROSPECTIVE.md"
 STATE_PATH=".planning/STATE.md"
 ```
 
-Read all files that exist. Missing files are fine — the summary adapts to what's available.
+Read all files that exist. The summary uses the available files. Missing files are acceptable.
 
 ## Step 3: Discover Phase Artifacts
 
@@ -70,20 +70,22 @@ gsd_run query init.progress ${GSD_WS:+--ws=${GSD_WS##* }}
 
 This returns phase metadata. For each phase in the milestone scope:
 
-- Read `{phase_dir}/{padded}-SUMMARY.md` if it exists — extract `one_liner`, `accomplishments`, `decisions`
-- Read `{phase_dir}/{padded}-VERIFICATION.md` if it exists — extract status, gaps, deferred items
-- Read `{phase_dir}/{padded}-CONTEXT.md` if it exists — extract key decisions from `<decisions>` section
-- Read `{phase_dir}/{padded}-RESEARCH.md` if it exists — note what was researched
+- If `{phase_dir}/{padded}-SUMMARY.md` exists, read it and extract `one_liner`, `accomplishments`, and `decisions`.
+- If `{phase_dir}/{padded}-VERIFICATION.md` exists, read it and extract status, gaps, and deferred items.
+- If `{phase_dir}/{padded}-CONTEXT.md` exists, read it and extract key decisions from the `<decisions>` section.
+- If `{phase_dir}/{padded}-RESEARCH.md` exists, read it and note what was researched.
 
 Track which phases have which artifacts.
 
-**If no phase directories exist** (empty milestone or pre-build state): skip to Step 5 and generate a minimal summary noting "No phases have been executed yet." Do not error — the summary should still capture PROJECT.md and ROADMAP.md content.
+**If no phase directories exist** (empty milestone or pre-build state), skip to Step 5. Generate a minimal summary that notes "No phases have been executed yet."
+
+This is not an error. The summary should still capture PROJECT.md and ROADMAP.md content.
 
 ## Step 4: Gather Git Statistics
 
 Try each method in order until one succeeds:
 
-**Method 1 — Tagged milestone** (check first):
+**Method 1 — Tagged milestone** (examine first):
 ```bash
 git tag -l "v${VERSION}" | head -1
 ```
@@ -94,7 +96,7 @@ git diff --stat $(git log --format=%H --reverse v${VERSION} | head -1)..v${VERSI
 ```
 
 **Method 2 — STATE.md date range** (if no tag):
-Read STATE.md and extract the `started_at` or earliest session date. Use it as the `--since` boundary:
+Read STATE.md. Extract the `started_at` or earliest session date. Use it as the `--since` boundary:
 ```bash
 git log --oneline --since="<started_at_date>" | wc -l
 ```
@@ -104,12 +106,16 @@ Find the earliest `.planning/phases/` commit:
 ```bash
 git log --oneline --diff-filter=A -- ".planning/phases/" | tail -1
 ```
-Use that commit's date as the start boundary.
+Use the date of that commit as the start boundary.
 
 **Method 4 — Skip stats** (if none of the above work):
-Report "Git statistics unavailable — no tag or date range could be determined." This is not an error — the summary continues without the Stats section.
+Report:
 
-Extract (when available):
+> "Git statistics unavailable — no tag or date range could be determined."
+
+This is not an error. The summary continues without the Stats section.
+
+If available, extract:
 - Total commits in milestone
 - Files changed, insertions, deletions
 - Timeline (start date → end date)
@@ -191,15 +197,17 @@ Present as a bulleted list of decisions with brief rationale:
 ## Step 6: Write and Commit
 
 **Overwrite guard:** If `.planning/reports/MILESTONE_SUMMARY-v${VERSION}.md` already exists, ask the user:
-> "A milestone summary for v{VERSION} already exists. Overwrite it, or view the existing one?"
-If "view": display existing file and skip to Step 8 (interactive mode). If "overwrite": proceed.
 
-Create the reports directory if needed:
+> "A milestone summary for v{VERSION} already exists. Overwrite it, or view the existing one?"
+
+If "view", show the existing file and skip to Step 8 (interactive mode). If "overwrite", continue.
+
+If the reports directory does not exist, create it:
 ```bash
 mkdir -p .planning/reports
 ```
 
-Write the summary, then commit:
+Write the summary. Then commit:
 ```bash
 gsd_run query commit "docs(v${VERSION}): generate milestone summary for onboarding" --files \
   ".planning/reports/MILESTONE_SUMMARY-v${VERSION}.md"
@@ -207,21 +215,21 @@ gsd_run query commit "docs(v${VERSION}): generate milestone summary for onboardi
 
 ## Step 7: Present Summary
 
-Display the full summary document inline.
+Show the full summary document inline.
 
 ## Step 8: Offer Interactive Mode
 
-After presenting the summary:
+After you show the summary, say:
 
 > "Summary written to `.planning/reports/MILESTONE_SUMMARY-v{VERSION}.md`.
 >
-> I have full context from the build artifacts. Want to ask anything about the project?
-> Architecture decisions, specific phases, requirements, tech debt — ask away."
+> I have full context from the build artifacts. Do you want to ask anything about the project?
+> You can ask about architecture decisions, specific phases, requirements, or tech debt."
 
 If the user asks questions:
-- Answer from the artifacts already loaded (CONTEXT.md, SUMMARY.md, VERIFICATION.md, etc.)
-- Reference specific files and decisions
-- Stay grounded in what was actually built (not speculation)
+- Answer from the artifacts already loaded, including CONTEXT.md, SUMMARY.md, and VERIFICATION.md.
+- Refer to specific files and decisions.
+- Base answers on what the team built, not on speculation.
 
 If the user is done:
 - Suggest next steps: `/gsd:new-milestone`, `/gsd:progress`, or sharing the summary with the team

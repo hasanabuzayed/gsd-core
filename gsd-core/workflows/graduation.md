@@ -1,20 +1,20 @@
 # graduation.md — LEARNINGS.md Cross-Phase Graduation Helper
 
-**Invoked by:** `transition.md` step `graduation_scan`. Never invoked directly by users.
+**Invoked by:** `transition.md` step `graduation_scan`. Users never invoke this workflow directly.
 
-This workflow clusters recurring items across the last N phases' LEARNINGS.md files and surfaces promotion candidates to the developer via HITL. No item is promoted without explicit developer approval.
+This workflow groups recurring items from the LEARNINGS.md files of the last N phases into clusters. It shows promotion candidates to the developer through HITL. The workflow promotes an item only with explicit developer approval.
 
 ---
 
 ## Configuration
 
-Read from project config (`config.json`):
+Read from the project config (`config.json`):
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `features.graduation` | `true` | Master on/off switch. `false` skips silently. |
-| `features.graduation_window` | `5` | How many prior phases to scan |
-| `features.graduation_threshold` | `3` | Minimum cluster size to surface |
+| `features.graduation` | `true` | Main on/off switch. `false` skips silently. |
+| `features.graduation_window` | `5` | Number of previous phases to scan. |
+| `features.graduation_threshold` | `3` | Minimum cluster size to show. |
 
 ---
 
@@ -28,19 +28,23 @@ GRADUATION_WINDOW=$(gsd_run query config-get features.graduation_window --raw 2>
 GRADUATION_THRESHOLD=$(gsd_run query config-get features.graduation_threshold --raw 2>/dev/null || echo "3")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`.
 
-**Skip silently (print nothing) if:**
+This output includes narration between tool calls, status updates, progress notes, and findings. It also includes questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
+
+**If either condition is true, skip silently (print nothing):**
 - `features.graduation` is `false`
-- Fewer than `graduation_threshold` completed prior phases exist (not enough data)
+- Fewer than `graduation_threshold` completed previous phases exist (not enough data)
 
-**Skip silently (print nothing) if total items across all LEARNINGS.md files in the window is fewer than 5.**
+**If the total items across all LEARNINGS.md files in the window is fewer than 5, skip silently (print nothing).**
 
 ---
 
 ## Step 2: Collect LEARNINGS.md Files
 
-Find LEARNINGS.md files from the last N completed phases (excluding the phase currently completing):
+Find LEARNINGS.md files from the last N completed phases. Exclude the phase that is currently completing:
 
 ```bash
 find .planning/phases -name "*-LEARNINGS.md" | sort | tail -n "$GRADUATION_WINDOW"
@@ -49,27 +53,29 @@ find .planning/phases -name "*-LEARNINGS.md" | sort | tail -n "$GRADUATION_WINDO
 For each file found:
 1. Parse the four category sections: `## Decisions`, `## Lessons`, `## Patterns`, `## Surprises`
 2. Extract each `### Item Title` + body as a single item record: `{ category, title, body, source_phase, source_file }`
-3. **Skip items that already contain `**Graduated:**`** — they have been promoted and must not re-surface
+3. **If an item already contains `**Graduated:**`, skip it.** The workflow promoted it and must not show it again.
 
 ---
 
 ## Step 3: Cluster by Lexical Similarity
 
-For each category independently, cluster items using Jaccard similarity on tokenized title+body:
+For each category independently, cluster items with Jaccard similarity on the tokenized title+body:
 
-**Tokenization:** lowercase, strip punctuation, split on whitespace, remove stop words (a, an, the, is, was, in, on, at, to, for, of, and, or, but, with, from, that, this, by, as).
+**Tokenization:** Convert to lowercase. Remove punctuation. Split on whitespace. Remove stop words (a, an, the, is, was, in, on, at, to, for, of, and, or, but, with, from, that, this, by, as).
 
-**Jaccard similarity:** `|A ∩ B| / |A ∪ B|` where A and B are token sets. Two items are in the same cluster if similarity ≥ 0.25.
+**Jaccard similarity:** `|A ∩ B| / |A ∪ B|` where A and B are token sets. If similarity ≥ 0.25, two items are in the same cluster.
 
-**Clustering algorithm:** single-pass greedy — process items in phase order; add to the first cluster whose centroid (union of all cluster tokens) has similarity ≥ 0.25 with the new item; otherwise start a new cluster.
+**Clustering algorithm:** Use single-pass greedy clustering. Process items in phase order. If a cluster's centroid has similarity ≥ 0.25 with the new item, add the item to the first such cluster. Otherwise start a new cluster.
 
-**Cluster size filter:** only surface clusters with distinct source phases ≥ `graduation_threshold` (not just total items — same item repeated in one phase still counts as 1 distinct phase).
+The centroid is the union of all cluster tokens.
+
+**Cluster size filter:** Show only clusters with distinct source phases ≥ `graduation_threshold`. Do not use only the total items. The same item repeated in one phase still counts as 1 distinct phase.
 
 ---
 
 ## Step 4: Check graduation_backlog in STATE.md
 
-Read `.planning/STATE.md` `graduation_backlog` section (if present). Format:
+If the `.planning/STATE.md` `graduation_backlog` section is present, read it. Format:
 
 ```yaml
 graduation_backlog:
@@ -81,7 +87,7 @@ graduation_backlog:
 
 **Skip any cluster whose `cluster_id` matches a `dismissed` entry.**
 
-**Skip any cluster whose `cluster_id` matches a `deferred` entry where `deferred_until` phase has not yet completed.**
+**If a cluster's `cluster_id` matches a `deferred` entry and its `deferred_until` phase is not yet complete, skip it.**
 
 ---
 
@@ -91,10 +97,10 @@ For each qualifying cluster, determine the suggested target file:
 
 | Category | Suggested Target |
 |----------|-----------------|
-| `decisions` | `PROJECT.md` — append under `## Validated Decisions` (create section if absent) |
-| `patterns` | `PATTERNS.md` — append under the appropriate category section (create file if absent) |
-| `lessons` | `PROJECT.md` — append under `## Invariants` (create section if absent) |
-| `surprises` | Flag for human review — if genuinely surprising 3+ times, something structural is wrong |
+| `decisions` | `PROJECT.md` — append under `## Validated Decisions`. If the section is absent, create it. |
+| `patterns` | `PATTERNS.md` — append under the applicable category section. If the file is absent, create it. |
+| `lessons` | `PROJECT.md` — append under `## Invariants`. If the section is absent, create it. |
+| `surprises` | Flag for human review. If genuinely surprising 3+ times, something structural is wrong. |
 
 Print the graduation report:
 
@@ -124,11 +130,11 @@ Cluster: "{title}" [{category}, {K} phases] → {target}
 Action [P/D/X/A]:
 ```
 
-Use `AskUserQuestion` (or equivalent HITL primitive for the current runtime). If `TEXT_MODE` is true, display the cluster question as plain text and accept typed input. Accept single-character input: `P`, `D`, `X`, `A` (case-insensitive).
+Use `AskUserQuestion` (or equivalent HITL primitive for the current runtime). If `TEXT_MODE` is true, show the cluster question as plain text. If `TEXT_MODE` is true, accept typed input. Accept single-character input: `P`, `D`, `X`, `A` (case-insensitive).
 
 **On `P` (Promote now):**
 
-1. Read the target file (or create it with a standard header if absent)
+1. If the target file is absent, create it with a standard header. Otherwise, read the target file.
 2. Append the cluster entry under the suggested section:
    ```markdown
    ### {Cluster representative title}
@@ -162,7 +168,7 @@ Write to `.planning/STATE.md` under `graduation_backlog`:
 
 **On `A` (Defer all):**
 
-Defer the current cluster (same as `D`) and skip all remaining clusters for this run, deferring each to the next transition. Print:
+Defer the current cluster (same as `D`). Skip all remaining clusters for this run. Defer each remaining cluster to the next transition. Print:
 ```text
 [graduation: deferred all remaining clusters to next transition]
 ```
@@ -172,7 +178,7 @@ Then proceed directly to Step 7.
 
 ## Step 7: Completion Report
 
-After processing all clusters, print:
+After you process all clusters, print:
 
 ```text
 Graduation complete: {promoted} promoted, {deferred} deferred, {dismissed} dismissed.
@@ -187,13 +193,15 @@ If no clusters qualified (all filtered by backlog or threshold), print:
 
 ## First-Run Behaviour
 
-On the first transition after upgrading to a version that includes this workflow, all extant LEARNINGS.md files may produce a large batch of candidates at once. A `[Defer all]` shorthand is available: if the developer enters `A` at any cluster prompt, all remaining clusters for this run are deferred to the next transition.
+After an upgrade to a version with this workflow, the first transition may produce a large batch of candidates at once. All existing LEARNINGS.md files may produce candidates.
+
+A `[Defer all]` shorthand is available. If the developer enters `A` at any cluster prompt, the workflow defers all remaining clusters for this run to the next transition.
 
 ---
 
 ## No-Op Conditions (silent skip)
 
 - `features.graduation = false`
-- Fewer than `graduation_threshold` prior phases with LEARNINGS.md
+- Fewer than `graduation_threshold` previous phases with LEARNINGS.md
 - Total items < 5 across the window
 - All qualifying clusters are in `graduation_backlog` as dismissed
