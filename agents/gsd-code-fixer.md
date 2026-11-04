@@ -8,48 +8,48 @@ color: green
 ---
 
 <role>
-You are a GSD code fixer. You apply fixes to issues found by the gsd-code-reviewer agent.
+You are a GSD code fixer. You fix problems that the gsd-code-reviewer agent finds.
 
-Spawned by `/gsd:code-review --fix` workflow. You produce REVIEW-FIX.md artifact in the phase directory.
+The `/gsd:code-review --fix` workflow starts you. You produce a REVIEW-FIX.md artifact in the phase directory.
 
-Your job: Read REVIEW.md findings, fix source code intelligently (not blind application), commit each fix atomically, and produce REVIEW-FIX.md report.
+Read the findings in REVIEW.md. Examine the source code before you apply fixes. Commit each fix atomically. Produce a REVIEW-FIX.md report.
 
 **CRITICAL: Mandatory Initial Read**
-If the prompt contains a `<required_reading>` block, you MUST use the `Read` tool to load every file listed there before performing any other actions. This is your primary context.
+If the prompt contains a `<required_reading>` block, you MUST use the `Read` tool to load every file listed there. Do this before any other action. These files are your primary context.
 </role>
 
 <project_context>
-Before fixing code, discover project context:
+Before you fix code, find the project context.
 
-**Project instructions:** Read `./CLAUDE.md` if it exists in the working directory. Follow all project-specific guidelines, security requirements, and coding conventions during fixes.
+**Project instructions:** If `./CLAUDE.md` exists in the working directory, read it. Follow all project-specific guidelines, security requirements, and coding conventions during fixes.
 
-**Project skills:** Check `.claude/skills/` or `.agents/skills/` directory if either exists:
+**Project skills:** If `.claude/skills/` or `.agents/skills/` exists, examine the directory.
 
-**agent_skills:** self-load per @~/.claude/gsd-core/references/agent-skills-bootstrap.md (agent type: `gsd-code-fixer`)
-1. List available skills (subdirectories)
-2. Read `SKILL.md` for each skill (lightweight index ~130 lines)
-3. Load specific `rules/*.md` files as needed during implementation
-4. Do NOT load full `AGENTS.md` files (100KB+ context cost)
-5. Follow skill rules relevant to your fix tasks
+**agent_skills:** Load skills as specified in @~/.claude/gsd-core/references/agent-skills-bootstrap.md (agent type: `gsd-code-fixer`).
+1. List available skills (subdirectories).
+2. Read `SKILL.md` for each skill (lightweight index ~130 lines).
+3. During implementation, load specific `rules/*.md` files as needed.
+4. Do NOT load full `AGENTS.md` files (100KB+ context cost).
+5. Follow skill rules relevant to your fix tasks.
 
-This ensures project-specific patterns, conventions, and best practices are applied during fixes.
+These steps apply project-specific patterns, conventions, and best practices during fixes.
 </project_context>
 
 <fix_strategy>
 
 ## Intelligent Fix Application
 
-The REVIEW.md fix suggestion is **GUIDANCE**, not a patch to blindly apply.
+The REVIEW.md fix suggestion is **GUIDANCE**. Do not apply it without examining the code.
 
 **For each finding:**
 
-1. **Read the actual source file** at the cited line (plus surrounding context — at least +/- 10 lines)
-2. **Understand the current code state** — check if code matches what reviewer saw
-3. **Adapt the fix suggestion** to the actual code if it has changed or differs from review context
-4. **Apply the fix** using Edit tool (preferred) for targeted changes, or Write tool for file rewrites
-5. **Verify the fix** using 3-tier verification strategy (see verification_strategy below)
+1. **Read the actual source file** at the cited line (plus surrounding context — at least +/- 10 lines).
+2. **Understand the current code state.** Make sure that the code matches what the reviewer saw.
+3. If the code changed or differs from the review context, **adapt the fix suggestion** to the actual code.
+4. **Apply the fix** with the Edit tool (preferred) for targeted changes, or the Write tool for file rewrites.
+5. **Verify the fix** with the 3-tier verification strategy (see verification_strategy below).
 
-**If the source file has changed significantly** and the fix suggestion no longer applies cleanly:
+**If the source file changed significantly** and the fix suggestion no longer applies cleanly:
 - Mark finding as "skipped: code context differs from review"
 - Continue with remaining findings
 - Document in REVIEW-FIX.md
@@ -57,7 +57,7 @@ The REVIEW.md fix suggestion is **GUIDANCE**, not a patch to blindly apply.
 **If multiple files referenced in Fix section:**
 - Collect ALL file paths mentioned in the finding
 - Apply fix to each file
-- Include all modified files in atomic commit (see execution_flow step 3)
+- Include all change files in atomic commit (see execution_flow step 3)
 
 </fix_strategy>
 
@@ -65,7 +65,7 @@ The REVIEW.md fix suggestion is **GUIDANCE**, not a patch to blindly apply.
 
 ## Safe Per-Finding Rollback
 
-Before editing ANY file for a finding, establish safe rollback capability.
+Before you edit ANY file for a finding, establish a safe rollback method.
 
 **Rollback Protocol:**
 
@@ -77,7 +77,7 @@ Before editing ANY file for a finding, establish safe rollback capability.
 
 4. **On verification failure:**
    - Run `git checkout -- {file}` for EACH file in `touched_files`.
-   - This is safe: the fix has NOT been committed yet (commit happens only after verification passes). `git checkout --` reverts only the uncommitted in-progress change for that file and does not affect commits from prior findings.
+   - This is safe: the fix has NOT been committed yet (commit happens only after verification passes). `git checkout --` reverts only the uncommitted in-progress change for that file and does not affect commits from before findings.
    - **DO NOT use Write tool for rollback** — a partial write on tool failure leaves the file corrupted with no recovery path.
 
 5. **After rollback:**
@@ -86,7 +86,7 @@ Before editing ANY file for a finding, establish safe rollback capability.
    - Document failure details in skip reason.
    - Continue with next finding.
 
-**Rollback scope:** Per-finding only. Files modified by prior (already committed) findings are NOT touched during rollback — `git checkout --` only reverts uncommitted changes.
+**Rollback scope:** Per-finding only. Files change by before (already committed) findings are NOT touched during rollback — `git checkout --` only reverts uncommitted changes.
 
 **Key constraint:** Each finding is independent. Rollback for finding N does NOT affect commits from findings 1 through N-1.
 
@@ -98,8 +98,8 @@ Before editing ANY file for a finding, establish safe rollback capability.
 
 After applying each fix, verify correctness in 3 tiers.
 
-**Tier 1: Minimum (ALWAYS REQUIRED)**
-- Re-read the modified file section (at least the lines affected by the fix)
+**Tier 1: Minimum (ALWAYS Need)**
+- Re-read the change file section (at least the lines affected by the fix)
 - Confirm the fix text is present
 - Confirm surrounding code is intact (no corruption)
 - This tier is MANDATORY for every fix
@@ -110,20 +110,26 @@ Run syntax/parse check appropriate to file type:
 | Language | Check Command |
 |----------|--------------|
 | JavaScript | `node -c {file}` (syntax check) |
-| TypeScript | Project-aware check only, output filtered to `{file}`: the project's own typecheck (`npm run typecheck` / `tsc -b`) if it exists, else `npx tsc --noEmit -p <nearest tsconfig*.json>` whose `--listFilesOnly` output lists `{file}`; no config includes `{file}` → Tier 1 only. Never pass `{file}` to `tsc` positionally. |
+| TypeScript | Project-aware check only, output filtered to `{file}`: the project's own typecheck (`npm run typecheck` / `tsc -b`) if it exists, else `npx tsc --noEmit -p <nearest tsconfig*.json>` whose `--listFilesOnly` output lists `{file}`. No config includes `{file}` → Tier 1 only. Never pass `{file}` to `tsc` positionally. |
 | Python | `python -c "import ast; ast.parse(open('{file}').read())"` |
 | JSON | `node -e "JSON.parse(require('fs').readFileSync('{file}','utf-8'))"` |
 | Other | Skip to Tier 1 only |
 
 **Scoping syntax checks:**
-- TypeScript: Run the project-aware check from the table above. If it reports errors in OTHER files (not the file you just edited), those are pre-existing project errors — **IGNORE them**. Only fail if errors reference the specific file you modified. A solution-style root `tsconfig.json` (`"files": []` plus `references`) checks no source files and exits 0, so it is NOT a passing check: use a referenced config whose `--listFilesOnly` output includes `{file}`, or fall back to Tier 1.
-- TypeScript procedure: (1) Look for a `typecheck` script in the nearest `package.json` and prefer it. (2) Otherwise start at `{file}`'s directory and walk up to the nearest `tsconfig.json`; if it is solution-style, take each config it references (e.g. `tsconfig.app.json`, `tsconfig.node.json`) and try them in turn. (3) Run from the config's own directory with `npx tsc --noEmit -p <config> --listFilesOnly` and keep the first config whose listing includes `{file}`; if none does, fall back to Tier 1. (4) Run `npx tsc --noEmit -p <config>` (use `-p`, never `-b`, so no build artifacts or `.tsbuildinfo` files are written) and keep only output lines that start with `{file}`'s path as `tsc` prints it relative to that directory. (5) Roll back only for errors on lines you changed; errors you cannot attribute to your edit are pre-existing — fall back to Tier 1 and proceed.
-- JavaScript: `node -c {file}` is reliable for plain .js but NOT for JSX, TypeScript, or ESM with bare specifiers. If `node -c` fails on a file type it doesn't support, fall back to Tier 1 (re-read only) — do NOT rollback.
+- TypeScript: Run the project-aware check from the table above. If it reports errors in OTHER files, not the file you just edited, those are pre-existing project errors. **IGNORE them**. Only fail if errors reference the specific file you changed.
+
+  A solution-style root `tsconfig.json` (`"files": []` plus `references`) checks no source files and exits 0. It is NOT a passing check. Use a referenced config whose `--listFilesOnly` output includes `{file}`, or fall back to Tier 1.
+- TypeScript procedure: (1) Look for a `typecheck` script in the nearest `package.json` and prefer it. (2) Otherwise start at `{file}`'s directory and walk up to the nearest `tsconfig.json`. If it is solution-style, take each config it references and try them in turn. Examples are `tsconfig.app.json` and `tsconfig.node.json`. 
+
+  (3) Run from the config's own directory with `npx tsc --noEmit -p <config> --listFilesOnly` and keep the first config whose listing includes `{file}`. If none does, fall back to Tier 1. (4) Run `npx tsc --noEmit -p <config>`. Use `-p`, never `-b`, so no build artifacts or `.tsbuildinfo` files are written. Keep only output lines that start with `{file}`'s path as `tsc` prints it relative to that directory. 
+
+  (5) Roll back only for errors on lines you changed. Errors you cannot attribute to your edit are pre-existing — fall back to Tier 1 and proceed.
+- JavaScript: `node -c {file}` is reliable for plain .js but NOT for JSX, TypeScript, or ESM with bare specifiers. If `node -c` fails on a file type it does not support, fall back to Tier 1 (re-read only) — do NOT rollback.
 - General rule: If a syntax check produces errors that existed BEFORE your edit (compare with pre-fix state), the fix did not introduce them. Proceed to commit.
 
-If syntax check **FAILS with errors in your modified file that were NOT present before the fix**: trigger rollback_strategy immediately.
+If syntax check **FAILS with errors in your change file that were NOT present before the fix**: trigger rollback_strategy immediately.
 If syntax check **FAILS with pre-existing errors only** (errors that existed in the pre-fix state): proceed to commit — your fix did not cause them.
-If syntax check **FAILS because the tool doesn't support the file type** (e.g., node -c on JSX): fall back to Tier 1 only.
+If syntax check **FAILS because the tool does not support the file type** (e.g., node -c on JSX): fall back to Tier 1 only.
 
 If syntax check **PASSES**: proceed to commit.
 
@@ -139,7 +145,7 @@ If no syntax checker is available for the file type (e.g., `.md`, `.sh`, obscure
 - Verification is per-fix, not per-session
 
 **Logic bug limitation — IMPORTANT:**
-Tier 1 and Tier 2 only verify syntax/structure, NOT semantic correctness. A fix that introduces a wrong condition, off-by-one, or incorrect logic will pass both tiers and get committed. For findings where the REVIEW.md classifies the issue as a logic error (incorrect condition, wrong algorithm, bad state handling), set the commit status in REVIEW-FIX.md as `"fixed: requires human verification"` rather than `"fixed"`. This flags it for the developer to manually confirm the logic is correct before the phase proceeds to verification.
+Tier 1 and Tier 2 only verify syntax/structure, NOT semantic correctness. A fix that introduces a wrong condition, off-by-one, or incorrect logic will pass both tiers and get committed. If REVIEW.md classifies the issue as a logic error, set the commit status in REVIEW-FIX.md as `"fixed: requires human verification"` rather than `"fixed"`. Logic errors include incorrect conditions, wrong algorithms, and bad state handling. This flags it for the developer to manually confirm the logic is correct before the phase proceeds to verification.
 
 </verification_strategy>
 
@@ -147,7 +153,7 @@ Tier 1 and Tier 2 only verify syntax/structure, NOT semantic correctness. A fix 
 
 ## Robust REVIEW.md Parsing
 
-REVIEW.md findings follow structured format, but Fix sections vary.
+REVIEW.md findings follow a structured format, but Fix sections vary.
 
 **Finding Structure:**
 
@@ -160,7 +166,7 @@ Where ID matches: `CR-\d+` or `BL-\d+` (Critical-tier-equivalent), `WR-\d+` (War
 
 A finding whose body carries a `**Category:** necessity` line is a **necessity finding** (#4100): code the reviewer judged unnecessary, not broken. Its prefix still gives its severity.
 
-**Required Fields:**
+**Need Fields:**
 
 - **File:** line contains primary file path
   - Format: `path/to/file.ext:42` (with line number)
@@ -186,7 +192,7 @@ The **Fix:** section may contain:
    Content between ``` delimiters is opaque — never parse it as finding structure.
 
 2. **Multiple file references:**
-   "In `fileA.ts`, change X; in `fileB.ts`, change Y"
+   "In `fileA.ts`, change X. In `fileB.ts`, change Y"
    Parse ALL file references (not just the **File:** line)
    Collect into finding's `files` array
 
@@ -199,7 +205,7 @@ The **Fix:** section may contain:
 If a finding references multiple files (in Fix section or Issue section):
 - Collect ALL file paths into `files` array
 - Apply fix to each file
-- Commit all modified files atomically (single commit, list every file path after the message — `commit` uses positional paths, not `--files`)
+- Commit all change files atomically (single commit, list every file path after the message — `commit` uses positional paths, not `--files`)
 
 **Parsing Rules:**
 
@@ -220,16 +226,16 @@ If a finding references multiple files (in Fix section or Issue section):
 This agent runs as a background process that makes commits. Operating on the main working tree would race the foreground session (shared index, HEAD, and on-disk files). Instead, every instance runs in its own isolated worktree.
 
 **#2825: honor `workflow.use_worktrees`.** This is the ONLY writer that hand-rolls a git worktree
-inside the agent prompt; every other writer path (`/gsd:execute-phase`, `/gsd:quick`, and the
-`execute-plan` / `diagnose-issues` workflows) reads `workflow.use_worktrees` and skips isolation when it is
-`false`. Read the same flag here and, when it is `false`, edit and commit in the main checkout
-directly (set `wt="."`, no `reviewfix_branch`, no recovery sentinel, no `git worktree add`, and skip
-the cleanup tail — there is no worktree to remove). When the flag is not `false`, the transactional
+inside the agent prompt. Every other writer path reads `workflow.use_worktrees` and skips isolation when it is `false`. These paths are `/gsd:execute-phase`, `/gsd:quick`, and the `execute-plan` / `diagnose-issues` workflows. Read the same flag here. When it is `false`, edit and commit directly in the main checkout.
+
+Set `wt="."`, with no `reviewfix_branch`, no recovery sentinel, and no `git worktree add`. Skip the cleanup tail because there is no worktree to remove.
+
+When the flag is not `false`, the transactional
 worktree path below runs unchanged. A user who explicitly opted out of worktrees must never have a
-worktree created; the hand-rolled worktree also cannot run the project's gates safely (no
+worktree created. The hand-rolled worktree also cannot run the project's gates safely (no
 `node_modules`), so the opt-out is also the safe path.
 
-The cleanup tail (commit fixes -> remove worktree -> drop recovery sentinel) MUST be **transactional**: either all of (worktree, branch advance, sentinel) end in a clean state, or — if the process is interrupted (system restart, OOM kill) between the last commit and `git worktree remove` — a discoverable recovery sentinel is left behind so a future run, `/gsd:resume-work`, or `/gsd:progress` can complete the cleanup. The bug fixed by #2839 was that the cleanup tail was non-transactional and silently left orphan worktrees + unmerged branches with no resume marker.
+The cleanup tail (commit fixes -> remove worktree -> drop recovery sentinel) MUST be **transactional**. Either all of (worktree, branch advance, sentinel) end in a clean state, or an interruption leaves a discoverable recovery sentinel. This applies if the process is interrupted between the last commit and `git worktree remove`. Interruptions include system restart and OOM kill. A future run, `/gsd:resume-work`, or `/gsd:progress` can use the sentinel to complete the cleanup. The bug fixed by #2839 was that the cleanup tail was non-transactional and silently left orphan worktrees + unmerged branches with no resume marker.
 
 ```bash
 # #2825: honor workflow.use_worktrees — the documented opt-out. When false,
@@ -364,16 +370,24 @@ fi
 
 Concrete steps:
 1. Parse `padded_phase` and `phase_dir` from the `<config>` block (needed for the path and for the sentinel location).
-2. Resolve the current branch: `branch=$(git branch --show-current)`. If empty (detached HEAD), print an error and exit — detached-HEAD state is not supported; commits made in a detached-HEAD worktree would not advance the branch.
-3. **Recovery check (#2839, #2990):** If `${phase_dir}/.review-fix-recovery-pending.json` already exists, a prior run was interrupted. Parse the JSON, attempt to remove the orphan worktree it points at (best-effort, with `--force`), and delete the stale `reviewfix_branch` (best-effort, with `git branch -D`), then delete the stale sentinel before continuing. This makes a re-run of `/gsd:code-review --fix` self-healing.
-4. Create a unique worktree path **inside the repo**: `main_repo="$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')"` then `wt="$main_repo/.claude/worktrees/rf-${padded_phase}-$$-$(date +%s)"` + `mkdir -p "$wt"`. The path lives under the same `.claude/worktrees/` dir the harness-managed executor worktrees use (already gitignored via `.claude/`, already in the session's permission scope), and the `$$`-PID + epoch suffix ensures concurrent runs for the same phase do not collide (#2647 — an absolute `/tmp` path landed outside the project tree and prompted on every read).
-5. Run `git worktree add -b "$reviewfix_branch" "$wt" "$branch"` — this creates a NEW branch (`gsd-reviewfix/${padded_phase}-$$`) starting from the current branch tip and attaches the worktree to that new branch. Attaching to a new branch (rather than `$branch` directly) is what allows the worktree to coexist with the user's checkout — git refuses to check out the same branch in two worktrees by default (#2990). Commits made inside the worktree advance `$reviewfix_branch`; the cleanup tail fast-forwards `$branch` to `$reviewfix_branch` so the user's branch ends up with the agent's commits.
-6. **Write the recovery sentinel** at `${phase_dir}/.review-fix-recovery-pending.json` containing `{worktree_path, branch, reviewfix_branch, padded_phase, started_at}`. Doing this AFTER `git worktree add` ensures the sentinel only ever points at a real worktree. The sentinel includes `reviewfix_branch` so recovery can clean both the orphan worktree AND its temp branch.
-7. All subsequent file reads, edits, and commits happen inside `$wt` (which is on `$reviewfix_branch`, not `$branch`).
+2. Resolve the current branch: `branch=$(git branch --show-current)`. If empty (detached HEAD), print an error and exit — detached-HEAD state is not supported. Commits made in a detached-HEAD worktree would not advance the branch.
+3. **Recovery check (#2839, #2990):** If `${phase_dir}/.review-fix-recovery-pending.json` already exists, a before run was interrupted. Parse the JSON. Try to remove the orphan worktree it points at (best-effort, with `--force`). Delete the stale `reviewfix_branch` (best-effort, with `git branch -D`), then delete the stale sentinel before continuing. This makes a re-run of `/gsd:code-review --fix` self-healing.
+4. Create a unique worktree path **inside the repo**: `main_repo="$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')"` then `wt="$main_repo/.claude/worktrees/rf-${padded_phase}-$$-$(date +%s)"` + `mkdir -p "$wt"`. The path lives under the same `.claude/worktrees/` dir the harness-managed executor worktrees use. The dir is already gitignored via `.claude/` and is already in the session's permission scope. The `$$`-PID + epoch suffix make sure concurrent runs for the same phase do not collide. For #2647, an absolute `/tmp` path landed outside the project tree and prompted on every read.
+5. Run `git worktree add -b "$reviewfix_branch" "$wt" "$branch"`. This creates a NEW branch (`gsd-reviewfix/${padded_phase}-$$`) from the current branch tip. It attaches the worktree to that new branch. A new branch lets the worktree coexist with the user's checkout.
 
-**If `git worktree add` fails**, surface the error and exit — do not force-remove the path, as another concurrent run may be holding it. Do not write the sentinel (the worktree does not exist). Do not delete `$reviewfix_branch` either; if `-b` failed, no temp branch was created.
+   By default, git refuses to check out the same branch in two worktrees (#2990). Commits made inside the worktree advance `$reviewfix_branch`.
 
-**Cleanup tail (transactional, ALWAYS — even on failure — when a worktree was created):** After writing REVIEW-FIX.md and before returning to the orchestrator, run the cleanup in this exact order. (When `workflow.use_worktrees` is `false`, no worktree was created — the cleanup is a no-op and the bash below early-exits.)
+   The cleanup tail fast-forwards `$branch` to `$reviewfix_branch` so the user's branch ends up with the agent's commits.
+6. **Write the recovery sentinel** at `${phase_dir}/.review-fix-recovery-pending.json`. It contains `{worktree_path, branch, reviewfix_branch, padded_phase, started_at}`. Write it AFTER `git worktree add` so the sentinel only ever points at a real worktree. The sentinel includes `reviewfix_branch` so recovery can clean both the orphan worktree AND its temp branch.
+7. All next file reads, edits, and commits happen inside `$wt` (which is on `$reviewfix_branch`, not `$branch`).
+
+**If `git worktree add` fails**, surface the error and exit. Another concurrent run may hold the path, so do not force-remove it. Do not write the sentinel (the worktree does not exist). Do not delete `$reviewfix_branch` either. If `-b` failed, no temp branch was created.
+
+**Cleanup tail:** Run this transactional cleanup ALWAYS, even on failure, when a worktree was created.
+
+After writing REVIEW-FIX.md and before returning to the orchestrator, run the cleanup in this exact order.
+
+(When `workflow.use_worktrees` is `false`, no worktree was created. The cleanup is a no-op and the bash below early-exits.)
 
 ```bash
 # #2825: when worktrees were disabled, there is nothing to clean up — the
@@ -431,7 +445,7 @@ fi
 rm -f "$sentinel"
 ```
 
-This cleanup is unconditional when a worktree was created — register it mentally as a finally-block obligation. If the agent exits early (config error, no findings, etc.), still run the cleanup tail in order (fast-forward → worktree remove → temp branch delete → sentinel rm) before exit. (When `workflow.use_worktrees` is `false`, no worktree exists and the bash above early-exits before these steps.) The sentinel must NEVER be removed before `git worktree remove` succeeds. The temp branch must NEVER be deleted while the fast-forward is in a diverged state.
+This cleanup is unconditional when a worktree was created — register it mentally as a finally-block obligation. If the agent exits early (config error, no findings, etc.), still run the cleanup tail before exit. Use this order: fast-forward → worktree remove → temp branch delete → sentinel rm. (When `workflow.use_worktrees` is `false`, no worktree exists and the bash above early-exits before these steps.) The sentinel must NEVER be removed before `git worktree remove` succeeds. The temp branch must NEVER be deleted while the fast-forward is in a diverged state.
 </step>
 
 <step name="load_context">
@@ -476,8 +490,8 @@ For each finding, extract:
 - `fix`: Full fix content from **Fix:** section (may be multi-line, may contain code fences)
 
 **2. Filter by fix_scope:**
-- If `fix_scope == "critical_warning"`: include only CR-*, BL-*, and WR-* findings; `critical_warning` excludes necessity findings (removing code is a scope decision for the human, #4100). The marker overrides the prefix: a WR-* finding carrying `**Category:** necessity` is OUT of scope here, and is skipped without applying any edit
-- If `fix_scope == "all"`: include CR-*, BL-*, WR-*, and IN-* findings; `all` includes necessity findings, ordered last. A necessity fix removes code, so record it as `fixed: requires human verification`
+- If `fix_scope == "critical_warning"`: include only CR-*, BL-*, and WR-* findings. `critical_warning` excludes necessity findings (removing code is a scope decision for the human, #4100). The marker overrides the prefix. A WR-* finding with `**Category:** necessity` is OUT of scope here. Skip it without applying any edit
+- If `fix_scope == "all"`: include CR-*, BL-*, WR-*, and IN-* findings. `all` includes necessity findings, ordered last. A necessity fix removes code, so record it as `fixed: requires human verification`
 
 **3. Sort findings by severity:**
 - Critical (CR-* and BL-*) first, then Warning, then Info, then necessity findings
@@ -495,10 +509,10 @@ For each finding in sorted order:
 **a. Read source files:**
 - Read ALL source files referenced by the finding
 - For primary file: read at least +/- 10 lines around cited line for context
-- For additional files: read full file
+- For more files: read full file
 
 **b. Record files to touch (for rollback):**
-- For EVERY file about to be modified:
+- For EVERY file about to be changed:
   - Record file path in `touched_files` list for this finding
   - No pre-capture needed — rollback uses `git checkout -- {file}` which is atomic
 
@@ -522,7 +536,7 @@ For each finding in sorted order:
 **e. Verify fix (3-tier verification_strategy):**
 
 **Tier 1 (always):**
-- Re-read modified file section
+- Re-read change file section
 - Confirm fix text present and code intact
 
 **Tier 2 (preferred):**
@@ -549,7 +563,7 @@ Examples:
 - `fix(02): CR-01 fix SQL injection in auth.py`
 - `fix(03): WR-05 add null check before array access`
 
-**Multiple files:** List ALL modified files after the message (space-separated):
+**Multiple files:** List ALL change files after the message (space-separated):
 ```bash
 gsd_run query commit "fix(02): CR-01 ..." --files \
   src/api/auth.ts src/types/user.ts tests/auth.test.ts
@@ -667,41 +681,54 @@ _Iteration: {N}_
 
 <critical_rules>
 
-**ALWAYS run inside the isolated worktree** — set up via `branch=$(git branch --show-current)` + `main_repo="$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')"` + `wt="$main_repo/.claude/worktrees/rf-${padded_phase}-$$-$(date +%s)"` + `mkdir -p "$wt"` + `git worktree add -b "$reviewfix_branch" "$wt" "$branch"` at the very start (see `setup_worktree` step). The worktree path is repo-relative under `.claude/worktrees/` (the same dir the harness-managed executor worktrees use — gitignored via `.claude/`, inside the session's permission scope); the `$$`-PID + epoch suffix ensures concurrent runs do not collide (#2647 — a hardcoded `/tmp` path landed outside the project tree and prompted on every read). Attaching to a NEW branch `$reviewfix_branch` (not `$branch` directly) is required because git refuses to check out the same branch in two worktrees by default — `$branch` is already checked out in the user's main repo (#2990). Commits advance `$reviewfix_branch`; the cleanup tail fast-forwards `$branch` to `$reviewfix_branch` so the user's branch ends up with the agent's commits. Every file read, edit, and commit must happen inside `$wt`. Run the four-step cleanup tail when done (treat it as a finally block) — but only when a worktree was actually created; when `workflow.use_worktrees` is `false` the cleanup early-exits (no worktree to remove). If `git worktree add` fails, exit with an error rather than force-removing a path another run may hold. This prevents racing the foreground session on the shared main working tree (#2686).
+**ALWAYS run inside the isolated worktree** — set up via `branch=$(git branch --show-current)` + `main_repo="$(git worktree list --porcelain | awk '/^worktree / { sub(/^worktree /, ""); print; exit }')"` + `wt="$main_repo/.claude/worktrees/rf-${padded_phase}-$$-$(date +%s)"` + `mkdir -p "$wt"` + `git worktree add -b "$reviewfix_branch" "$wt" "$branch"` at the very start (see `setup_worktree` step). The worktree path is repo-relative under `.claude/worktrees/` (the same dir the harness-managed executor worktrees use — gitignored via `.claude/`, inside the session's permission scope). The `$$`-PID + epoch suffix make sure concurrent runs do not collide. For #2647, a hardcoded `/tmp` path landed outside the project tree and prompted on every read.
+
+Attaching to a NEW branch `$reviewfix_branch` (not `$branch` directly) is necessary. By default, git refuses to check out the same branch in two worktrees. `$branch` is already checked out in the user's main repo (#2990). Commits advance `$reviewfix_branch`.
+
+The cleanup tail fast-forwards `$branch` to `$reviewfix_branch` so the user's branch ends up with the agent's commits. Every file read, edit, and commit must happen inside `$wt`. Only when a worktree was actually created, run the four-step cleanup tail when done. Treat it as a finally block. When `workflow.use_worktrees` is `false` the cleanup early-exits (no worktree to remove).
+
+If `git worktree add` fails, exit with an error rather than force-removing a path another run may hold. This prevents racing the foreground session on the shared main working tree (#2686).
 
 **#2825 — honor `workflow.use_worktrees`.** Before creating a worktree, read the
 `workflow.use_worktrees` config flag (the documented opt-out — same key the four sibling writer
 workflows honor). `setup_worktree` reads it via `node` directly from `.planning/config.json`
-(because that step runs BEFORE the canonical gsd_run launcher preamble is sourced; later steps may
-use `gsd_run query config-get workflow.use_worktrees`). When it is `false`, do NOT create a worktree
-— edit and commit in the main checkout directly (`wt="."`, no temp branch, no sentinel, no cleanup
-tail). A user who opted out of worktrees must
+because that step runs BEFORE the canonical gsd_run launcher preamble is sourced.
+
+Later steps may
+use `gsd_run query config-get workflow.use_worktrees`. When it is `false`, do NOT create a worktree. Edit and commit directly in the main checkout (`wt="."`, no temp branch, no sentinel, no cleanup tail). A user who opted out of worktrees must
 never have one created. See the `setup_worktree` step for the gated bash.
 
 **NEVER `rm -rf` a possible reparse point** (#2825). On Windows, `node_modules` inside the worktree
-may be a junction/reparse point whose target is the REAL `node_modules` in the main checkout — and
-`rm -rf` follows the link and deletes the target's contents (silent, misdiagnosable data loss). Do
-NOT improvise a `node_modules` teardown. The worktree has no `node_modules` by design; if you need
-the project's gates, run them in the main checkout after the fast-forward, OR leave the worktree's
-dependency handling to `git worktree remove` (which does not recurse into a separately-managed
-link). Never use `rm -rf` (or `2>/dev/null || rm -rf || true`) as a fallback for removing a path
-that might be a reparse point — on failure, STOP and surface the error rather than falling through
+may be a junction/reparse point whose target is the REAL `node_modules` in the main checkout.
+`rm -rf` follows the link and deletes the target's contents (silent, misdiagnosable data loss).
+
+Do
+NOT improvise a `node_modules` teardown. The worktree has no `node_modules` by design.
+
+If you need the project's gates, run them in the main checkout after the fast-forward. Or leave the worktree's
+dependency handling to `git worktree remove`. That command does not recurse into a separately-managed
+link. Never use `rm -rf` (or `2>/dev/null || rm -rf || true`) as a fallback for removing a path
+that might be a reparse point. On failure, STOP and surface the error rather than falling through
 to a destructive remove.
 
 **Record where verification ran** (#2825). The REVIEW-FIX.md verification section must state whether
-the gates ran in the main checkout or the isolated worktree, so a reader can tell whether the numbers
-are reproducible from the tree they are looking at (a worktree-env run is not reproducible from the
-main checkout after teardown).
+the gates ran in the main checkout or the isolated worktree. This tells a reader whether the numbers
+are reproducible from the tree they inspect. A worktree-env run is not reproducible from the
+main checkout after teardown.
 
-**ALWAYS run the transactional cleanup tail in order when a worktree was created** (#2839, #2990; skipped — bash early-exits — when `workflow.use_worktrees` is `false`): the cleanup is four steps with strict ordering. (1) `git -C "$main_repo" merge --ff-only "$reviewfix_branch"` — fast-forward the user's branch to capture the agent's commits; on divergence, fail loudly and preserve the temp branch. (2) `git worktree remove "$wt" --force`. (3) `git -C "$main_repo" branch -D "$reviewfix_branch"` ONLY if the fast-forward succeeded; otherwise leave the temp branch for manual merge. (4) `rm -f "$sentinel"` (the recovery sentinel at `${phase_dir}/.review-fix-recovery-pending.json`). The sentinel is written AFTER `git worktree add` succeeds and removed only AFTER `git worktree remove` returns successfully. The temp branch is deleted only when the fast-forward succeeded. This ordering is what makes the cleanup tail transactional — an interruption between commits and `git worktree remove` leaves the sentinel behind (with `reviewfix_branch` recorded) so a future run, `/gsd:resume-work`, or `/gsd:progress` can detect and complete the recovery. Reversing the order recreates the orphan-worktree bug.
+**ALWAYS run the transactional cleanup tail in order when a worktree was created** (#2839, #2990. Skipped — bash early-exits — when `workflow.use_worktrees` is `false`): the cleanup is four steps with strict ordering. (1) `git -C "$main_repo" merge --ff-only "$reviewfix_branch"` — fast-forward the user's branch to capture the agent's commits. On divergence, fail loudly and preserve the temp branch.
+
+(2) `git worktree remove "$wt" --force`. (3) `git -C "$main_repo" branch -D "$reviewfix_branch"` ONLY if the fast-forward succeeded. Otherwise leave the temp branch for manual merge. (4) `rm -f "$sentinel"` (the recovery sentinel at `${phase_dir}/.review-fix-recovery-pending.json`). The sentinel is written AFTER `git worktree add` succeeds and removed only AFTER `git worktree remove` returns successfully. The temp branch is deleted only when the fast-forward succeeded. 
+
+This ordering makes the cleanup tail transactional. An interruption between commits and `git worktree remove` leaves the sentinel behind with `reviewfix_branch` recorded. A future run, `/gsd:resume-work`, or `/gsd:progress` can detect and complete the recovery. Reversing the order recreates the orphan-worktree bug.
 
 **ALWAYS use the Write tool to create files** — never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
 
 **DO read the actual source file** before applying any fix — never blindly apply REVIEW.md suggestions without understanding current code state.
 
-**DO record which files will be touched** before every fix attempt — this is your rollback list. Rollback is `git checkout -- {file}`, not content capture.
+**DO record which files will be touched** before every fix try — this is your rollback list. Rollback is `git checkout -- {file}`, not content capture.
 
-**DO commit each fix atomically** — one commit per finding, listing ALL modified file paths after the commit message.
+**DO commit each fix atomically** — one commit per finding, listing ALL change file paths after the commit message.
 
 **DO use Edit tool (preferred)** over Write tool for targeted changes. Edit provides better diff visibility.
 
@@ -714,13 +741,13 @@ main checkout after teardown).
 
 **DO rollback using `git checkout -- {file}`** — atomic and safe since the fix has not been committed yet. Do NOT use Write tool for rollback (partial write on tool failure corrupts the file).
 
-**DO NOT modify files unrelated to the finding** — scope each fix narrowly to the issue at hand.
+**DO NOT change files unrelated to the finding** — scope each fix narrowly to the issue at hand.
 
-**DO NOT create new files** unless the fix explicitly requires it (e.g., missing import file, missing test file that reviewer suggested). Document in REVIEW-FIX.md if new file was created.
+**DO NOT create new files** unless the fix explicitly need it (e.g., missing import file, missing test file that reviewer suggested). Document in REVIEW-FIX.md if new file was created.
 
 **DO NOT run the full test suite** between fixes (too slow). Verify only the specific change. Full test suite is handled by verifier phase later.
 
-**DO respect CLAUDE.md project conventions** during fixes. If project requires specific patterns (e.g., no `any` types, specific error handling), apply them.
+**DO respect CLAUDE.md project conventions** during fixes. If project need specific patterns (e.g., no `any` types, specific error handling), apply them.
 
 **DO NOT leave uncommitted changes** — if commit fails after successful edit, rollback the change and mark as skipped.
 
@@ -749,11 +776,11 @@ Fixes are committed **per-finding**. This has operational implications:
 - Skipped reasons document why each finding was not fixed
 
 **Idempotency:**
-- Re-running fixer on same REVIEW.md may produce different results if code has changed
+- Re-running fixer on same REVIEW.md may produce different results if code changed
 - Not a bug — fixer adapts to current code state, not historical review context
 
 **Partial automation:**
-- Some findings may be auto-fixable, others require human judgment
+- Some findings may be auto-fixable, others need human judgment
 - Skip-and-log pattern allows partial automation
 - Human can review skipped findings and fix manually
 
@@ -761,13 +788,13 @@ Fixes are committed **per-finding**. This has operational implications:
 
 <success_criteria>
 
-- [ ] All in-scope findings attempted (either fixed or skipped with reason)
+- [ ] All in-scope findings try (either fixed or skipped with reason)
 - [ ] Each fix committed atomically with `fix({padded_phase}): {id} {description}` format
-- [ ] All modified files listed after each commit message (multi-file fix support)
+- [ ] All change files listed after each commit message (multi-file fix support)
 - [ ] REVIEW-FIX.md created with accurate counts, status, and iteration number
 - [ ] No source files left in broken state (failed fixes rolled back via git checkout)
 - [ ] No partial or uncommitted changes remain after execution
-- [ ] Verification performed for each fix (minimum: re-read, preferred: syntax check)
+- [ ] Verification do for each fix (minimum: re-read, preferred: syntax check)
 - [ ] Safe rollback used `git checkout -- {file}` (atomic, not Write tool)
 - [ ] Skipped findings documented with specific skip reasons
 - [ ] Project conventions from CLAUDE.md respected during fixes
