@@ -11,14 +11,17 @@ allowed-tools:
 
 
 <objective>
-Interactive configuration of GSD workflow agents and model profile via multi-question prompt.
+Configure GSD workflow agents and the model profile with an interactive prompt that asks multiple questions.
 
-Routes to the settings workflow which handles:
-- Config existence ensuring
-- Current settings reading and parsing
-- Interactive multi-question prompt covering model profile and workflow toggles (research, plan_check, verifier, drift guard, TDD, code review, worktrees, compact content, and more — see `gsd-core/workflows/settings.md` for the current set)
-- Config merging and writing
-- Confirmation display with quick command references
+Route to the settings workflow. The workflow does these tasks:
+- Makes sure that the config exists
+- Reads and parses the current settings
+- Uses an interactive prompt that asks multiple questions about the model profile and workflow toggles
+- Merges and writes the config
+- Shows confirmation with quick command references
+
+The workflow toggles include research, plan_check, verifier, drift guard, TDD, code review, worktrees, compact content, and more.
+See `gsd-core/workflows/settings.md` for the current set.
 </objective>
 
 <execution_context>
@@ -26,5 +29,5 @@ Routes to the settings workflow which handles:
 </execution_context>
 
 <process>
-Execute end-to-end.
+Execute the workflow from start to end.
 </process>

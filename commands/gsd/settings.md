@@ -11,14 +11,16 @@ requires: [quick]
 ---
 
 <objective>
-Interactive configuration of GSD workflow agents and model profile via multi-question prompt.
+Use a multi-question prompt to configure GSD workflow agents and the model profile.
 
-Routes to the settings workflow which handles:
-- Config existence ensuring
-- Current settings reading and parsing
-- Interactive multi-question prompt covering model profile and workflow toggles (research, plan_check, verifier, drift guard, TDD, code review, worktrees, compact content, and more — see `gsd-core/workflows/settings.md` for the current set)
-- Config merging and writing
-- Confirmation display with quick command references
+Route to the settings workflow. The workflow does these tasks:
+- Make sure that the config exists.
+- Read and parse the current settings.
+- Use an interactive multi-question prompt for the model profile and workflow toggles.
+  The toggles include research, plan_check, verifier, drift guard, TDD, code review, worktrees, compact content, and more.
+  See `gsd-core/workflows/settings.md` for the current set.
+- Merge and write the config.
+- Show confirmation with quick command references.
 </objective>
 
 <execution_context>
@@ -26,5 +28,5 @@ Routes to the settings workflow which handles:
 </execution_context>
 
 <process>
-Execute end-to-end.
+Execute the workflow from start to end.
 </process>
