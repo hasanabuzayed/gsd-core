@@ -1,16 +1,18 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Verify milestone achieved its definition of done by aggregating phase verifications, checking cross-phase integration, and assessing requirements coverage. Reads existing VERIFICATION.md files (phases already verified during execute-phase), aggregates tech debt and deferred gaps, then spawns integration checker for cross-phase wiring.
+Make sure that the milestone meets its definition of done. Collect phase verifications. Examine cross-phase integration and requirements coverage.
+
+Read existing VERIFICATION.md files. The execute-phase already verified these phases. Collect tech debt and deferred gaps. Spawn the integration checker to examine cross-phase wiring.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-integration-checker — Checks cross-phase integration
+Valid GSD subagent types (use exact names — do not use 'general-purpose' instead):
+- gsd-integration-checker — Examines cross-phase integration
 </available_agent_types>
 
 <process>
@@ -43,10 +45,10 @@ integration_checker_model=$(gsd_run query resolve-model gsd-integration-checker 
 gsd_run query phases.list
 ```
 
-- Parse version from arguments or detect current from ROADMAP.md
-- Identify all phase directories in scope
-- Extract milestone definition of done from ROADMAP.md
-- Extract requirements mapped to this milestone from REQUIREMENTS.md
+- Parse the version from the arguments or find the current version in ROADMAP.md.
+- Find all phase directories in scope.
+- Extract the milestone definition of done from ROADMAP.md.
+- Extract the requirements mapped to this milestone from REQUIREMENTS.md.
 
 ## 2. Read All Phase Verifications
 
@@ -64,21 +66,21 @@ From each VERIFICATION.md, extract:
 - **Critical gaps:** (if any — these are blockers)
 - **Non-critical gaps:** tech debt, deferred items, warnings
 - **Anti-patterns found:** TODOs, stubs, placeholders
-- **Requirements coverage:** which requirements satisfied/blocked
+- **Requirements coverage:** which requirements are satisfied/blocked
 
-If a phase is missing VERIFICATION.md, flag it as "unverified phase" — this is a blocker.
+If a phase is missing VERIFICATION.md, flag it as "unverified phase". This is a blocker.
 
 ## 3. Spawn Integration Checker
 
-With phase context collected:
+After you collect the phase context, extract `MILESTONE_REQ_IDS` from the REQUIREMENTS.md traceability table. Include all REQ-IDs assigned to phases in this milestone.
 
-Extract `MILESTONE_REQ_IDS` from REQUIREMENTS.md traceability table — all REQ-IDs assigned to phases in this milestone.
-
-Print: "Spawning integration checker (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)"
+Print: "Spawning integration checker (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze)"
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`integration_checker_model`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value for `model` (`integration_checker_model`) is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes.
+>
+> When you omit it, the subagent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 ```
 Agent(
@@ -104,7 +106,9 @@ ${AGENT_SKILLS_CHECKER}",
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result.
+>
+> This prevents duplicate work, conflicting edits, and wasted context. When the subagent result is available, resume work only then.
 
 ## 4. Collect Results
 
@@ -155,23 +159,23 @@ For each REQ-ID, determine status using all three sources:
 
 ### 5e. FAIL Gate and Orphan Detection
 
-**REQUIRED:** Any `unsatisfied` requirement MUST force `gaps_found` status on the milestone audit.
+**Need:** Any `unsatisfied` requirement MUST force `gaps_found` status on the milestone audit.
 
-**Orphan detection:** Requirements present in REQUIREMENTS.md traceability table but absent from ALL phase VERIFICATION.md files MUST be flagged as orphaned. Orphaned requirements are treated as `unsatisfied` — they were assigned but never verified by any phase.
+**Orphan detection:** Examine the REQUIREMENTS.md traceability table for requirements absent from ALL phase VERIFICATION.md files. You MUST flag these requirements as orphaned. Treat orphaned requirements as `unsatisfied`. These requirements were assigned, but no phase verified them.
 
 ## 5.5. Nyquist Compliance Discovery
 
-Skip if the Nyquist capability is inactive.
+If the Nyquist capability is inactive, skip this section.
 
 ```bash
 VERIFY_POST_HOOKS_JSON=$(gsd_run loop render-hooks verify:post --raw)
 ```
 
-Resolve active step hooks from `VERIFY_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "validate-phase"`.
+From `VERIFY_POST_HOOKS_JSON`, resolve active step hooks where `kind == "step"` and `ref.skill == "validate-phase"`.
 
-If no active validate-phase step hook exists: skip entirely.
+If no active validate-phase step hook exists, skip this section entirely.
 
-For each phase directory, check `*-VALIDATION.md`. If exists, parse frontmatter (`status`, `nyquist_compliant`, `wave_0_complete`).
+For each phase directory, examine `*-VALIDATION.md`. If the file exists, parse its frontmatter (`status`, `nyquist_compliant`, `wave_0_complete`).
 
 Classify per phase:
 
@@ -182,11 +186,15 @@ Classify per phase:
 | NOT-VALIDATED | `status: draft` (or absent) — validate-phase has not yet reconciled this file (#2117) |
 | MISSING | No VALIDATION.md |
 
-> **NOT-VALIDATED vs PARTIAL (#2117):** A phase reads `status: draft` when it was seeded by plan-phase but never reconciled by validate-phase, OR when its `VALIDATION.md` predates the `status` field (files written before #2117 stay `draft` whether or not validation ran). In both cases `nyquist_compliant` is not authoritative, so this is a coverage TODO ("run validate-phase") — not a compliance failure. Re-running validate-phase promotes the file to `status: validated` and yields the real COMPLIANT/PARTIAL verdict. Only `status: validated` + `nyquist_compliant: false` is a genuine PARTIAL.
+> **NOT-VALIDATED vs PARTIAL (#2117):** A phase reads `status: draft` in either of these cases:
+> - plan-phase seeded the file, but validate-phase never reconciled it.
+> - Its `VALIDATION.md` predates the `status` field. Files written before #2117 stay `draft` whether or not validation ran.
+
+> In both cases, `nyquist_compliant` is not authoritative. This is a coverage TODO ("run validate-phase"), not a compliance failure. A new validate-phase run promotes the file to `status: validated` and gives the real COMPLIANT/PARTIAL verdict. Only `status: validated` + `nyquist_compliant: false` is a genuine PARTIAL.
 
 Add to audit YAML: `nyquist: { compliant_phases, partial_phases, not_validated_phases, missing_phases, overall }`
 
-Discovery only — never auto-calls `/gsd:validate-phase`.
+Discovery only — never automatically call `/gsd:validate-phase`.
 
 ## 6. Aggregate into v{version}-MILESTONE-AUDIT.md
 
@@ -224,7 +232,7 @@ tech_debt:  # Non-critical, deferred
 ---
 ```
 
-Plus full markdown report with tables for requirements, phases, integration, tech debt.
+Also include a full markdown report with tables for requirements, phases, integration, and tech debt.
 
 **Status values:**
 - `passed` — all requirements met, no critical gaps, minimal tech debt
@@ -233,12 +241,12 @@ Plus full markdown report with tables for requirements, phases, integration, tec
 
 ## 7. Present Results
 
-Route by status (see `<offer_next>`).
+Use the status to select the route (see `<offer_next>`).
 
 </process>
 
 <offer_next>
-Output this markdown directly (not as a code block). Route based on status:
+Output this markdown directly, not as a code block. Use the status to select the route:
 
 ---
 
@@ -294,16 +302,16 @@ All requirements covered. Cross-phase integration verified. E2E flows complete.
 |-------|---------------|-----------|--------|
 | {phase} | exists/missing | true/false/partial | `/gsd:validate-phase {N}` |
 
-Phases needing validation: run `/gsd:validate-phase {N}` for each flagged phase.
+For phases that need validation, run `/gsd:validate-phase {N}` for each flagged phase.
 
 ---
 
 ## ▶ Next Up — [${PROJECT_CODE}] ${PROJECT_TITLE}
 
-**Close the gaps inline** — gap planning happens as part of this audit's
-output (see the Unsatisfied Requirements, Cross-Phase Issues, Broken Flows,
-and Nyquist Coverage sections above). Insert one closure phase per gap (or
-per group of related gaps) using the standard phase chain:
+**Close the gaps inline** — gap planning is part of this audit's output.
+See the Unsatisfied Requirements, Cross-Phase Issues, Broken Flows, and Nyquist Coverage sections above.
+Insert one closure phase per gap or per group of related gaps.
+Use the standard phase chain:
 
 /clear then:
 
@@ -312,14 +320,10 @@ per group of related gaps) using the standard phase chain:
 /gsd:plan-phase <new-phase>
 /gsd:execute-phase <new-phase>
 
-`<after-phase>` is the phase the closure phase goes after. `<new-phase>` is
-the number the insert prints for the phase it creates (e.g. `5.1` after `5`,
-or `5.2` if `5.1` exists), never `<after-phase>`.
+`<after-phase>` is the phase before the closure phase. `<new-phase>` is the number that the insert prints for the phase it creates. For example, it prints `5.1` after `5`, or `5.2` if `5.1` exists. It is never `<after-phase>`.
 
-For Nyquist-coverage gaps flagged in the table above, prefer running
-`/gsd:validate-phase <N>` for each flagged phase (and `/gsd:secure-phase
-<N>` if SECURITY.md was flagged) before inserting a new closure phase —
-they may close the gap retroactively without a new phase.
+For Nyquist-coverage gaps flagged in the table above, prefer running `/gsd:validate-phase <N>` for each flagged phase before inserting a new closure phase. If SECURITY.md was flagged, also prefer running `/gsd:secure-phase
+<N>` before inserting a new closure phase. These commands may close the gap retroactively without a new phase.
 
 ---
 
@@ -357,8 +361,8 @@ All requirements met. No critical blockers. Accumulated tech debt needs review.
 
 /gsd:complete-milestone {version}
 
-**B. Plan a cleanup phase** — address the debt above before completing.
-Insert a closure phase using the standard chain:
+**B. Plan a cleanup phase** — address the debt above before you complete the milestone.
+Use the standard chain to insert a closure phase:
 
 /clear then:
 
@@ -367,9 +371,7 @@ Insert a closure phase using the standard chain:
 /gsd:plan-phase <new-phase>
 /gsd:execute-phase <new-phase>
 
-`<after-phase>` is the phase the cleanup phase goes after. `<new-phase>` is
-the number the insert prints for the phase it creates (e.g. `5.1` after `5`,
-or `5.2` if `5.1` exists), never `<after-phase>`.
+`<after-phase>` is the phase before the cleanup phase. `<new-phase>` is the number that the insert prints for the phase it creates. For example, it prints `5.1` after `5`, or `5.2` if `5.1` exists. It is never `<after-phase>`.
 
 ---
 </offer_next>

@@ -45,13 +45,13 @@ Parse `$ARGUMENTS` for:
 
 ### Load the Sketch Landscape
 
-If no `.planning/sketches/` directory exists, tell the user there's nothing to analyze and offer to start fresh with an idea instead.
+If no `.planning/sketches/` directory exists, tell the user there is nothing to analyze and offer to start fresh with an idea instead.
 
 Otherwise, load in this order:
 
 **a. MANIFEST.md** — the design direction, reference points, and sketch table with winners.
 
-**b. Findings skills** — glob `./.claude/skills/sketch-findings-*/SKILL.md` and read any that exist, plus their `references/*.md`. These contain curated design decisions from prior wrap-ups.
+**b. Findings skills** — glob `./.claude/skills/sketch-findings-*/SKILL.md` and read any that exist, plus their `references/*.md`. These contain curated design decisions from before wrap-ups.
 
 **c. All sketch READMEs** — read `.planning/sketches/*/README.md` for design questions, winners, and tags.
 
@@ -59,16 +59,16 @@ Otherwise, load in this order:
 
 Review winning variants across all sketches. Look for:
 
-- **Visual consistency gaps:** Two sketches made independent design choices that haven't been tested together.
+- **Visual consistency gaps:** Two sketches made independent design choices that have not been tested together.
 - **State combinations:** Individual states validated but not seen in sequence.
 - **Responsive gaps:** Validated at one viewport but the real app needs multiple.
-- **Theme coherence:** Individual components look good but haven't been composed into a full-page view.
+- **Theme coherence:** Individual components look good but have not been composed into a full-page view.
 
 If consistency risks exist, present them as concrete proposed sketches with names and design questions. If no meaningful gaps, say so and skip.
 
 ### Analyze for Frontier Sketches
 
-Think laterally about the design direction from MANIFEST.md and what's been explored:
+Think laterally about the design direction from MANIFEST.md and what is been explored:
 
 - **Unsketched screens:** UI surfaces assumed but unexplored.
 - **Interaction patterns:** Static layouts validated but transitions, loading, drag-and-drop need feeling.
@@ -84,7 +84,7 @@ Present all consistency and frontier candidates, then ask which to run. When the
 </step>
 
 <step name="setup_directory">
-Create `.planning/sketches/` and themes directory if they don't exist:
+Create `.planning/sketches/` and themes directory if they do not exist:
 
 ```bash
 mkdir -p .planning/sketches/themes
@@ -102,7 +102,7 @@ RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be presented in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 </step>
 
 <step name="mood_intake">
@@ -115,8 +115,8 @@ Before sketching anything, explore the design intent through conversation. Ask o
 **Questions to cover (adapt to what the user has already shared):**
 
 1. **Feel:** "What should this feel like? Give me adjectives, emotions, or a vibe."
-2. **References:** "What apps, sites, or products have a similar feel to what you're imagining?"
-3. **Core action:** "What's the single most important thing a user does here?"
+2. **References:** "What apps, sites, or products have a similar feel to what you imagine?"
+3. **Core action:** "What is the single most important thing a user does here?"
 
 After each answer, briefly reflect what you heard and how it shapes your thinking.
 
@@ -128,13 +128,13 @@ Only proceed when the user says go.
 <step name="load_spike_context">
 ## Load Spike Context
 
-If spikes exist for this project, read them to ground the sketches in reality. Mockups are still pure HTML, but they should reflect what's actually been proven — real data shapes, real component names, real interaction patterns.
+If spikes exist for this project, read them to ground the sketches in reality. Mockups are still pure HTML, but they should reflect what is actually been proven — real data shapes, real component names, real interaction patterns.
 
 **a.** Glob for `./.claude/skills/spike-findings-*/SKILL.md` and read any that exist, plus their `references/*.md`. These contain validated patterns and requirements.
 
-**b.** Read `.planning/spikes/MANIFEST.md` if it exists — it may hold separate `### {idea-key}` sections for several unrelated ideas. Check the Requirements list of the idea key relevant to this sketch's design direction (or all of them if none clearly matches) for non-negotiable design constraints (e.g., "must support streaming", "must render markdown"). These requirements should be visible in the mockup even though the mockup doesn't implement them for real.
+**b.** Read `.planning/spikes/MANIFEST.md` if it exists — it may hold separate `### {idea-key}` sections for several unrelated ideas. Check the Requirements list of the idea key relevant to this sketch's design direction for non-negotiable design constraints (e.g., "must support streaming", "must render markdown"). If none clearly matches, check the Requirements lists of all idea keys for those constraints. These requirements should be visible in the mockup even though the mockup does not implement them for real.
 
-**c.** Read `.planning/spikes/CONVENTIONS.md` if it exists — the established stack informs what's buildable and what interaction patterns are idiomatic.
+**c.** Read `.planning/spikes/CONVENTIONS.md` if it exists — the established stack informs what is buildable and what interaction patterns are idiomatic.
 
 **How spike context improves sketches:**
 - Use real field names and data shapes from spike findings instead of generic placeholders
@@ -161,7 +161,7 @@ Each sketch answers one specific visual question. Good sketches:
 
 Bad sketches:
 - "Design the whole app" — too broad
-- "Set up the component library" — that's implementation
+- "Set up the component library" — that is implementation
 - "Pick a color palette" — apply it to UI instead
 
 Present the table and get alignment before building.
@@ -170,7 +170,7 @@ Present the table and get alignment before building.
 <step name="research_stack">
 ## Research the Target Stack
 
-Before sketching, ground the design in what's actually buildable. Sketches are HTML, but they should reflect real constraints of the target implementation.
+Before sketching, ground the design in what is actually buildable. Sketches are HTML, but they should reflect real constraints of the target implementation.
 
 **a. Identify the target stack.** Check for package.json, Cargo.toml, etc. If the user mentioned a framework (React, SwiftUI, Flutter, etc.), note it.
 
@@ -181,12 +181,12 @@ Before sketching, ground the design in what's actually buildable. Sketches are H
 
 **c. Note constraints that affect design:**
 - Platform conventions (iOS nav patterns, desktop menu bars, terminal grid constraints)
-- Framework limitations (what's easy vs requires custom work)
+- Framework limitations (what is easy vs need custom work)
 - Existing design tokens or theme systems already in the project
 
 **d. Let research inform variants.** At least one variant should follow the path of least resistance for the target stack.
 
-**Skip when unnecessary.** Greenfield project with no stack, or user says "just explore visually." The point is grounding, not gatekeeping.
+**Skip when unnecessary.** Greenfield project with no stack, or user says "just explore visually." The point is to ground the design, not to gatekeep.
 </step>
 
 <step name="create_manifest">
@@ -213,7 +213,7 @@ If MANIFEST.md already exists, append new sketches to the existing table.
 <step name="create_theme">
 If no theme exists yet at `.planning/sketches/themes/default.css`, create one based on the mood/direction from the intake step. See `sketch-theme-system.md` for the full template.
 
-Adapt colors, fonts, spacing, and shapes to match the agreed aesthetic — don't use the defaults verbatim unless they match the mood.
+Adapt colors, fonts, spacing, and shapes to match the agreed aesthetic — do not use the defaults verbatim unless they match the mood.
 </step>
 
 <step name="build_sketches">
@@ -228,7 +228,7 @@ Build each sketch in order.
 **c.** Build `index.html` with 2-3 variants:
 
 **First round — dramatic differences:** 2-3 meaningfully different approaches.
-**Subsequent rounds — refinements:** Subtler variations within the chosen direction.
+**Next rounds — refinements:** Subtler variations within the chosen direction.
 
 Each variant is a page/tab in the same HTML file. Include:
 - Tab navigation to switch between variants (see `sketch-variant-patterns.md`)
@@ -270,7 +270,7 @@ open .planning/sketches/NNN-descriptive-name/index.html
 
 **e.** Present to the user with a checkpoint:
 
-### CHECKPOINT: Verification Required
+### CHECKPOINT: Verification Need
 
 **Sketch {NNN}: {name}**
 
@@ -344,7 +344,7 @@ After all sketches complete:
 </process>
 
 <success_criteria>
-- [ ] `.planning/sketches/` created (auto-creates if needed, no project init required)
+- [ ] `.planning/sketches/` created (auto-creates if needed, no project init need)
 - [ ] Design direction explored conversationally before any code (unless --quick)
 - [ ] Spike context loaded — real data shapes, requirements, and conventions inform mockups
 - [ ] Target stack researched — component availability, constraints, idioms (unless greenfield/skipped)
