@@ -32,7 +32,7 @@ Mode routing:
 | (none) | Interactive 5-question common-case config prompt | settings |
 | --advanced | Power-user knobs: planning, execution, discussion, cross-AI, git, runtime | settings-advanced |
 | --integrations | API keys (Brave/Firecrawl/Exa), review CLI routing, agent skills | settings-integrations |
-| --profile &lt;name&gt; | Switch model profile without interactive prompt | gsd-tools query config-set-model-profile |
+| --profile &lt. Name&gt. | Switch model profile without interactive prompt | gsd-tools query config-set-model-profile |
 
 </routing>
 
@@ -49,7 +49,7 @@ Parse the first token of the `<arguments>` block:
 - If it is `--advanced`: strip the flag, execute settings-advanced workflow
 - If it is `--integrations`: strip the flag, execute settings-integrations workflow
 - If it starts with `--profile`: extract the profile name (remainder after `--profile`), then:
-  1. Verify `gsd-tools` is on PATH via `command -v gsd-tools`; if absent, emit the install hint `Install GSD via 'npm i -g @opengsd/gsd-core'` and stop.
+  1. Verify `gsd-tools` is on PATH via `command -v gsd-tools`. If absent, emit the install hint `Install GSD via 'npm i -g @opengsd/gsd-core'` and stop.
   2. Run: `gsd_run query config-set-model-profile <profile-name> --raw` and display the output verbatim.
 - Otherwise: execute settings workflow (no argument needed)
 </context>
