@@ -1,18 +1,19 @@
 <purpose>
 Triage and review all open GitHub issues and PRs against project contribution templates.
-Produces a structured report showing compliance status for each item, flags missing
-required fields, identifies label gaps, and optionally takes action (label, comment, close).
+Produce a structured report that shows the compliance status for each item.
+Flag missing need fields and find label gaps.
+Optionally, take action to label, comment, or close.
 </purpose>
 
 <required_reading>
-Before starting, read these project files to understand the review criteria:
-- `.github/ISSUE_TEMPLATE/feature_request.yml` — required fields for feature issues
-- `.github/ISSUE_TEMPLATE/enhancement.yml` — required fields for enhancement issues
-- `.github/ISSUE_TEMPLATE/chore.yml` — required fields for chore issues
-- `.github/ISSUE_TEMPLATE/bug_report.yml` — required fields for bug reports
-- `.github/PULL_REQUEST_TEMPLATE/feature.md` — required checklist for feature PRs
-- `.github/PULL_REQUEST_TEMPLATE/enhancement.md` — required checklist for enhancement PRs
-- `.github/PULL_REQUEST_TEMPLATE/fix.md` — required checklist for fix PRs
+Before you start, read these project files to understand the review criteria:
+- `.github/ISSUE_TEMPLATE/feature_request.yml` — need fields for feature issues
+- `.github/ISSUE_TEMPLATE/enhancement.yml` — need fields for enhancement issues
+- `.github/ISSUE_TEMPLATE/chore.yml` — need fields for chore issues
+- `.github/ISSUE_TEMPLATE/bug_report.yml` — need fields for bug reports
+- `.github/PULL_REQUEST_TEMPLATE/feature.md` — need checklist for feature PRs
+- `.github/PULL_REQUEST_TEMPLATE/enhancement.md` — need checklist for enhancement PRs
+- `.github/PULL_REQUEST_TEMPLATE/fix.md` — need checklist for fix PRs
 - `CONTRIBUTING.md` — the issue-first rule and approval gates
 </required_reading>
 
@@ -22,23 +23,27 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`.
+
+This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+Keep technical terms, code, file paths, and subagent prompts in English.
+Translate only user-facing output.
 
 <step name="preflight">
-Verify prerequisites:
+Make sure that these prerequisites are met:
 
-1. **`gh` CLI available and authenticated?**
+1. **Is the `gh` CLI available and authenticated?**
    ```bash
    which gh && gh auth status 2>&1
    ```
-   If not available: print setup instructions and exit.
+   If it is not available, print setup instructions and exit.
 
 2. **Detect repository:**
-   If `--repo` flag provided, use that. Otherwise:
+   If the `--repo` flag is provided, use it. Otherwise:
    ```bash
    gh repo view --json nameWithOwner -q '.nameWithOwner' 2>/dev/null
    ```
-   If no repo detected: error — must be in a git repo with a GitHub remote.
+   If no repo is detected, show an error. You must be in a git repo with a GitHub remote.
 
 3. **Parse flags:**
    - `--issues` → set REVIEW_ISSUES=true, REVIEW_PRS=false
@@ -49,14 +54,14 @@ Verify prerequisites:
 </step>
 
 <step name="fetch_issues">
-Skip if REVIEW_ISSUES=false.
+If REVIEW_ISSUES=false, skip this step.
 
 Fetch all open issues:
 ```bash
 gh issue list --state open --json number,title,labels,body,author,createdAt,updatedAt --limit 100
 ```
 
-For each issue, classify by labels and body content:
+For each issue, use its labels and body content to classify it.
 
 | Label/Pattern | Type | Template |
 |---|---|---|
@@ -66,7 +71,7 @@ For each issue, classify by labels and body content:
 | `type: chore` | Chore | chore.yml |
 | No matching label | Unknown | Flag for manual triage |
 
-If an issue has no type label, attempt to classify from the body content:
+If an issue has no type label, try to classify it from the body content:
 - Contains "### Feature name" → likely Feature
 - Contains "### What existing feature" → likely Enhancement
 - Contains "### What happened?" → likely Bug
@@ -75,17 +80,17 @@ If an issue has no type label, attempt to classify from the body content:
 </step>
 
 <step name="review_issues">
-Skip if REVIEW_ISSUES=false.
+If REVIEW_ISSUES=false, skip this step.
 
-For each classified issue, review against its template requirements.
+For each classified issue, review it against its template requirements.
 
 **Feature Request Review Checklist:**
 - [ ] Pre-submission checklist present (4 checkboxes)
 - [ ] Feature name provided
 - [ ] Type of addition selected
 - [ ] Problem statement filled (not placeholder text)
-- [ ] What is being added described with examples
-- [ ] Full scope of changes listed (files created/modified/systems)
+- [ ] Description of the addition with examples
+- [ ] Full scope of changes listed (files `created/modified/systems`)
 - [ ] User stories present (minimum 2)
 - [ ] Acceptance criteria present (testable conditions)
 - [ ] Applicable runtimes selected
@@ -97,10 +102,10 @@ For each classified issue, review against its template requirements.
 
 **Enhancement Review Checklist:**
 - [ ] Pre-submission checklist present (4 checkboxes)
-- [ ] What is being improved identified
+- [ ] Identification of what the enhancement improves
 - [ ] Current behavior described with examples
 - [ ] Proposed behavior described with examples
-- [ ] Reason and benefit articulated (not vague)
+- [ ] Reason and benefit described (not vague)
 - [ ] Scope of changes listed
 - [ ] Breaking changes assessed
 - [ ] Alternatives considered
@@ -132,20 +137,20 @@ For each classified issue, review against its template requirements.
 - **Label check:** Has `needs-triage` label?
 
 **Scoring:** For each issue, calculate a completeness percentage:
-- Count required fields present vs. total required fields
+- Count the need fields present and the total need fields
 - Score = (present / total) * 100
 - Status: COMPLETE (100%), MOSTLY COMPLETE (75-99%), INCOMPLETE (50-74%), REJECT (<50%)
 </step>
 
 <step name="fetch_prs">
-Skip if REVIEW_PRS=false.
+If REVIEW_PRS=false, skip this step.
 
 Fetch all open PRs:
 ```bash
 gh pr list --state open --json number,title,labels,body,author,headRefName,baseRefName,isDraft,createdAt,reviewDecision,statusCheckRollup --limit 100
 ```
 
-For each PR, classify by body content and linked issue:
+For each PR, use its body content and linked issue to classify it.
 
 | Body Pattern | Type | Template |
 |---|---|---|
@@ -155,16 +160,16 @@ For each PR, classify by body content and linked issue:
 | Uses default template | Wrong Template | Flag — must use typed template |
 | Cannot determine | Unknown | Flag for manual review |
 
-Also check for linked issues:
+Also examine linked issues:
 ```bash
 gh pr view {number} --json body -q '.body' | grep -oE '(Closes|Fixes|Resolves) #[0-9]+'
 ```
 </step>
 
 <step name="review_prs">
-Skip if REVIEW_PRS=false.
+If REVIEW_PRS=false, skip this step.
 
-For each classified PR, review against its template requirements.
+For each classified PR, review it against its template requirements.
 
 **Feature PR Review Checklist:**
 - [ ] Uses feature PR template (not default)
@@ -172,7 +177,7 @@ For each classified PR, review against its template requirements.
 - [ ] Linked issue exists and has `approved-feature` label
 - [ ] Feature summary present
 - [ ] New files table filled
-- [ ] Modified files table filled
+- [ ] Change files table filled
 - [ ] Implementation notes present
 - [ ] Spec compliance checklist present (acceptance criteria from issue)
 - [ ] Test coverage described
@@ -219,25 +224,25 @@ For each classified PR, review against its template requirements.
 - [ ] One concern per PR (not mixing fix + enhancement)
 - [ ] No unrelated formatting changes visible in diff
 - [ ] `.changeset/*.md` fragment added for user-facing changes (or `no-changelog` label applied)
-- [ ] Not using `--no-verify` or skipping hooks
+- [ ] No use of `--no-verify` or skipped hooks
 
 **Scoring:** Same as issues — completeness percentage per PR.
 </step>
 
 <step name="check_gates">
-Cross-reference issues and PRs to enforce the issue-first rule:
+Compare issues and PRs to enforce the issue-first rule:
 
 For each open PR:
-1. Extract linked issue number from body
-2. If no linked issue: **GATE VIOLATION** — PR has no issue
-3. If linked issue exists, check its labels:
+1. Extract the linked issue number from the body.
+2. If there is no linked issue, report **GATE VIOLATION** — PR has no issue.
+3. If the linked issue exists, examine its labels:
    - Feature PR → issue must have `approved-feature`
    - Enhancement PR → issue must have `approved-enhancement`
    - Fix PR → issue must have `confirmed-bug`
-4. If label is missing: **GATE VIOLATION** — PR opened before approval
+4. If the label is missing, report **GATE VIOLATION** — PR opened before approval.
 
-Report gate violations prominently — these are the most important findings because
-the project auto-closes PRs without proper approval gates.
+Make gate violations prominent in the report.
+These are the most important findings because the project auto-closes PRs without proper approval gates.
 </step>
 
 <step name="generate_report">
@@ -296,15 +301,15 @@ STALE ITEMS (>30 days, no activity)
 ===================================================================
 ```
 
-Write this report to `.planning/INBOX-TRIAGE.md` if a `.planning/` directory exists,
-otherwise print to console only.
+If a `.planning/` directory exists, write this report to `.planning/INBOX-TRIAGE.md`.
+Otherwise, print the report to the console only.
 </step>
 
 <step name="auto_actions">
-Only execute if `--label` or `--close-incomplete` flags were set.
+Only when the `--label` or `--close-incomplete` flags were set, execute this step. Otherwise, skip it.
 
 **If --label:**
-For each issue/PR where labels are missing or incorrect:
+For each issue/PR with missing or incorrect labels, run:
 ```bash
 gh issue edit {number} --add-label "{label}"
 ```
@@ -321,19 +326,24 @@ Label recommendations:
 - PRs with gate violations → add `gate-violation`
 
 **If --close-incomplete:**
-For issues scoring below 50% completeness:
+For issues with a completeness score below 50%, run:
 ```bash
 gh issue close {number} --comment "Closed by GSD inbox triage: this issue is missing required fields per the issue template. Missing: {list}. Please reopen with a complete submission. See CONTRIBUTING.md for requirements."
 ```
 
-For PRs with gate violations:
+For PRs with gate violations, run:
 ```bash
 gh pr close {number} --comment "Closed by GSD inbox triage: this PR does not meet the issue-first requirement. {specific violation}. See CONTRIBUTING.md for the correct process."
 ```
 
-Always confirm with the user before closing anything:
+Always get confirmation from the user before you close anything:
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS`, set `TEXT_MODE=true`.
+If `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list.
+Ask the user to type their choice number.
+Non-Claude runtimes without `AskUserQuestion`, such as OpenAI Codex and Antigravity, need this.
 
 ```
 AskUserQuestion:
@@ -378,8 +388,8 @@ After triage:
 
 - /gsd:review — Run cross-AI peer review on a specific phase plan
 - /gsd:ship — Create a PR from completed work
-- /gsd:progress — See overall project state
-- /gsd:inbox --label — Re-run with auto-labeling enabled
+- /gsd:progress — See the overall project state
+- /gsd:inbox --label — Run again with auto-labeling enabled
 </offer_next>
 
 <success_criteria>
