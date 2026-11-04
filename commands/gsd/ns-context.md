@@ -23,7 +23,7 @@ Route to the appropriate codebase-intelligence skill based on the user's intent.
 | Generate a knowledge graph | gsd-graphify |
 | Update project documentation | gsd-docs-update |
 | Extract learnings from a completed phase | gsd-extract-learnings |
-| Recall prior decisions and patterns before planning | gsd-mempalace-recall |
+| Recall before decisions and patterns before planning | gsd-mempalace-recall |
 | File a phase artifact into MemPalace | gsd-mempalace-capture |
 
 Invoke the matched skill directly using the Skill tool.
