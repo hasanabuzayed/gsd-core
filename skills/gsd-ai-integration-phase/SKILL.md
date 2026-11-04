@@ -33,7 +33,7 @@ Flow: Select Framework → Research Docs → Research Domain → Design Eval Str
 </execution_context>
 
 <context>
-Phase number: the `<arguments>` block — optional; when omitted, the orchestrating workflow reads ROADMAP.md and selects the next unplanned phase. This is not a `gsd-tools.cjs` CLI feature — the CLI's phase-lookup primitives require an explicit phase number.
+Phase number: the `<arguments>` block — optional. When omitted, the orchestrating workflow reads ROADMAP.md and selects the next unplanned phase. This is not a `gsd-tools.cjs` CLI feature — the CLI's phase-lookup primitives need an explicit phase number.
 </context>
 
 <process>
