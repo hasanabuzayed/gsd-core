@@ -20,7 +20,7 @@ Argument parsing rules:
 - Recognize the long form, short form, and obvious aliases listed above.
 - A bare token like `debug`, `--debug`, `capture`, `workflow`, `config` is a topic — route to `topic.md`.
 - Multiple flags: `--brief` and `--full` are mutually exclusive — if both appear *without* a topic, prefer `--full`.
-- `--brief` combined with a topic invokes `topic.md` in compact scope; `--full` combined with a topic invokes `topic.md` in full scope (the default topic behavior). When passing arguments through to `topic.md`, retain the `--brief` flag so the mode can pick the right scope.
+- `--brief` combined with a topic invokes `topic.md` in compact scope. `--full` combined with a topic invokes `topic.md` in full scope (the default topic behavior). When passing arguments through to `topic.md`, retain the `--brief` flag so the mode can pick the right scope.
 
 After loading the chosen mode, emit its `<reference>` block content directly. No additions, no project context, no suggestions.
 </progressive_disclosure>

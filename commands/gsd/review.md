@@ -28,7 +28,7 @@ planning via /gsd:plan-phase --reviews.
 </execution_context>
 
 <context>
-Phase number: extracted from the `<arguments>` block (required)
+Phase number: extracted from the `<arguments>` block (need)
 
 **Flags:**
 - `--claude` — Include Claude CLI review (uses separate session)
@@ -40,8 +40,8 @@ Phase number: extracted from the `<arguments>` block (required)
 - `--all` — Include all available CLIs
 
 **No flags** — if `review.default_reviewers` is set, review with only those configured
-reviewers that are detected; otherwise review with all available CLIs. Configured
-`review.reviewer_instances` names may appear in `review.default_reviewers`; each runs as an
+reviewers that are detected. Otherwise review with all available CLIs. Configured
+`review.reviewer_instances` names may appear in `review.default_reviewers`. Each runs as an
 independent reviewer identity backed by its configured adapter+model (see
 `docs/CONFIGURATION.md`). Instance names are not valid as flags.
 </context>
