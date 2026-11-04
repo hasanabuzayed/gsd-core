@@ -1,7 +1,7 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Cross-phase audit of all UAT and verification files. Finds every outstanding item (pending, skipped, blocked, human_needed), optionally verifies against the codebase to detect stale docs, and produces a prioritized human test plan.
+This workflow audits all UAT and verification files across phases. It finds every outstanding item (pending, skipped, blocked, human_needed). It optionally compares the items with the codebase to detect stale docs and produces a prioritized human test plan.
 </purpose>
 
 <process>
@@ -14,7 +14,7 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 AUDIT=$(gsd_run query audit-uat --raw)
 ```
 
-Parse JSON for `results` array and `summary` object.
+Parse the JSON for the `results` array and the `summary` object.
 
 If `summary.total_items` is 0 AND `summary.parse_gap_files` is 0:
 ```
@@ -25,31 +25,35 @@ All tests are passing, resolved, or diagnosed with fix plans.
 ```
 Stop here.
 
-If `summary.total_items` is 0 but `summary.parse_gap_files` is greater than 0, this is NOT all-clear — one or more files have test blocks that could not be parsed and may be hiding outstanding work. Continue to the `categorize` and `present` steps below; `present` renders the Unparsed section from these `parse_gap: true` entries even though `items` is empty for a mixed project.
+If `summary.total_items` is 0 but `summary.parse_gap_files` is greater than 0, this is NOT all-clear. One or more files have test blocks that the audit could not parse. These blocks may hide outstanding work.
+
+Continue to the `categorize` and `present` steps below. Even when `items` is empty for a mixed project, `present` renders the Unparsed section from these `parse_gap: true` entries.
 </step>
 
 <step name="categorize">
-Group items by what's actionable NOW vs. what needs prerequisites:
+Group the items by what is actionable NOW and what needs prerequisites:
 
 **Testable Now** (no external dependencies):
-- `pending` — tests never run
-- `human_uat` — human verification items
-- `skipped_unresolved` — skipped without clear blocking reason
+- `pending` — tests that never ran
+- `human_uat` — items for human verification
+- `skipped_unresolved` — skipped with no clear blocking reason
 
 **Needs Prerequisites:**
-- `server_blocked` — needs external server running
-- `device_needed` — needs physical device (not simulator)
-- `build_needed` — needs release/preview build
-- `third_party` — needs external service configuration
+- `server_blocked` — needs a running external server
+- `device_needed` — needs a physical device (not a simulator)
+- `build_needed` — needs a release/preview build
+- `third_party` — needs configuration for an external service
 
-For each item in "Testable Now", use Grep/Read to check if the underlying feature still exists in the codebase:
-- If the test references a component/function that no longer exists → mark as `stale`
-- If the test references code that has been significantly rewritten → mark as `needs_update`
-- Otherwise → mark as `active`
+For each item in "Testable Now", use Grep/Read to make sure that the underlying feature still exists in the codebase:
+- If the test references a component/function that no longer exists, mark the item as `stale`
+- If the test references code that was significantly rewritten, mark the item as `needs_update`
+- Otherwise, mark the item as `active`
 </step>
 
 <step name="present">
-If `summary.parse_gap_files` is greater than 0, render this section FIRST (before the `## UAT Audit Report` below, or standalone if `total_items` is also 0). Filter `results` for entries with `parse_gap: true`:
+If `summary.parse_gap_files` is greater than 0, render this section FIRST. Render it before the `## UAT Audit Report` below. If `total_items` is also 0, render it standalone.
+
+Filter `results` for entries with `parse_gap: true`:
 ```
 ## Unparsed UAT Files ({parse_gap_files} files)
 
@@ -60,7 +64,11 @@ If `summary.parse_gap_files` is greater than 0, render this section FIRST (befor
 
 These files have `### N.` test blocks with no readable `result:` line. Fix the file's structure, then re-run the audit.
 ```
-This fires for ANY project with `parse_gap_files > 0`, including a mixed project where other phases also have real outstanding `items` — the two sections are not mutually exclusive. An outstanding item does not stop mattering because its phase belongs to an already-archived milestone (a deferred human-UAT scenario or a `skipped` live-stack test is exactly what gets archived still-open), so an archived phase's parse gap is listed in this same table, unfiltered by `archived_milestone`. If `total_items` is 0, stop after this section (there is no `## UAT Audit Report` to present). Otherwise continue below.
+This section fires for ANY project with `parse_gap_files > 0`. The two sections are not mutually exclusive. A mixed project can also have real outstanding `items` in other phases.
+
+Even if its phase belongs to an already-archived milestone, an outstanding item still matters. A deferred human-UAT scenario or a `skipped` live-stack test is exactly the kind of item that gets archived still-open. The audit lists the parse gap of an archived phase in this same table, with no filter on `archived_milestone`.
+
+If `total_items` is 0, stop after this section. There is no `## UAT Audit Report` to present. Otherwise, continue below.
 
 Present the audit report:
 
@@ -103,7 +111,7 @@ Present the audit report:
 <step name="test_plan">
 Generate a human UAT test plan for "Testable Now" + "active" items only:
 
-Group by what can be tested together (same screen, same feature, same prerequisite):
+Group the items by what you can test together (same screen, same feature, same prerequisite):
 
 ```
 ## Human UAT Test Plan
