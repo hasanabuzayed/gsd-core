@@ -21,7 +21,7 @@ Manage phases in ROADMAP.md with a single consolidated command.
 Mode routing:
 - **default** (no flag): Add a new integer phase to the end of the current milestone → add-phase workflow
 - **--insert**: Insert urgent work as a decimal phase (e.g., 72.1) between existing phases → insert-phase workflow
-- **--remove**: Remove a future phase and renumber subsequent phases → remove-phase workflow
+- **--remove**: Remove a future phase and renumber next phases → remove-phase workflow
 - **--edit**: Edit any field of an existing phase in place → edit-phase workflow
 </objective>
 
@@ -31,7 +31,7 @@ Mode routing:
 |------|--------|----------|
 | (none) | Add new integer phase at end of milestone | add-phase |
 | --insert | Insert decimal phase (e.g., 72.1) after specified phase | insert-phase |
-| --remove | Remove future phase, renumber subsequent | remove-phase |
+| --remove | Remove future phase, renumber next | remove-phase |
 | --edit | Edit fields of existing phase in place | edit-phase |
 
 </routing>
