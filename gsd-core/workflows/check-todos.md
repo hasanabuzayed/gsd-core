@@ -1,9 +1,9 @@
 <purpose>
-List all pending todos, allow selection, load full context for the selected todo, and route to appropriate action.
+List all pending todos. Let the user select a todo. Load the full context for the selected todo. Route to the applicable action.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -22,9 +22,11 @@ INIT=$(gsd_run query init.todos ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Extract from init JSON: `todo_count`, `todos`, `pending_dir`, `response_language`.
+Extract these fields from the init JSON: `todo_count`, `todos`, `pending_dir`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST use `{response_language}`. This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Technical terms, code, file paths, and subagent prompts stay in English. Translate only user-facing output.
 
 If `todo_count` is 0:
 ```
@@ -44,15 +46,15 @@ Exit.
 </step>
 
 <step name="parse_filter">
-Check for area filter in arguments:
+Examine the arguments for an area filter:
 - `/gsd:capture --list` → show all
 - `/gsd:capture --list api` → filter to area:api only
 </step>
 
 <step name="list_todos">
-Use the `todos` array from init context (already filtered by area if specified).
+Use the `todos` array from the init context. If the user specified an area, the array is already filtered by area.
 
-Parse and display as numbered list:
+Parse the array. Show it as a numbered list:
 
 ```
 Pending Todos:
@@ -68,18 +70,19 @@ Reply with a number to view details, or:
 - `q` to exit
 ```
 
-Format age as relative time from created timestamp.
+Format age as relative time from the created timestamp.
 </step>
 
 <step name="handle_selection">
 Wait for user to reply with a number.
 
-If valid: load selected todo, proceed.
-If invalid: "Invalid selection. Reply with a number (1-[N]) or `q` to exit."
+If the selection is valid, load the selected todo. Then proceed.
+
+If the selection is invalid, show: "Invalid selection. Reply with a number (1-[N]) or `q` to exit."
 </step>
 
 <step name="load_context">
-Read the todo file completely. Display:
+Read the complete todo file. Show:
 
 ```
 ## [title]
@@ -95,23 +98,27 @@ Read the todo file completely. Display:
 [solution section content]
 ```
 
-If `files` field has entries, read and briefly summarize each.
+If the `files` field has entries, read each file. Give a short summary of each file.
 </step>
 
 <step name="check_roadmap">
-Check for roadmap (can use init progress or directly check file existence):
+Look for the roadmap. You can use init progress or examine whether the file exists directly.
 
 If `.planning/ROADMAP.md` exists:
-1. Check if todo's area matches an upcoming phase
-2. Check if todo's files overlap with a phase's scope
-3. Note any match for action options
+1. Examine whether the todo's area matches an upcoming phase.
+2. Examine whether the todo's files overlap with a phase's scope.
+3. Note any match for the action options.
 </step>
 
 <step name="offer_actions">
 **If todo maps to a roadmap phase:**
 
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
+
+Non-Claude runtimes where `AskUserQuestion` is not available need this. OpenAI Codex and Antigravity are examples of these runtimes.
 Use AskUserQuestion:
 - header: "Action"
 - question: "This todo relates to Phase [N]: [name]. What would you like to do?"
@@ -138,17 +145,17 @@ Use AskUserQuestion:
 ```bash
 mv ".planning/todos/pending/[filename]" ".planning/todos/completed/"
 ```
-Update STATE.md todo count. Present problem/solution context. Begin work or ask how to proceed.
+Update STATE.md todo count. Show the problem/solution context. Start work or ask how to proceed.
 
 **Add to phase plan:**
-Note todo reference in phase planning notes. Keep in pending. Return to list or exit.
+Note the todo reference in the phase planning notes. Keep the todo in pending. Return to the list or exit.
 
 **Create a phase:**
-Display: `/gsd:phase "[description from todo]"`
-Keep in pending. User runs command in fresh context.
+Show: `/gsd:phase "[description from todo]"`
+Keep the todo in pending. The user runs the command in a fresh context.
 
 **Brainstorm approach:**
-Keep in pending. Start discussion about problem and approaches.
+Keep the todo in pending. Start a discussion about the problem and approaches.
 
 **Put it back:**
 Return to list_todos step.
@@ -157,20 +164,24 @@ Return to list_todos step.
 <step name="update_state">
 If `.planning/STATE.md` exists:
 
-1. Re-run `gsd_run query init.todos ${GSD_WS:+--ws=${GSD_WS##* }}` (same workstream flag as the first call) to get a fresh, post-write JSON snapshot (the count and rendering must reflect the change just made).
-2. **Fail-safe check (#2618):** if the JSON failed to parse, or `pending_read_ok` is not `true`, or `pending_todos_markdown` is not a string, do NOT touch the "### Pending Todos" section — leave it exactly as-is and continue to the next step. A partial or malformed `init.todos` result must never overwrite a good existing section.
-3. Otherwise, replace the entire body of "### Pending Todos" (under "## Accumulated Context") with the literal value of `pending_todos_markdown` — verbatim, one bullet per pending todo already rendered and length-capped by `init.todos`. Do not reformat, re-wrap, re-order, or hand-edit the bullets; do not append to the old body — replace it wholesale (this is what makes an old run-on-sentence section get superseded cleanly with no migration step).
+1. Re-run `gsd_run query init.todos ${GSD_WS:+--ws=${GSD_WS##* }}` to get a fresh JSON snapshot after the write. Use the same workstream flag as the first call. The count and rendering must reflect the change just made.
+
+2. **Fail-safe check (#2618):** If the JSON failed to parse, do NOT touch the "### Pending Todos" section. If `pending_read_ok` is not `true` or `pending_todos_markdown` is not a string, do NOT touch the section. Leave it exactly as-is and continue to the next step. A partial or malformed `init.todos` result must never overwrite a good existing section.
+
+3. Otherwise, replace the entire body of "### Pending Todos" under "## Accumulated Context" with the literal value of `pending_todos_markdown`. Use the value verbatim. `init.todos` already renders one bullet per pending todo and caps its length.
+
+   Do not reformat, re-wrap, re-order, or hand-edit the bullets. Do not append to the old body. Replace the entire body. This replaces an old run-on-sentence section cleanly without a migration step.
 </step>
 
 <step name="git_commit">
-If todo was moved to completed/, commit the change:
+If the todo moved to completed/, commit the change:
 
 ```bash
 git rm --cached .planning/todos/pending/[filename] 2>/dev/null || true
 gsd_run query commit "docs: start work on todo - [title]" --files .planning/todos/completed/[filename] .planning/STATE.md
 ```
 
-Tool respects `commit_docs` config and gitignore automatically.
+The tool respects `commit_docs` config and gitignore automatically.
 
 Confirm: "Committed: docs: start work on todo - [title]"
 </step>
@@ -178,12 +189,12 @@ Confirm: "Committed: docs: start work on todo - [title]"
 </process>
 
 <success_criteria>
-- [ ] All pending todos listed with title, area, age
-- [ ] Area filter applied if specified
-- [ ] Selected todo's full context loaded
-- [ ] Roadmap context checked for phase match
-- [ ] Appropriate actions offered
-- [ ] Selected action executed
-- [ ] STATE.md updated if todo count changed
-- [ ] Changes committed to git (if todo moved to completed/)
+- [ ] List all pending todos with title, area, and age
+- [ ] If the user specified an area filter, apply it
+- [ ] Load the selected todo's full context
+- [ ] Examine the roadmap context for a phase match
+- [ ] Offer applicable actions
+- [ ] Execute the selected action
+- [ ] If the todo count changed, update STATE.md
+- [ ] If the todo moved to completed/, commit the changes to git
 </success_criteria>
