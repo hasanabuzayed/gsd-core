@@ -30,33 +30,33 @@ Manage parallel workstreams for concurrent milestone work.
 
 ## Step 1: Parse Subcommand
 
-Parse the user's input to determine which workstream operation to perform.
-If no subcommand given, default to `list`.
+Parse the user input to find the workstream operation.
+If the user gives no subcommand, use `list`.
 
 ## Step 2: Execute Operation
 
 ### list
 Run: `gsd-tools query workstream.list --raw --cwd "$CWD"`
-Display the workstreams in a table format showing name, status, current phase, and progress.
+Show the workstreams in a table with these columns: name, status, current phase, and progress.
 
 ### create
 Run: `gsd-tools query workstream.create <name> --raw --cwd "$CWD"`
-After creation, display the new workstream path and suggest next steps:
+After creation, show the new workstream path and suggest next steps:
 - `/gsd:new-milestone --ws <name>` to set up the milestone
 
 ### status
 Run: `gsd-tools query workstream.status <name> --raw --cwd "$CWD"`
-Display detailed phase breakdown and state information.
+Show the phase breakdown and the state information.
 
 ### switch
 Run: `gsd-tools query workstream.set <name> --raw --cwd "$CWD"`
-Also set `GSD_WORKSTREAM` for the current session when the runtime supports it.
+If the runtime supports it, also set `GSD_WORKSTREAM` for the current session.
 If the runtime exposes a session identifier, GSD also stores the active workstream
-session-locally so concurrent sessions do not overwrite each other.
+for the session so concurrent sessions do not overwrite each other.
 
 ### progress
 Run: `gsd-tools query workstream.progress --raw --cwd "$CWD"`
-Display a progress overview across all workstreams.
+Show a progress overview across all workstreams.
 
 ### complete
 Run: `gsd-tools query workstream.complete <name> --raw --cwd "$CWD"`
@@ -65,7 +65,7 @@ Archive the workstream to milestones/.
 ### resume
 Set the workstream as active and suggest `/gsd:resume-work --ws <name>`.
 
-## Step 3: Display Results
+## Step 3: Show Results
 
-Format the JSON output from gsd-tools query into a human-readable display.
+Show the JSON output from gsd-tools query in a human-readable format.
 Include the `${GSD_WS}` flag in any routing suggestions.
