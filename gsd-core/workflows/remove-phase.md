@@ -1,22 +1,22 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Remove an unstarted future phase from the project roadmap, delete its directory, renumber all subsequent phases to maintain a clean linear sequence, and commit the change. The git commit serves as the historical record of removal.
+Remove an unstarted future phase from the project roadmap. Delete its directory. Renumber all next phases to keep a linear sequence. Commit the change. The git commit is the historical record of the removal.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
 
 <step name="parse_arguments">
 Parse the command arguments:
-- Argument is the phase number to remove (integer or decimal)
+- The argument is the phase number to remove (integer or decimal)
 - Example: `/gsd-remove-phase 17` → phase = 17
 - Example: `/gsd-remove-phase 16.1` → phase = 16.1
 
-If no argument provided:
+If the user gives no argument, show the following before you exit:
 
 ```
 ERROR: Phase number required
@@ -43,14 +43,14 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 Extract: `phase_found`, `phase_dir`, `phase_number`, `commit_docs`, `roadmap_exists`.
 
-Also read STATE.md and ROADMAP.md content for parsing current position.
+Also read STATE.md and ROADMAP.md to parse the current position.
 </step>
 
 <step name="validate_future_phase">
-Verify the phase is a future phase (not started):
+Make sure that the phase is a future phase (not started):
 
-1. Compare target phase to current phase from STATE.md
-2. Target must be > current phase number
+1. Compare the target phase to the current phase from STATE.md.
+2. The target must be > the current phase number.
 
 If target <= current phase:
 
@@ -68,7 +68,7 @@ Exit.
 </step>
 
 <step name="confirm_removal">
-Present removal summary and confirm:
+Show the removal summary and request confirmation:
 
 ```
 Removing Phase {target}: {Name}
@@ -91,18 +91,18 @@ Wait for confirmation.
 RESULT=$(gsd_run query phase.remove "${target}")
 ```
 
-If the phase has executed plans (SUMMARY.md files), the CLI will error. Use `--force` only if the user confirms:
+If the phase contains executed plans (SUMMARY.md files), the CLI will error. Only if the user confirms, use `--force`:
 
 ```bash
 RESULT=$(gsd_run query phase.remove "${target}" --force)
 ```
 
-The CLI handles:
-- Deleting the phase directory
-- Renumbering all subsequent directories (in reverse order to avoid conflicts)
-- Renaming all files inside renumbered directories (PLAN.md, SUMMARY.md, etc.)
-- Updating ROADMAP.md (removing section, renumbering all phase references, updating dependencies)
-- Updating STATE.md (decrementing phase count)
+The CLI does these tasks:
+- Deletes the phase directory
+- Renumbers all next directories in reverse order to avoid conflicts
+- Renames all files inside renumbered directories, including PLAN.md and SUMMARY.md
+- Updates ROADMAP.md (removes the section, renumbers all phase references, and updates dependencies)
+- Updates STATE.md (decrements the phase count)
 
 Extract from result: `removed`, `directory_deleted`, `renamed_directories`, `renamed_files`, `roadmap_updated`, `state_updated`.
 </step>
@@ -114,11 +114,11 @@ Stage and commit the removal:
 gsd_run query commit "chore: remove phase {target} ({original-phase-name})" --files .planning/
 ```
 
-The commit message preserves the historical record of what was removed.
+The commit message keeps the historical record of what the operation removed.
 </step>
 
 <step name="completion">
-Present completion summary:
+Show the completion summary:
 
 ```
 Phase {target} ({original-name}) removed.
@@ -146,18 +146,18 @@ Would you like to:
 
 <anti_patterns>
 
-- Don't remove completed phases (have SUMMARY.md files) without --force
-- Don't remove current or past phases
-- Don't manually renumber — use `gsd_run query phase.remove` which handles all renumbering
-- Don't add "removed phase" notes to STATE.md — git commit is the record
-- Don't modify completed phase directories
+- Do not remove completed phases (have SUMMARY.md files) without --force.
+- Do not remove current or past phases.
+- Do not manually renumber. Use `gsd_run query phase.remove` to handle all renumbering.
+- Do not add "removed phase" notes to STATE.md. The git commit is the record.
+- Do not change completed phase directories.
 </anti_patterns>
 
 <success_criteria>
 Phase removal is complete when:
 
-- [ ] Target phase validated as future/unstarted
+- [ ] You made sure that the target phase is future/unstarted
 - [ ] `gsd_run query phase.remove` executed successfully
-- [ ] Changes committed with descriptive message
-- [ ] User informed of changes
+- [ ] You committed the changes with a descriptive message
+- [ ] You informed the user of the changes
 </success_criteria>
