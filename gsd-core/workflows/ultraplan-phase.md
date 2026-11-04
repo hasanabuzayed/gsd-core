@@ -2,17 +2,19 @@
 
 # Ultraplan Phase Workflow [BETA]
 
-Offload GSD's plan phase to Claude Code's ultraplan cloud infrastructure.
+Send the GSD plan phase to the ultraplan cloud infrastructure in Claude Code.
 
-⚠ **BETA feature.** Ultraplan is in research preview and may change. This workflow is
-intentionally isolated from /gsd:plan-phase so upstream changes to ultraplan cannot
-affect the core planning pipeline.
+⚠ **BETA feature.** Ultraplan is in research preview and may change.
+
+This workflow stays separate from /gsd:plan-phase.
+
+Changes to ultraplan cannot affect the core planning pipeline.
 
 ---
 
 <step name="banner">
 
-Display the stage banner:
+Show the stage banner:
 
 ```text
 ### GSD ► ULTRAPLAN PHASE  ⚠ BETA
@@ -26,7 +28,7 @@ Use /gsd:plan-phase for stable local planning.
 
 <step name="runtime_gate">
 
-Check that the session is running inside Claude Code:
+Make sure that the session runs inside Claude Code:
 
 ```bash
 if [ "$CLAUDECODE" = "1" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ]; then
@@ -41,7 +43,7 @@ else
 fi
 ```
 
-If the output is empty or unset, display the following error and exit:
+If the output is empty or unset, show the following error and exit.
 
 ```text
 ### RUNTIME ERROR
@@ -58,8 +60,11 @@ Use /gsd:plan-phase for local planning instead.
 
 <step name="initialize">
 
-Parse phase number from `$ARGUMENTS`. If no phase number is provided, detect the next
-unplanned phase from the roadmap (same logic as /gsd:plan-phase).
+Parse the phase number from `$ARGUMENTS`.
+
+If `$ARGUMENTS` has no phase number, find the next unplanned phase in the roadmap.
+
+Use the same logic as /gsd:plan-phase.
 
 Load GSD phase context:
 
@@ -85,9 +90,9 @@ No .planning directory found. Initialize the project first:
 /gsd:new-project
 ```
 
-**If `phase_found` is false:** Error with the phase number provided and exit.
+**If `phase_found` is false:** Show an error with the phase number provided and exit.
 
-Display detected phase:
+Show the detected phase:
 
 ```text
 Phase {N}: {phase name}
@@ -101,14 +106,11 @@ Phase {N}: {phase name}
 
 Build the ultraplan prompt from GSD context.
 
-1. Read the phase scope from ROADMAP.md — extract the goal, deliverables, and scope for
-   the target phase.
+1. Read the phase scope from ROADMAP.md. Extract the goal, deliverables, and scope for the target phase.
 
-2. Read REQUIREMENTS.md if it exists (`requirements_path` is not null) — extract a
-   concise summary (key requirements relevant to this phase, not the full document).
+2. If REQUIREMENTS.md exists (`requirements_path` is not null), read it. Extract a short summary of the key requirements for this phase, not the full document.
 
-3. Read RESEARCH.md if it exists (`research_path` is not null) — extract a concise
-   summary of technical findings. Including this reduces redundant cloud research.
+3. If RESEARCH.md exists (`research_path` is not null), read it. Extract a short summary of the technical findings. This summary reduces redundant cloud research.
 
 Construct the prompt:
 
@@ -158,8 +160,9 @@ Keep the plan focused and executable.
 
 <step name="return_path_card">
 
-Display the return-path instructions **before** triggering ultraplan so they are visible
-in the terminal scroll-back after ultraplan launches:
+Show the return-path instructions **before** you start ultraplan.
+
+The instructions will stay visible in the terminal scroll-back after ultraplan starts:
 
 ```text
 ### WHEN THE PLAN IS READY — WHAT TO DO
@@ -186,13 +189,14 @@ validate via plan-checker, update ROADMAP.md, and commit.
 
 <step name="trigger">
 
-Trigger ultraplan with the constructed prompt:
+Start ultraplan with the constructed prompt.
 
 ```text
 /ultraplan {constructed prompt from build_prompt step}
 ```
 
 Your terminal will show a `◇ ultraplan` status indicator while the remote session works.
-Use `/tasks` to open the detail view with the session link, agent activity, and a stop action.
+
+Use `/tasks` to open the detail view. The view shows the session link, agent activity, and a stop action.
 
 </step>

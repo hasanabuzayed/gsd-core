@@ -1,7 +1,11 @@
 <purpose>
-Retroactive audit of an implemented AI phase's evaluation coverage. Standalone command that works on any GSD-managed AI phase. Produces a scored EVAL-REVIEW.md with gap analysis and remediation plan.
+This standalone command audits the evaluation coverage of an implemented AI phase. It works on any GSD-managed AI phase.
 
-Use after /gsd:execute-phase to verify that the evaluation strategy from AI-SPEC.md was actually implemented. Mirrors the pattern of /gsd:ui-review and /gsd:validate-phase.
+It produces a scored EVAL-REVIEW.md with a gap analysis and a remediation plan.
+
+After /gsd:execute-phase, use this command to make sure that the implementation includes the evaluation strategy from AI-SPEC.md.
+
+The command follows the pattern of /gsd:ui-review and /gsd:validate-phase.
 </purpose>
 
 <required_reading>
@@ -25,7 +29,11 @@ INIT=$(gsd_run query init.phase-op ${GSD_WS:+--ws=${GSD_WS##* }} "${PHASE_ARG}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST use `{response_language}` for all user-facing output of this workflow.
+
+This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Parse: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `commit_docs`.
 
@@ -39,7 +47,7 @@ GSD_WS=$(echo " $GSD_ARGS" | sed -nE 's/.* --ws +([A-Za-z0-9][A-Za-z0-9._-]*).*/
 AGENT_SKILLS_AUDITOR=$(gsd_run query agent-skills gsd-eval-auditor ${GSD_WS:+--ws=${GSD_WS##* }})
 ```
 
-Display banner:
+Show the banner:
 ```
 ### GSD ► EVAL AUDIT — PHASE {N}: {name}
 ```
@@ -52,16 +60,24 @@ AI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-AI-SPEC.md 2>/dev/null | head -1)
 EVAL_REVIEW_FILE=$(ls "${PHASE_DIR}"/*-EVAL-REVIEW.md 2>/dev/null | head -1)
 ```
 
-**State A** — AI-SPEC.md + SUMMARY.md exist: Full audit against spec
-**State B** — SUMMARY.md exists, no AI-SPEC.md: Audit against general best practices
+**State A** — AI-SPEC.md + SUMMARY.md exist: Do a full audit against the spec.
+
+**State B** — SUMMARY.md exists, no AI-SPEC.md: Audit against general best practices.
+
 **State C** — No SUMMARY.md: Exit — "Phase {N} not executed. Run /gsd:execute-phase {N} first."
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `$ARGUMENTS` contains `--text` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+If TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
+
+Non-Claude runtimes such as OpenAI Codex and Antigravity need this because `AskUserQuestion` is not available.
 **If `EVAL_REVIEW_FILE` non-empty:**
 
-**If `--auto`:** Auto-select "View" — keep the existing EVAL-REVIEW.md untouched and exit without
-re-auditing. Log: `[auto] EVAL-REVIEW.md exists — reusing as-is.` "Re-audit" is the regenerating
-choice; an unattended run reuses an existing artifact instead (#4776).
+**If `--auto`:** Auto-select "View". Keep the existing EVAL-REVIEW.md unchanged and exit without a new audit.
+
+Log: `[auto] EVAL-REVIEW.md exists — reusing as-is.`
+
+"Re-audit" is the choice that regenerates the artifact. An unattended run reuses an existing artifact instead (#4776).
 
 **Otherwise:** Use AskUserQuestion:
 - header: "Existing Eval Review"
@@ -70,7 +86,7 @@ choice; an unattended run reuses an existing artifact instead (#4776).
   - "Re-audit — run fresh audit"
   - "View — display current review and exit"
 
-If "View": display file, exit.
+If "View": show the file and exit.
 If "Re-audit": continue.
 
 **If State B (no AI-SPEC.md):** Warn:
@@ -83,10 +99,10 @@ Continue (non-blocking).
 
 ## 2. Gather Context Paths
 
-Build file list for auditor:
-- AI-SPEC.md (if exists — the planned eval strategy)
-- All SUMMARY.md files in phase dir
-- All PLAN.md files in phase dir
+Build the file list for the auditor:
+- AI-SPEC.md, if it exists — the planned eval strategy
+- All SUMMARY.md files in the phase dir
+- All PLAN.md files in the phase dir
 
 ## 3. Spawn gsd-eval-auditor
 
@@ -127,7 +143,7 @@ Spawn as Task with model `AUDITOR_MODEL`.
 
 ## 4. Parse Auditor Result
 
-Read the written EVAL-REVIEW.md. Extract:
+Read the EVAL-REVIEW.md that the auditor wrote. Extract:
 - `overall_score`
 - `verdict` (PRODUCTION READY | NEEDS WORK | SIGNIFICANT GAPS | NOT IMPLEMENTED)
 - `critical_gap_count`
@@ -162,11 +178,11 @@ gsd_run query commit "docs({phase_slug}): add EVAL-REVIEW.md — score {overall_
 </process>
 
 <success_criteria>
-- [ ] Phase execution state detected correctly
-- [ ] AI-SPEC.md presence handled (with or without)
-- [ ] gsd-eval-auditor spawned with correct context
-- [ ] EVAL-REVIEW.md written (by auditor)
-- [ ] Score and verdict displayed to user
-- [ ] Appropriate next steps surfaced based on verdict
-- [ ] Committed if commit_docs enabled
+- [ ] Detect the phase execution state correctly
+- [ ] Handle the presence or absence of AI-SPEC.md
+- [ ] Spawn gsd-eval-auditor with the correct context
+- [ ] Auditor writes EVAL-REVIEW.md
+- [ ] Show the score and verdict to the user
+- [ ] Show the appropriate next steps based on the verdict
+- [ ] If commit_docs is enabled, commit
 </success_criteria>

@@ -1,17 +1,19 @@
 # /gsd:onboard Workflow
 
-One-command onboarding for an existing or unknown repo. This workflow is a thin
-renderer around `init onboard`; deterministic routing lives in the CLI projection.
+This workflow uses one command to onboard an existing or unknown repo.
+The workflow renders the output of `init onboard`.
+
+The CLI projection controls deterministic routing.
 
 @~/.claude/gsd-core/references/gsd-run-resolver.md
 
 ## 1. Render the Onboarding Projection
 
 Parse `$ARGUMENTS`:
-- `--fast` passes `--fast` to `init onboard`. Fast mode accepts the fast map for lightweight onboarding only; `next_action` still decides whether complete map work is required before project setup.
+- `--fast` passes `--fast` to `init onboard`. Fast mode accepts the fast map for lightweight onboarding only. `next_action` still decides whether complete map work is needed before project setup.
 - `--text` forces text-mode choices for runtimes without `AskUserQuestion`.
 
-Run the standard `gsd_run` resolver from the reference above, then run the projection from the runtime root:
+Run the standard `gsd_run` resolver from the reference above. Then run the projection from the runtime root:
 
 ```bash
 # If --fast was parsed from $ARGUMENTS:
@@ -33,10 +35,14 @@ Parse JSON fields from `INIT`:
 - `commit_docs`, `text_mode`, `has_git`, `git_worktree_root`, `in_nested_subdir`
 - `response_language`
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Set:
-- `TEXT_MODE=true` if `--text` is present or `text_mode` is true. When `TEXT_MODE` is active, replace every `AskUserQuestion` call below with a plain-text numbered list and ask the user to type their choice number — required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+- If `--text` is present or `text_mode` is true, set `TEXT_MODE=true`. When `TEXT_MODE` is active, replace every `AskUserQuestion` call below with a plain-text numbered list. Ask the user to type their choice number.
+
+  This is necessary for non-Claude runtimes, such as OpenAI Codex and Antigravity, that do not have `AskUserQuestion`.
 - `ONBOARDING_ROOT={git_worktree_root || _GSD_RUNTIME_ROOT}`.
 
 If `has_git` and `in_nested_subdir` are true, warn that onboarding artifacts belong to the outer worktree at `git_worktree_root`. Do not run `git init`.
@@ -76,7 +82,9 @@ Run from worktree root {ONBOARDING_ROOT}:
 Then rerun {handoff_commands.onboard} from the same worktree root.
 ```
 
-Exit. If the user skips mapping:
+Exit.
+
+If the user skips mapping:
 
 - If `(project_exists || requirements_exists || roadmap_exists || state_exists) && (!project_exists || !requirements_exists || !roadmap_exists || !state_exists)`, route the skip to the partial planning guard instead:
 
@@ -227,7 +235,9 @@ If `next_action.kind == "write-summary"`, continue to summary creation.
 
 ## 3. Create Onboarding Summary
 
-Create `{ONBOARDING_ROOT}/{next_action.summary_path}`. Do not overwrite an existing summary; the projection should only route here when the summary is missing.
+Create `{ONBOARDING_ROOT}/{next_action.summary_path}`. Do not overwrite an existing summary.
+
+The projection should route here only when the summary is missing.
 
 Summary template:
 
@@ -277,4 +287,4 @@ Onboarding status:
 Next recommended command: {handoff_commands.manager}
 ```
 
-Do not run implementation execution or shipping from onboarding.
+Do not execute implementation or shipping from onboarding.
