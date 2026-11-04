@@ -3,8 +3,8 @@ Execute a phase prompt (PLAN.md) and create the outcome summary (SUMMARY.md).
 </purpose>
 
 <required_reading>
-Read STATE.md before any operation to load project context.
-Read config.json for planning behavior settings.
+Before any operation, read STATE.md to load the project context.
+Read config.json for the planning behavior settings.
 
 @~/.claude/gsd-core/references/git-integration.md
 </required_reading>
@@ -13,23 +13,20 @@ Read config.json for planning behavior settings.
 For each executed plan, the only complete close-out order is:
 `production-code commit(s) -> SUMMARY commit -> STATE/ROADMAP update`.
 
-For a synchronous executor, the only legal half-state is mid-production-commits
-while the executor is still actively working. Once production commits for a plan
-exist, returning without a committed SUMMARY.md is an illegal partial-plan state.
-The next execute-phase resume must detect that condition before dispatching
-another executor.
+For a synchronous executor, the only legal half-state occurs during production commits while the executor still works.
+Once production commits for a plan exist, a return without a committed SUMMARY.md is an illegal partial-plan state.
+The next execute-phase resume must detect that condition before it dispatches another executor.
 
-**Async exception — `external_job_waiting`.** When an executor dispatches an
-async external job (long-running compute) it commits an async-job manifest at
-`.planning/async-jobs/<job>.json` and returns *without* SUMMARY.md. With a
-manifest recording a non-terminal job for this plan, the SUMMARY-absent state is
-a **legal deferred state** (`external_job_waiting`), not an illegal partial.
-SUMMARY.md is deferred until the external job reaches a terminal state and its
-output is verified. Resume reconciles against the manifest and must NOT
-re-dispatch a fresh executor for a plan with a non-terminal manifest (that would
-duplicate the external job). The manifest schema is the stability contract in
-`docs/reference/planning-artifacts.md`; the scheduler adapter that *writes* it is
-a capability (#1164), not core.
+**Async exception — `external_job_waiting`.** When an executor dispatches an async external job (long-running compute), it commits a manifest at `.planning/async-jobs/<job>.json`.
+The executor returns *without* SUMMARY.md.
+If a manifest records a non-terminal job for this plan, the missing SUMMARY is a **legal deferred state** (`external_job_waiting`).
+It is not an illegal partial state.
+The executor defers SUMMARY.md until the external job reaches a terminal state and its output is verified.
+
+Resume reconciles against the manifest.
+For a plan with a non-terminal manifest, resume must NOT dispatch a fresh executor again. That would duplicate the external job.
+The manifest schema is the stability contract in `docs/reference/planning-artifacts.md`.
+The scheduler adapter that *writes* it is a capability (#1164), not core.
 </atomic_close_out_invariant>
 
 <available_agent_types>
@@ -56,7 +53,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 Extract from init JSON: `executor_model`, `commit_docs`, `sub_repos`, `phase_dir`, `phase_number`, `plans`, `summaries`, `incomplete_plans`, `state_path`, `config_path`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be presented in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
 If `.planning/` missing: error.
 </step>
@@ -70,7 +67,7 @@ If `.planning/` missing: error.
 
 Find first PLAN without matching SUMMARY. Decimal phases supported (`01.1-hotfix/`).
 
-**Exclude `external_job_waiting` plans from selection.** When choosing the first PLAN that lacks a matching SUMMARY, skip any plan whose `plan_id` matches an async-job manifest in `.planning/async-jobs/` (any status) — that plan is `external_job_waiting` or awaiting reconciliation, never work to (re-)dispatch (re-dispatching would duplicate the external job). Reconcile via the manifest / safe_resume_gate instead.
+**Exclude `external_job_waiting` plans from selection.** When choosing the first PLAN that lacks a matching SUMMARY, skip any plan whose `plan_id` matches an async-job manifest in `.planning/async-jobs/` (any status). That plan is `external_job_waiting` or awaiting reconciliation, never work to (re-)dispatch. Re-dispatching would duplicate the external job. Reconcile via the manifest / safe_resume_gate instead.
 
 ```bash
 PHASE=$(echo "$PLAN_PATH" | grep -oE '[0-9]+[A-Z]?(\.[0-9]+)*-[0-9]+')
@@ -126,7 +123,7 @@ Otherwise: Apply checkpoint-based routing below.
   `isolation`-`none` host with a FATAL for a run that was never going to dispatch anything.
 - **Pattern A:** read @gsd-core/references/dispatch-isolation-gate.md and run its
   `Resolve ISOLATION`, `Single-agent dispatch sites`, and `Resolve the harness flag` blocks in
-  order; they set `ISOLATION`/`HARNESS_FLAG` via `query dispatch-isolation`. `ISOLATION` — not
+  order. They set `ISOLATION`/`HARNESS_FLAG` via `query dispatch-isolation`. `ISOLATION` — not
   `RUNTIME` — gates the worktree decision. Substitute `{harnessFlag}` in Pattern A's `Agent()`
   with `$HARNESS_FLAG`+comma when `ISOLATION = "harness-worktree"`, else empty.
   `{harnessFlag}` is a template placeholder, not a shell variable.
@@ -141,15 +138,31 @@ Otherwise: Apply checkpoint-based routing below.
   gsd_run query dispatch-isolation --raw --force-isolation none >/dev/null 2>&1 || true
   ```
 
-  Segment dispatches therefore carry no `{harnessFlag}` and DO carry a `<sequential_execution>` block (`You are running as a SEQUENTIAL executor agent on the main working tree (set SEQUENTIAL=true in your Step 0 commit guard, #4799).`) so the segment executor's commit guard does not apply the per-agent branch allow-list in a linked phase worktree.
+  Segment dispatches carry no `{harnessFlag}` and DO carry a `<sequential_execution>` block:
+  `You are running as a SEQUENTIAL executor agent on the main working tree (set SEQUENTIAL=true in your Step 0 commit guard, #4799).`
+  This prevents the segment executor's commit guard from applying the per-agent branch allow-list in a linked phase worktree.
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
-**Pattern A:** init_agent_tracking → capture `EXPECTED_BASE=$(git rev-parse HEAD)` → **before spawning, run the #2649 pre-dispatch worktree base-check** (mirrors execute-phase #683/#1369 and quick #1941): if `ISOLATION = "harness-worktree"`, run `gsd_run query worktree.base-check --mode "$ISOLATION" --pick shouldDegrade` (#3659/#4588: `--mode` names the creator; `"head"` suppresses the check — honored by GSD worktrees and, measured, by Claude Code); if it returns `true`, print its `--pick message` to stderr, emit the `⚠ [#2649] Worktree fork base diverged from orchestrator HEAD — auto-degrading to sequential mode for this plan to avoid a base-mismatch halt.` warning, and treat `ISOLATION` as `"none"` for this dispatch (spawn without `{harnessFlag}`), **then re-record the degrade before spawning** — run `gsd_run query dispatch-isolation --raw --force-isolation none >/dev/null 2>&1 || true`. That re-record is mandatory, not bookkeeping: the resolve step already persisted `harness-worktree` to the run-scoped sentinel, the degrade above happens where the resolver cannot see it, and the shipped `PreToolUse` isolation guard (#3045) reads that sentinel at the instant of the `Agent()` call — a stale `harness-worktree` against a dispatch that correctly omits `{harnessFlag}` is denied with `exit 2`, so the plan does not run at all. See `Re-record after every degrade` in `gsd-core/references/dispatch-isolation-gate.md`. With `worktree.baseRef` unset, Claude Code's `isolation="worktree"` forks from `origin/HEAD`, not live local HEAD; without this gate a plan whose commit advanced local HEAD past a stale `origin/HEAD` hits the verify-only guard's `exit 42` mid-execution with no auto-degrade. Setting `"head"` is what changes that, and the harness is measured to honor it (#4588) — except where a `WorktreeCreate` hook creates the worktree, which the base-check detects and reports separately (#4881). → print `Spawning executor agent (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)` → spawn Agent(subagent_type="gsd-executor", model=executor_model) with prompt: execute plan at [path], autonomous, all tasks + SUMMARY + commit, follow deviation/auth rules, honor checkpoint gate semantics (#3370) — gate="blocking" (the default) is auto-approvable in auto-mode per the executor's own checkpoint protocol, gate="blocking-human" always surfaces to a human; add no instruction overriding that protocol — report: plan name, tasks, SUMMARY path, commit hash → track agent_id → wait → update tracking → report. **Include `{harnessFlag}` only when `ISOLATION = "harness-worktree"` and the #2649 base-check did not degrade** — never hardcode `isolation="worktree"`, which is Claude Code's own literal and wrong on any other harness-worktree host. **When dispatching with `{harnessFlag}`, embed the `<worktree_branch_check>` block from `gsd-core/references/worktree-branch-check.md` into the prompt, substituting `{EXPECTED_BASE}` with the captured base SHA.** That guard is **verify-only and fail-closed** (#48) and stays active as a backstop whether or not the base-check degraded: it asserts a per-agent `agent-*` / `worktree-agent-*` branch and the exact base, forbids `git update-ref` self-recovery (#2924), and on any mismatch prints `FATAL:` and `exit 42` so the orchestrator can recover — the sub-agent never rewrites a worktree it did not create. This supersedes the former self-recovery (#2015), whose destructive base rewrite could fail silently under a deny rule; the base-drift it addressed affects all platforms, and base correction is now the orchestrator's responsibility.
+**Pattern A:** init_agent_tracking → capture `EXPECTED_BASE=$(git rev-parse HEAD)` → **before spawning, run the #2649 pre-dispatch worktree base-check** (mirrors execute-phase #683/#1369 and quick #1941): if `ISOLATION = "harness-worktree"`, run `gsd_run query worktree.base-check --mode "$ISOLATION" --pick shouldDegrade` (#3659/#4588: `--mode` names the creator. `"head"` suppresses the check — honored by GSD worktrees and, measured, by Claude Code). If it returns `true`, print its `--pick message` to stderr. Emit the `⚠ [#2649] Worktree fork base diverged from orchestrator HEAD — auto-degrading to sequential mode for this plan to avoid a base-mismatch halt.` warning. Treat `ISOLATION` as `"none"` for this dispatch (spawn without `{harnessFlag}`). **Then re-record the degrade before spawning** — run `gsd_run query dispatch-isolation --raw --force-isolation none >/dev/null 2>&1 || true`. 
 
-**Pattern B:** Execute segment-by-segment. Autonomous segments: spawn subagent for assigned tasks only (no SUMMARY/commit). Checkpoints: main context. After all segments: aggregate, create SUMMARY, commit. See segment_execution. **Segments run unisolated on the main working tree by design** — each continues where the previous one stopped — so dispatch them WITHOUT `{harnessFlag}`, and only after the `ISOLATION=none` re-record above has run (#2652/#3045).
+That re-record is mandatory, not bookkeeping. The resolve step already persisted `harness-worktree` to the run-scoped sentinel. The degrade above happens where the resolver cannot see it. The shipped `PreToolUse` isolation guard (#3045) reads that sentinel at the instant of the `Agent()` call. A stale `harness-worktree` against a dispatch that correctly omits `{harnessFlag}` is denied with `exit 2`. The plan does not run at all.
+
+ See `Re-record after every degrade` in `gsd-core/references/dispatch-isolation-gate.md`. With `worktree.baseRef` unset, Claude Code's `isolation="worktree"` forks from `origin/HEAD`, not live local HEAD. Without this gate a plan whose commit advanced local HEAD past a stale `origin/HEAD` hits the verify-only guard's `exit 42` mid-execution with no auto-degrade. Setting `"head"` changes that. The harness is measured to honor it (#4588), except where a `WorktreeCreate` hook creates the worktree. The base-check detects and reports that case separately (#4881).
+
+ → print `Spawning executor agent (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)` → spawn Agent(subagent_type="gsd-executor", model=executor_model) with prompt: execute plan at [path], autonomous, all tasks + SUMMARY + commit, follow deviation/auth rules, honor checkpoint gate semantics (#3370). Per the executor's checkpoint protocol, gate="blocking" (the default) is auto-approvable in auto-mode. gate="blocking-human" always surfaces to a human. Add no instruction overriding that protocol — report: plan name, tasks, SUMMARY path, commit hash → track agent_id → wait → update tracking → report.
+
+**Include `{harnessFlag}` only when `ISOLATION = "harness-worktree"` and the #2649 base-check did not degrade** — never hardcode `isolation="worktree"`, which is Claude Code's own literal and wrong on any other harness-worktree host. **When dispatching with `{harnessFlag}`, embed the `<worktree_branch_check>` block from `gsd-core/references/worktree-branch-check.md` into the prompt, substituting `{EXPECTED_BASE}` with the captured base SHA.** That guard is **verify-only and fail-closed** (#48). It stays active as a backstop whether or not the base-check degraded. It asserts a per-agent `agent-*` / `worktree-agent-*` branch and the exact base.
+
+It forbids `git update-ref` self-recovery (#2924). On any mismatch it prints `FATAL:` and `exit 42` so the orchestrator can recover. The sub-agent never rewrites a worktree it did not create.
+
+ This supersedes the former self-recovery (#2015), whose destructive base rewrite could fail silently under a deny rule. The base-drift it addressed affects all platforms, and base correction is now the orchestrator's responsibility.
+
+**Pattern B:** Execute segment-by-segment. Autonomous segments: spawn subagent for assigned tasks only (no SUMMARY/commit). Checkpoints: main context. After all segments: aggregate, create SUMMARY, commit. See segment_execution.
+
+**Segments run unisolated on the main working tree by design.** Each continues where the previous one stopped. Dispatch them WITHOUT `{harnessFlag}`, and only after the `ISOLATION=none` re-record above ran (#2652/#3045).
 
 **Pattern C:** Execute in main using standard flow (step name="execute").
 
@@ -192,13 +205,13 @@ Pattern B only (verify-only checkpoints). Skip for A/C.
 
    After ALL segments: aggregate files/deviations/decisions → create SUMMARY.md → self-check:
    - Verify key-files.created exist on disk with `[ -f ]`
-   - Check `gsd_run check evaluation-scope --plan "{phase}-{plan}" --commits-only --raw` returns `commits` with ≥1 entry (commits on THIS branch only — #5164; a commit that lives only on another branch does not satisfy the check; exit `69` means the scope could not be resolved, which is a failed self-check, never "no commits yet")
+   - Check `gsd_run check evaluation-scope --plan "{phase}-{plan}" --commits-only --raw` returns `commits` with ≥1 entry (commits on THIS branch only — #5164. A commit that lives only on another branch does not satisfy the check. Exit `69` means the scope could not be resolved, which is a failed self-check, never "no commits yet")
    - Re-run ALL `<acceptance_criteria>` from every task — if any fail, fix before finalizing SUMMARY
    - Re-run the plan-level `<verification>` commands — log results in SUMMARY
    - Append `## Self-Check: PASSED` or `## Self-Check: FAILED` to SUMMARY
    Then commit (no narrative between Write and commit).
 
-   **Known Claude Code bug (classifyHandoffIfNeeded):** If any segment agent reports "failed" with `classifyHandoffIfNeeded is not defined`, this is a Claude Code runtime bug — not a real failure. Run spot-checks; if they pass, treat as successful.
+   **Known Claude Code bug (classifyHandoffIfNeeded):** If any segment agent reports "failed" with `classifyHandoffIfNeeded is not defined`, this is a Claude Code runtime bug — not a real failure. Run spot-checks. If they pass, treat as successful.
 
 </step>
 
@@ -217,8 +230,8 @@ gsd_run query phases.list --type summaries --raw
 # Extract the second-to-last summary from the JSON result
 ```
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
-If previous SUMMARY has unresolved "Issues Encountered" or "Next Phase Readiness" blockers: AskUserQuestion(header="Previous Issues", options: "Proceed anyway" | "Address first" | "Review previous").
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. Non-Claude runtimes (OpenAI Codex, Antigravity, etc.) need this when `AskUserQuestion` is not available.
+If previous SUMMARY contains unresolved "Issues Encountered" or "Next Phase Readiness" blockers: AskUserQuestion(header="Previous Issues", options: "Proceed anyway" | "Address first" | "Review previous").
 </step>
 
 <step name="execute">
@@ -227,17 +240,21 @@ Deviations are normal — handle via rules below.
 1. Read @context files from prompt
 2. **MCP tools:** If CLAUDE.md or project instructions reference MCP tools (e.g. jCodeMunch for code navigation), prefer them over Grep/Glob when available. Fall back to Grep/Glob if MCP tools are not accessible.
 3. Per task:
-   - **Task-content resolution:** If this task is NOT `type="checkpoint:*"` AND it carries a `tracker-id` attribute, run `gsd_run task resolve-content --plan "<plan path>" --task-id "<tracker-id>" --raw` BEFORE anything else for this task — before the read_first gate below, since read_first is itself a field this call can resolve. A `type="checkpoint:*"` task NEVER enters this resolution, regardless of whether it carries a `tracker-id` attribute — its interactive structure always stays sourced from PLAN.md (ADR-3646 Decision 1); see the `type="checkpoint:*"` bullet below. A **non-zero exit is a HARD HALT**: surface the tracker-id, the tracker prefix, and the command's stderr, and STOP — do NOT proceed to read this task's inline PLAN.md content as a fallback (that defeats the point of the seam: see ADR-3646). On exit 0 with `resolved: true`, the returned `content` object SUPERSEDES this task's `<read_first>`/`<action>`/`<verify>`/`<acceptance_criteria>`/`<done>` for every remaining bullet in this step — every gate below reads from the resolved content instead of PLAN.md. On exit 0 with `resolved: false` (for any `reason`), proceed exactly as today and read the task's inline PLAN.md content. A task with no `tracker-id` attribute, or a checkpoint task, is unaffected — this step is unconditional but resolves to a no-op instantly for the common case.
-   - **MANDATORY read_first gate:** If the task has a `<read_first>` field (or the resolved content carries one), you MUST read every listed file BEFORE making any edits. This is not optional. Do not skip files because you "already know" what's in them — read them. The read_first files establish ground truth for the task.
+   - **Task-content resolution:** If this task is NOT `type="checkpoint:*"` AND it carries a `tracker-id` attribute, run `gsd_run task resolve-content --plan "<plan path>" --task-id "<tracker-id>" --raw` BEFORE anything else for this task. Run it before the read_first gate below, since read_first is itself a field this call can resolve. A `type="checkpoint:*"` task NEVER enters this resolution, regardless of whether it carries a `tracker-id` attribute — its interactive structure always stays sourced from PLAN.md (ADR-3646 Decision 1). See the `type="checkpoint:*"` bullet below. A **non-zero exit is a HARD HALT**: surface the tracker-id, the tracker prefix, and the command's stderr, and STOP. Do NOT read this task's inline PLAN.md content as a fallback (that defeats the point of the seam: see ADR-3646).
+
+      On exit 0 with `resolved: true`, the returned `content` object SUPERSEDES this task's `<read_first>`/`<action>`/`<verify>`/`<acceptance_criteria>`/`<done>` for every remaining bullet in this step. Every gate below reads from the resolved content instead of PLAN.md. On exit 0 with `resolved: false` (for any `reason`), proceed exactly as today and read the task's inline PLAN.md content. A task with no `tracker-id` attribute, or a checkpoint task, is unaffected — this step is unconditional but resolves to a no-op instantly for the common case.
+   - **MANDATORY read_first gate:** If the task has a `<read_first>` field (or the resolved content carries one), you MUST read every listed file BEFORE making any edits. This is not optional. Do not skip files because you "already know" what is in them — read them. The read_first files establish ground truth for the task.
    - `type="auto"`: if `tdd="true"` → TDD execution. Implement with deviation rules + auth gates. Verify done criteria. Commit (see task_commit). Track hash for Summary.
-   - `type="tracer"`: execute like `type="auto"` (production-quality, real `<verify>`, commit), then run the tracer feedback gate BEFORE any expansion task — an early integration checkpoint. Evaluate in order (#3299). First, `gate="blocking-human"` → STOP → return a `checkpoint:human-verify` via checkpoint_protocol — every mode, auto included (golden rule 6, checkpoints.md). Next, Auto mode active (`AUTO_CHAIN` or `AUTO_CFG`): re-run the tracer `<verify>`; on failure HALT and surface (deviation) — do NOT start expansion tasks. Next, `HUMAN_VERIFY_MODE` is `end-of-phase` (default) AND the tracer's `<verify>` carries only `<automated>` (no `<human-check>`) → re-run the tracer `<verify>`; on failure HALT and surface as a deviation exactly as in the auto-mode branch — never a checkpoint; on success log `⚡ Tracer verified end-to-end — expanding` and continue to expansion, do NOT synthesize a checkpoint. Otherwise (`mid-flight`, or the tracer carries genuine human-observable evidence) → STOP → return a `checkpoint:human-verify` for the tracer via checkpoint_protocol before expansion.
+   - `type="tracer"`: execute like `type="auto"` (production-quality, real `<verify>`, commit), then run the tracer feedback gate BEFORE any expansion task — an early integration checkpoint. Evaluate in order (#3299). First, `gate="blocking-human"` → STOP → return a `checkpoint:human-verify` via checkpoint_protocol — every mode, auto included (golden rule 6, checkpoints.md). Next, Auto mode active (`AUTO_CHAIN` or `AUTO_CFG`): re-run the tracer `<verify>`. On failure HALT and surface (deviation) — do NOT start expansion tasks. 
+
+     Next, `HUMAN_VERIFY_MODE` is `end-of-phase` (default) AND the tracer's `<verify>` carries only `<automated>` (no `<human-check>`) → re-run the tracer `<verify>`. On failure HALT and surface as a deviation exactly as in the auto-mode branch — never a checkpoint. On success log `⚡ Tracer verified end-to-end — expanding` and continue to expansion, do NOT synthesize a checkpoint. Otherwise (`mid-flight`, or the tracer carries genuine human-observable evidence) → STOP → return a `checkpoint:human-verify` for the tracer via checkpoint_protocol before expansion.
    - `type="checkpoint:*"`: STOP → checkpoint_protocol → wait for user → continue only after confirmation.
    - **HARD GATE — acceptance_criteria verification:** After completing each task, if it has `<acceptance_criteria>` (inline or resolved), you MUST run a verification loop before proceeding:
      1. For each criterion: execute the grep, file check, or CLI command that proves it passes
      2. Log each result as PASS or FAIL with the command output
      3. If ANY criterion fails: fix the implementation immediately, then re-run ALL criteria
      4. Repeat until all criteria pass — you are BLOCKED from starting the next task until this gate clears
-     5. If a criterion cannot be satisfied after 2 fix attempts, log it as a deviation with reason — do NOT silently skip it
+     5. If a criterion cannot be satisfied after 2 fix try, log it as a deviation with reason — do NOT silently skip it
      This is not advisory. A task with failing acceptance criteria is an incomplete task.
 3. Run `<verification>` checks
 4. Confirm `<success_criteria>` met
@@ -248,7 +265,7 @@ Deviations are normal — handle via rules below.
 
 ## Authentication Gates
 
-Auth errors during execution are NOT failures — they're expected interaction points.
+Auth errors during execution are NOT failures — they are expected interaction points.
 
 **Indicators:** "Not authenticated", "Unauthorized", 401/403, "Please run {tool} login", "Set {ENV_VAR}"
 
@@ -275,7 +292,7 @@ Apply deviation rules from the gsd-executor agent definition (single source of t
 - **Rules 1-3** (bugs, missing critical, blockers): auto-fix, test, verify, track as deviations
 - **Rule 4** (architectural changes): STOP, present decision to user, await approval
 - **Scope boundary**: do not auto-fix pre-existing issues unrelated to current task
-- **Fix attempt limit**: max 3 retries per deviation before escalating
+- **Fix try limit**: max 3 retries per deviation before escalating
 - **Priority**: Rule 4 (STOP) > Rules 1-3 (auto) > unsure → Rule 4
 
 </deviation_rules>
@@ -286,7 +303,7 @@ Apply deviation rules from the gsd-executor agent definition (single source of t
 
 Summary MUST include deviations section. None? → `## Deviations from Plan\n\nNone - plan executed exactly as written.`
 
-Per deviation: **[Rule N - Category] Title** — Found during: Task X | Issue | Fix | Files modified | Verification | Commit hash
+Per deviation: **[Rule N - Category] Title** — Found during: Task X | Issue | Fix | Files change | Verification | Commit hash
 
 End with: **Total deviations:** N auto-fixed (breakdown). **Impact:** assessment.
 
@@ -298,12 +315,14 @@ End with: **Total deviations:** N auto-fixed (breakdown). **Impact:** assessment
 For `type: tdd` plans — RED-GREEN-REFACTOR:
 
 1. **Infrastructure** (first TDD plan only): detect project, install framework, config, verify empty suite
-2. **Cycle (#3990: stated ONCE; #4267: cited correctly):** execute RED → GREEN → REFACTOR
-exactly as specified in the canonical `~/.claude/gsd-core/references/tdd.md` reference — the
-"Red-Green-Refactor Cycle" section's commit-scope contract (`test({phase}-{plan})` →
-`feat({phase}-{plan})` → `refactor({phase}-{plan})`, RED must fail, GREEN must pass, REFACTOR
-commits only on change), the "Gate Enforcement Rules" section's "Fail-Fast Rules" subsection,
-and the "Error Handling" section. The reference is the single source; do not improvise a
+2. **Cycle (#3990: stated ONCE, #4267: cited correctly):** execute RED → GREEN → REFACTOR
+exactly as specified in the canonical `~/.claude/gsd-core/references/tdd.md` reference. Follow the
+"Red-Green-Refactor Cycle" section's commit-scope contract: `test({phase}-{plan})` →
+`feat({phase}-{plan})` → `refactor({phase}-{plan})`. RED must fail, GREEN must pass, and REFACTOR
+commits only on change.
+
+Follow the "Gate Enforcement Rules" section's "Fail-Fast Rules" subsection
+and the "Error Handling" section. The reference is the single source. Do not improvise a
 variant.
 </tdd_plan_execution>
 
@@ -317,7 +336,9 @@ Run commits normally — let pre-commit hooks run. Do NOT use `--no-verify` by d
 (#2924). Hooks should run so issues surface at the introducing commit, and silent
 bypass violates project CLAUDE.md guidance. If a project explicitly opts out via
 `workflow.worktree_skip_hooks=true`, the orchestrator will surface that flag in the
-prompt; absent that signal, hooks run normally. If a hook fails, follow the
+prompt. Absent that signal, hooks run normally.
+
+If a hook fails, follow the
 sequential-mode handling below.
 
 **If running as the sole executor (sequential mode):**
@@ -334,9 +355,9 @@ If a commit is BLOCKED by a hook:
 <task_commit>
 ## Task Commit Protocol
 
-Canonical per-task commit rules live in **`agents/gsd-executor.md`** (`<task_commit_protocol>`). Follow that section for staging, `{type}({phase}-{plan})` messages, `commit-to-subrepo` when `sub_repos` is set, post-commit checks, and untracked-file handling — do not duplicate or paraphrase the full protocol here (single source of truth).
+Canonical per-task commit rules live in **`agents/gsd-executor.md`** (`<task_commit_protocol>`). Follow that section for staging and `{type}({phase}-{plan})` messages. Also follow it for `commit-to-subrepo` when `sub_repos` is set, post-commit checks, and untracked-file handling. Do not duplicate or paraphrase the full protocol here (single source of truth).
 
-**Orchestrator note:** After each task, the spawned executor reports commit hashes; this workflow does not re-specify commit semantics beyond pointing at the executor.
+**Orchestrator note:** After each task, the spawned executor reports commit hashes. This workflow does not re-specify commit semantics beyond pointing at the executor.
 
 </task_commit>
 
@@ -359,7 +380,7 @@ See ~/.claude/gsd-core/references/checkpoints.md for details.
 <step name="checkpoint_return_for_orchestrator">
 When spawned via Task and hitting checkpoint: return structured state (cannot interact with user directly).
 
-**Required return:** 1) Completed Tasks table (hashes + files) 2) Current Task (what's blocking) 3) Checkpoint Details (user-facing content) 4) Awaiting (what's needed from user)
+**Need return:** 1) Completed Tasks table (hashes + files). 2) Current Task (what blocks progress). 3) Checkpoint Details (user-facing content). 4) Awaiting (what is needed from user).
 
 Orchestrator parses → presents to user → spawns fresh continuation with your completed tasks state. You will NOT be resumed. In main context: use checkpoint_protocol above.
 </step>
@@ -378,9 +399,12 @@ If `NODE_REPAIR` is `true`: invoke `@./.claude/gsd-core/workflows/node-repair.md
 - PLAN_CONTEXT: adjacent task names + phase goal
 - REPAIR_BUDGET: `workflow.node_repair_budget` from config (default: 2)
 
-Node repair will attempt RETRY, DECOMPOSE, or PRUNE autonomously. Only reaches this gate again if repair budget is exhausted (ESCALATE).
+Node repair will try RETRY, DECOMPOSE, or PRUNE autonomously. Only reaches this gate again if repair budget is exhausted (ESCALATE).
 
-If `NODE_REPAIR` is `false` OR repair returns ESCALATE: STOP. Present: "Verification failed for Task [X]: [name]. Expected: [criteria]. Actual: [result]. Repair attempted: [summary of what was tried]." Options: Retry | Skip (mark incomplete) | Stop (investigate). If skipped → SUMMARY "Issues Encountered".
+
+If `NODE_REPAIR` is `false` OR repair returns ESCALATE: STOP. Present: "Verification failed for Task [X]: [name]. Expected: [criteria]. Actual: [result]. Repair try: [summary of what was tried]."
+
+Options: Retry | Skip (mark incomplete) | Stop (investigate). If skipped → SUMMARY "Issues Encountered".
 </step>
 
 <step name="record_completion_time">
@@ -406,23 +430,25 @@ fi
 grep -A 50 "^user_setup:" .planning/phases/XX-name/{phase}-{plan}-PLAN.md | head -50
 ```
 
-If user_setup exists: create `{phase}-USER-SETUP.md` using the template at `~/.claude/gsd-core/templates/user-setup.md` (or its `~/.claude/gsd-core/templates/user-setup.compact.md` variant — resolve per `~/.claude/gsd-core/references/compact-content-gate.md` §"Streams 1b and 4"). Per service: env vars table, account setup checklist, dashboard config, local dev notes, verification commands. Status "Incomplete". Set `USER_SETUP_CREATED=true`. If empty/missing: skip.
+If user_setup exists: create `{phase}-USER-SETUP.md`. Use the template at `~/.claude/gsd-core/templates/user-setup.md` or its `~/.claude/gsd-core/templates/user-setup.compact.md` variant. Resolve per `~/.claude/gsd-core/references/compact-content-gate.md` §"Streams 1b and 4".
+
+Per service: env vars table, account setup checklist, dashboard config, local dev notes, verification commands. Status "Incomplete". Set `USER_SETUP_CREATED=true`. If empty/missing: skip.
 </step>
 
 <step name="create_summary">
-**Critical ordering — write and commit SUMMARY.md as one atomic block.** Do NOT
-emit narrative output between the Write tool call and the commit tool call.
+**Critical ordering — write and commit SUMMARY.md as one atomic block.**
+Do NOT emit narrative output between the Write and commit tool calls.
 Truncation at this boundary is a known failure mode (see #2070 rescue logic in
 execute-phase.md step 5.5).
 
-Create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`. Use the template at `~/.claude/gsd-core/templates/summary.md` (or `summary.compact.md` — same `compact-content-gate.md` resolution as the USER-SETUP template above).
+Create `{phase}-{plan}-SUMMARY.md` at `.planning/phases/XX-name/`. Use the template at `~/.claude/gsd-core/templates/summary.md` or `summary.compact.md`. Resolve the compact template as for the USER-SETUP template above, using `compact-content-gate.md`.
 
-**Frontmatter:** phase, plan, subsystem, tags | requires/provides/affects | tech-stack.added/patterns | key-files.created/modified | key-decisions | requirements-completed (**MUST** copy `requirements` array from PLAN.md frontmatter verbatim) | duration ($DURATION), completed ($PLAN_END_TIME date).
+**Frontmatter:** phase, plan, subsystem, tags | `requires/provides/affects` | tech-stack.added/patterns | key-files.created/`modified` | key-decisions | requirements-completed (**MUST** copy `requirements` array from PLAN.md frontmatter verbatim) | duration ($DURATION), completed ($PLAN_END_TIME date).
 
 **Coverage block (#1602):** Populate the `coverage:` frontmatter block — one entry per shipped deliverable (the structured form of each `## Accomplishments` bullet). For each deliverable, aggregate the task-level `<verify>` results and tests:
 - A task whose `<verify>` command passed or whose matching test passed → a `verification` entry with `kind` + `ref` (`tests/path#name`, Playwright screenshot ref, or command) + `status: pass`, and `human_judgment: false`.
 - A judgment-dependent deliverable (UX adequacy, external/multi-session behavior, anything no test asserts) → `human_judgment: true` with a `rationale`.
-- **Every deliverable MUST be classified.** If you cannot determine coverage, default to `human_judgment: true` with `rationale: "Coverage not determined at authoring time — verifier must classify"`. Never set `human_judgment: false` without a non-empty all-`pass` `verification` — `verify-work` auto-passes (skips the human) ONLY on that proof, so an unproven `false` still routes to the human but loses the audit trail. Omit the whole block only for a genuinely prose-only SUMMARY (verify-work then uses the legacy `## Accomplishments` path). The block is validated downstream by `gsd-tools uat classify-coverage`.
+- **Every deliverable MUST be classified.** If you cannot determine coverage, default to `human_judgment: true` with `rationale: "Coverage not determined at authoring time — verifier must classify"`. Never set `human_judgment: false` without a non-empty all-`pass` `verification`. `verify-work` auto-passes (skips the human) ONLY on that proof. An unproven `false` still routes to the human but loses the audit trail. Omit the whole block only for a genuinely prose-only SUMMARY (verify-work then uses the legacy `## Accomplishments` path). The block is validated downstream by `gsd-tools uat classify-coverage`.
 
 Title: `# Phase [X] Plan [Y]: [Name] Summary`
 
@@ -494,7 +520,7 @@ If SUMMARY "Issues Encountered" ≠ "None": yolo → log and continue. Interacti
 Run this step only when NOT executing inside a git worktree (i.e.
 `use_worktrees: false`, the bug #2661 reproducer). In worktree mode each
 worktree has its own ROADMAP.md, so per-plan writes here would diverge
-across siblings; the orchestrator owns the post-merge sync centrally
+across siblings. The orchestrator owns the post-merge sync centrally
 (see execute-phase.md §5.7, single-writer contract from #1486 / dcb50396).
 
 ```bash
@@ -513,9 +539,9 @@ Counts PLAN vs SUMMARY files on disk. Updates progress table row with correct co
 <step name="update_requirements">
 Mark completed requirements from the PLAN.md frontmatter `requirements:` field.
 
-Extract requirement IDs from the plan's frontmatter (e.g., `requirements: [AUTH-01, AUTH-02]`) into `REQ_IDS`. If no requirements field, skip this step.
+Extract requirement IDs from the plan's frontmatter into `REQ_IDS`. For example, `requirements: [AUTH-01, AUTH-02]`. If no requirements field, skip this step.
 
-**Shared-ID gate (#2388):** a requirement ID declared by more than one plan in this phase must not read `Complete` until every plan declaring it has finished (produced a `*-SUMMARY.md`) — otherwise the first plan to finish flips it `Complete` while its sibling plans are still running, before phase verification ever gets a chance to catch a real gap. Compute the ready subset first, then mark only those:
+**Shared-ID gate (#2388):** More than one plan in this phase can declare a requirement ID. That ID must not read `Complete` until every plan declaring it finished (produced a `*-SUMMARY.md`). Otherwise the first plan to finish flips it `Complete` while its sibling plans are still running. This happens before phase verification ever gets a chance to catch a real gap. Compute the ready subset first, then mark only those:
 
 ```bash
 READY=$(gsd_run query requirements.ready-ids "${PLAN_PATH}" ${REQ_IDS})
@@ -525,12 +551,14 @@ if [ -n "$(printf '%s' "$READY_IDS" | tr -d '[:space:]')" ]; then
 fi
 ```
 
-`requirements.ready-ids` is read-only and prints JSON by default (`--raw` prints a prose summary `jq` cannot read, so the ready list would always be empty, #4956): it scans sibling `*-PLAN.md` files in this plan's phase directory and blocks an ID only when a sibling ALSO declares it and that sibling has no `*-SUMMARY.md` yet. An ID no sibling declares is always ready (single-plan requirements mark immediately, no added latency). A blocked ID is re-evaluated the next time any plan in this phase finishes its own `update_requirements` step, and becomes ready once the LAST declaring plan's SUMMARY exists.
+`requirements.ready-ids` is read-only and prints JSON by default. With `--raw`, it prints a prose summary that `jq` cannot read. The ready list would always be empty (#4956). It scans sibling `*-PLAN.md` files in this plan's phase directory.
+
+It blocks an ID only when a sibling ALSO declares it and that sibling has no `*-SUMMARY.md` yet. An ID no sibling declares is always ready (single-plan requirements mark immediately, no added latency). A blocked ID is re-evaluated when any plan in this phase next finishes its own `update_requirements` step. It becomes ready once the LAST declaring plan's SUMMARY exists.
 </step>
 
 <step name="git_commit_metadata">
-**Critical ordering — write and commit SUMMARY.md as one atomic block.** Do NOT
-emit narrative output between the Write tool call and the commit tool call.
+**Critical ordering — write and commit SUMMARY.md as one atomic block.**
+Do NOT emit narrative output between the Write and commit tool calls.
 Truncation at this boundary is a known failure mode (see #2070 rescue logic in
 execute-phase.md step 5.5).
 
@@ -550,7 +578,7 @@ fi
 </step>
 
 <step name="update_codebase_map">
-If .planning/codebase/ doesn't exist: skip.
+If .planning/codebase/ does not exist: skip.
 
 ```bash
 # #5164: the files this phase changed come from the evaluation-scope resolver (ADR-5057 §4):
@@ -585,7 +613,7 @@ SUMMARY_COUNT=$(echo "$PHASE_COUNTS" | jq -r '.summary_count // 0')
 
 | Condition | Route | Action |
 |-----------|-------|--------|
-| summaries < plans | **A: More plans** | Find next PLAN without SUMMARY — skip any plan whose `plan_id` matches a non-terminal async-job manifest (`external_job_waiting`; see `identify_plan`). Yolo: auto-continue. Interactive: show next plan, suggest `/gsd:execute-phase {phase}` + `/gsd:verify-work`. STOP here. |
+| summaries < plans | **A: More plans** | Find next PLAN without SUMMARY — skip any plan whose `plan_id` matches a non-terminal async-job manifest (`external_job_waiting`. See `identify_plan`). Yolo: auto-continue. Interactive: show next plan, suggest `/gsd:execute-phase {phase}` + `/gsd:verify-work`. STOP here. |
 | summaries = plans, current < highest phase | **B: Phase done** | Show completion, suggest `/gsd:plan-phase {Z+1}` + `/gsd:verify-work {Z}` + `/gsd:discuss-phase {Z+1}` |
 | summaries = plans, current = highest phase | **C: Milestone done** | Show banner, suggest `/gsd:complete-milestone` + `/gsd:verify-work` + `/gsd:phase` |
 

@@ -1,11 +1,11 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Check project progress, summarize recent work and what's ahead, then intelligently route to the next action — either executing an existing plan or creating the next one. Provides situational awareness before continuing work.
+Examine project progress. Summarize recent work and the work ahead. Route to the next action: execute an existing plan or create the next one. This gives the user project context before work continues.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -33,7 +33,10 @@ DISCUSS_MODE=$(gsd_run query config-get workflow.discuss_mode --raw 2>/dev/null 
 
 **If `init_incomplete` is true (#4040 — interrupted bootstrap):**
 
-`.planning/` exists but the core initialization artifacts are missing (one or more of `REQUIREMENTS.md`, `ROADMAP.md`, `STATE.md` were never created — a bootstrap that stopped partway, e.g. after PROJECT.md). This is NOT a new project, NOT a missing STATE.md, and NOT a between-milestones state — do not fall through to any of those routes. Route to initialization recovery:
+`.planning/` exists, but initialization did not create one or more core artifacts: `REQUIREMENTS.md`, `ROADMAP.md`, or `STATE.md`. For example, initialization stopped after PROJECT.md.
+
+This is NOT a new project, NOT a missing STATE.md, and NOT a between-milestones state. Do not use any of those routes. Route to initialization recovery:
+
 
 ```
 ---
@@ -49,7 +52,10 @@ A partial `.planning/` was found: project initialization started but stopped bef
 ---
 ```
 
-Exit. (The payload's `init_incomplete` is computed with the between-milestones archive case excluded — `MILESTONES.md` present means missing ROADMAP/REQUIREMENTS is archival, and that state still routes to Route F below.)
+Exit.
+
+The payload excludes the between-milestones archive case when it computes `init_incomplete`. If `MILESTONES.md` exists, missing ROADMAP/REQUIREMENTS are archival. That state still routes to Route F below.
+
 
 If `init_incomplete` is false and `planning_exists` is false and `project_exists` is false (no `.planning/` directory at all):
 
@@ -65,7 +71,8 @@ If missing STATE.md: suggest `/gsd:new-project`.
 
 **If ROADMAP.md missing but PROJECT.md exists (and `init_incomplete` is false):**
 
-This means a milestone was completed and archived. Go to **Route F** (between milestones).
+This means that a milestone was completed and archived. Go to **Route F** (between milestones).
+
 
 If missing both ROADMAP.md and PROJECT.md: suggest `/gsd:new-project`.
 </step>
@@ -73,15 +80,18 @@ If missing both ROADMAP.md and PROJECT.md: suggest `/gsd:new-project`.
 <step name="load">
 **Use structured extraction from `gsd_run query`:**
 
-Instead of reading full files, use targeted tools to get only the data needed for the report:
+Use targeted tools instead of full files to get only the data that the report needs:
+
 - `ROADMAP=$(gsd_run query roadmap.analyze)`
 - `STATE=$(gsd_run query state-snapshot)`
 
-This minimizes orchestrator context usage.
+This reduces orchestrator context usage.
+
 </step>
 
 <step name="analyze_roadmap">
-**Get comprehensive roadmap analysis (replaces manual parsing):**
+**Get complete roadmap analysis (this replaces manual parsing):**
+
 
 ```bash
 ROADMAP=$(gsd_run query roadmap.analyze)
@@ -89,41 +99,46 @@ ROADMAP=$(gsd_run query roadmap.analyze)
 
 This returns structured JSON with:
 - All phases with disk status (complete/partial/planned/empty/no_directory)
-- Goal and dependencies per phase
-- Plan and summary counts per phase
-- Aggregated stats: total plans, summaries, progress percent
+- Goal and dependencies for each phase
+- Plan and summary counts for each phase
+- Total plans, summaries, and progress percent
 - Current and next phase identification
 
+
 Use this instead of manually reading/parsing ROADMAP.md.
+
 </step>
 
 <step name="recent">
 **Gather recent work context:**
 
 - Find the 2-3 most recent SUMMARY.md files
-- Use `summary-extract` for efficient parsing:
+- Use `summary-extract` to parse them efficiently:
+
   ```bash
   gsd_run query summary-extract <path> --fields one_liner
   ```
-- This shows "what we've been working on"
+- This shows recent work
+
   </step>
 
 <step name="position">
 **Parse current position from init context and roadmap analysis:**
 
 - Use `current_phase` and `next_phase` from `$ROADMAP`
-- Note `paused_at` if work was paused (from `$STATE`)
+- If work was paused, note `paused_at` from `$STATE`
 - Count pending todos: use `init todos` or `list-todos`
-- Check for active debug sessions: `(ls .planning/debug/*.md 2>/dev/null || true) | grep -v '/knowledge-base\.md$' | wc -l`
+- Find active debug sessions: `(ls .planning/debug/*.md 2>/dev/null || true) | grep -v '/knowledge-base\.md$' | wc -l`
   </step>
 
 <step name="report">
-> ⚠️ Context authority: PROJECT.md, STATE.md, and ROADMAP.md are the authoritative sources
-> for project name, milestone, current phase, and next-step routing. CLAUDE.md ## Project
-> blocks are a secondary config aid that may be significantly stale — do NOT use the
-> CLAUDE.md project description as a source for any progress report field.
+> ⚠️ Context authority: PROJECT.md, STATE.md, and ROADMAP.md are the authoritative sources for project name, milestone, current phase, and next-step routing.
+> CLAUDE.md ## Project blocks are a secondary config aid that may be significantly stale.
+> Do NOT use the CLAUDE.md project description as a source for any progress report field.
 
-**Generate progress bar from `gsd_run query progress` / `progress.json`, then present rich status report:**
+
+**Generate a progress bar from `gsd_run query progress` / `progress.json`. Then show a detailed status report:**
+
 
 ```bash
 # Get formatted progress bar
@@ -165,11 +180,13 @@ CONTEXT: [✓ if has_context | - if not]
 
 ```bash
 WINDOWS_STATUS=$(gsd_run windows status --raw 2>/dev/null || echo '')
+
 WINDOWS_OPEN=$(printf '%s' "$WINDOWS_STATUS" | jq -r '.ledger.open_count // 0' 2>/dev/null || echo 0)
+
 WINDOWS_WAIVED=$(printf '%s' "$WINDOWS_STATUS" | jq -r '.ledger.waived_count // 0' 2>/dev/null || echo 0)
 ```
 
-Render `Open Windows` only when `$WINDOWS_OPEN` is greater than `0` (or `$WINDOWS_WAIVED` is greater than `0`, so an auditable deferral history remains visible). Phrase: `{WINDOWS_OPEN} open, {WINDOWS_WAIVED} waived — resolves with /gsd:ship gate; inspect via gsd_run windows status`. The ledger is cross-phase; the count is the project total, not the current phase's.
+Render `Open Windows` only when `$WINDOWS_OPEN` is greater than `0` or `$WINDOWS_WAIVED` is greater than `0`. This keeps an auditable deferral history visible. Phrase: `{WINDOWS_OPEN} open, {WINDOWS_WAIVED} waived — resolves with /gsd:ship gate; inspect via gsd_run windows status`. The ledger is cross-phase; the count is the project total, not the current phase's.
 
 
 ## Active Debug Sessions
@@ -184,20 +201,38 @@ Render `Open Windows` only when `$WINDOWS_OPEN` is greater than `0` (or `$WINDOW
 
 <!-- gsd:section id="mvp-display" when="state:phase-mvp-mode" -->
 If `section_manifest` is `null` or `"mvp-display"` is in its `included` list: read and execute `gsd-core/workflows/progress/steps/mvp-display.md`. Otherwise skip — do not read the file.
+
 <!-- /gsd:section -->
 
 <step name="route">
 **Determine next action based on verified counts.**
 
+
 **Step 0: Resume-incomplete-phase invariant (Route 0)**
 
-Before any current-phase-scoped counting, scan ALL phases for incomplete execution. This catches the case where STATE.md's `current_phase` was advanced past the phase that actually has unfinished work (common after a mid-execution session death from hang, token exhaustion, or API disruption). Without this guard, the current-phase-scoped count in Step 1 would inspect the wrong phase and the routing would skip the unfinished work.
+Before any current-phase-scoped counting, scan ALL phases for incomplete execution.
+
+This catches the case where STATE.md's `current_phase` was advanced past the phase that actually has
+
+unfinished work (common after a mid-execution session death from hang, token exhaustion, or API disruption).
+
+Without this guard, the current-phase-scoped count in Step 1 would inspect the wrong phase and the routing would skip the unfinished work.
+
 
 **Skip if `--no-resume` or `--force` is present in `$ARGUMENTS`.**
 
-Scan all phases via the `$ROADMAP` JSON already loaded in `analyze_roadmap`. For each phase entry, compare `plans` length to `summaries` length using the same plans-without-summaries predicate as `determine_next_action` Route 4 (`plans.length > summaries.length`). Stop at the first (lowest-numbered) phase where the predicate is true. Record its phase number as `INCOMPLETE_PHASE`.
+
+Scan all phases via the `$ROADMAP` JSON already loaded in `analyze_roadmap`.
+
+For each phase entry, compare `plans` length to `summaries` length using the same plans-without-summaries predicate as `determine_next_action` Route 4 (`plans.length > summaries.length`).
+
+Stop at the first (lowest-numbered) phase where the predicate is true.
+
+Record its phase number as `INCOMPLETE_PHASE`.
+
 
 If `$ROADMAP` is empty or the query failed, surface a warning rather than silently proceeding:
+
 
 ```bash
 INCOMPLETE_PHASE=""
@@ -224,7 +259,8 @@ else
 fi
 ```
 
-**If `INCOMPLETE_PHASE` is non-empty:** emit a one-line resume notice in the routing output and route to `/gsd:execute-phase ${INCOMPLETE_PHASE}` instead of running Step 1's current-phase routing. The progress report (already displayed by the `report` step above) gives the user full project status before this routing decision is shown.
+**If `INCOMPLETE_PHASE` is non-empty:** Show a one-line resume notice in the routing output. Route to `/gsd:execute-phase ${INCOMPLETE_PHASE}` instead of running Step 1's current-phase routing. The `report` step above already shows the user full project status before this routing decision.
+
 
 ```
 ---
@@ -246,8 +282,8 @@ Then exit the route step. Do NOT run Steps 1 through Routes A-F.
 
 **Step 1: Count plans, summaries, and issues in current phase**
 
-Get plan/summary counts for the current phase from the single owner (#3218 — LIVE
-counts, i.e. `status: superseded` plans excluded, matching "outstanding work"):
+Get plan/summary counts for the current phase from the single owner (#3218). These are LIVE counts. They exclude `status: superseded` plans and match "outstanding work":
+
 
 ```bash
 PHASE_COUNTS=$(gsd_run query find-phase "${CURRENT_PHASE}")
@@ -258,9 +294,10 @@ Y=$(echo "$PHASE_COUNTS" | jq -r '.summary_count // 0')
 
 State: "This phase has {X} plans, {Y} summaries."
 
-**Step 1.5: Check for unaddressed UAT gaps**
+**Step 1.5: Find unaddressed UAT gaps**
 
-Check for UAT.md files with status "diagnosed" (has gaps needing fixes).
+Find UAT.md files with status "diagnosed" (gaps need fixes).
+
 
 ```bash
 # Check for diagnosed UAT with gaps or partial (incomplete) testing
@@ -271,9 +308,10 @@ Track:
 - `uat_with_gaps`: UAT.md files with status "diagnosed" (gaps need fixing)
 - `uat_partial`: UAT.md files with status "partial" (incomplete testing)
 
-**Step 1.6: Cross-phase health check**
+**Step 1.6: Examine cross-phase health**
 
-Scan ALL phases for outstanding verification debt using the CLI. Milestone scoping note (#3782): the audit milestone-filters the ACTIVE phase tree (`getMilestonePhaseFilter`), and deliberately adds ARCHIVED milestone trees unfiltered — each archived result carries an `archived_milestone` stamp. `summary.total_items` spans BOTH populations, so never read it as current-milestone debt.
+Use the CLI to scan ALL phases for outstanding verification debt. Milestone scope note (#3782): the audit filters the ACTIVE phase tree by milestone (`getMilestonePhaseFilter`). The audit deliberately adds ARCHIVED milestone trees without a filter. Each archived result has an `archived_milestone` stamp. `summary.total_items` spans BOTH populations. Never read it as current-milestone debt.
+
 
 ```bash
 DEBT=$(gsd_run query audit-uat --raw 2>/dev/null)
@@ -291,13 +329,17 @@ CURRENT_DEBT=$(printf '%s' "$DEBT" | jq '[.results[] | select(has("archived_mile
 ARCHIVED_DEBT=$(printf '%s' "$DEBT" | jq '[.results[] | select(has("archived_milestone"))] | map(.items | length) | add // 0' 2>/dev/null || echo 0)
 ```
 
-Track: `outstanding_debt` — `CURRENT_DEBT`, the non-archived (current-milestone) count. Track `archived_debt` — `ARCHIVED_DEBT`, the still-open items in already-archived milestones. Track `parse_gap_files` — `summary.parse_gap_files` from the audit.
+Track `outstanding_debt` as `CURRENT_DEBT`, the non-archived (current-milestone) count. Track `archived_debt` as `ARCHIVED_DEBT`, the still-open items in already-archived milestones. Track `parse_gap_files` as `summary.parse_gap_files` from the audit.
 
-Archived debt stays VISIBLE — an item archived still-open is still open (the archived set can include an unrun security-boundary test). Render it as its own labeled line; never fold it into the current-milestone total and never filter it away.
+Archived debt stays VISIBLE. An item archived while still open remains open. The archived set can include an unrun security-boundary test. Show it on its own labeled line. Never add it to the current-milestone total. Never filter it out.
 
-`summary.parse_gap_files` counts EVERY file with `parse_gap: true`, archived or not — deliberately cross-population, unlike `outstanding_debt` (which #3782 scopes to non-archived results). An outstanding item does not stop mattering because its phase belongs to an already-archived milestone: a deferred human-UAT scenario or a `skipped` live-stack test is exactly what gets archived still-open, so an archived parse gap is exactly as much unread outstanding work as an archived `result: pending` row — it surfaces through `parse_gap_files` and the unparsed row below, keeping the whole cross-population picture visible.
+`summary.parse_gap_files` counts EVERY file with `parse_gap: true`, archived or not. It deliberately spans both populations, unlike `outstanding_debt`, which #3782 limits to non-archived results. An outstanding item still matters when its phase belongs to an already-archived milestone.
 
-**If outstanding_debt > 0 OR archived_debt > 0 OR parse_gap_files > 0:** Add a warning section to the progress report output (in the `report` step), placed between "## What's Next" and the route suggestion:
+A deferred human-UAT scenario or a `skipped` live-stack test can be archived while still open. An archived parse gap is unread outstanding work, as is an archived `result: pending` row. It appears through `parse_gap_files` and the unparsed row below. This keeps the whole cross-population picture visible.
+
+
+**If outstanding_debt > 0 OR archived_debt > 0 OR parse_gap_files > 0:** Add a warning section to the progress report output in the `report` step. Put it between "## What is Next" and the route suggestion:
+
 
 ```markdown
 ## Verification Debt ({N} items across current-milestone phases; {M} items still open in archived milestones)
@@ -313,11 +355,15 @@ Review: `/gsd:audit-uat ${GSD_WS}` — full cross-phase audit
 Resume testing: `/gsd:verify-work {phase} ${GSD_WS}` — retest specific phase
 ```
 
-The unparsed row comes from `results` entries with `parse_gap: true` (`summary.parse_gap_files` counts exactly those, archived or not). This is a WARNING, not a blocker — routing proceeds normally. The debt is visible so the user can make an informed choice.
+The unparsed row comes from `results` entries with `parse_gap: true`. `summary.parse_gap_files` counts exactly those entries, archived or not. This is a WARNING, not a blocker. Routing continues normally. The user can see the debt and make an informed choice.
 
-**Step 1.7: Check verification status for the current phase**
 
-A phase whose verification is anything but `passed` is NOT complete, even when every PLAN.md has a matching SUMMARY.md. The count-based status (`roadmap.analyze`) only sees plans/summaries, so without this check such a phase is reported complete and routing skips straight to the next phase. When the phase appears count-complete (`summaries = plans AND plans > 0`), consult the verification report (the same `verification.status` gate `ship` and `execute-phase` use, from #651), on the phase directory the locator resolved (a workstream project does not keep its phases under `.planning/phases/`):
+**Step 1.7: Examine verification status for the current phase**
+
+A phase whose verification is not `passed` is NOT complete, even when every PLAN.md has a matching SUMMARY.md. The count-based status (`roadmap.analyze`) sees only plans/summaries. Without this check, it reports such a phase as complete. Routing then skips to the next phase.
+
+When the phase appears count-complete (`summaries = plans AND plans > 0`), consult the verification report. Use the same `verification.status` gate that `ship` and `execute-phase` use, from #651. Use the phase directory that the locator resolved. A workstream project does not keep its phases under `.planning/phases/`:
+
 
 ```bash
 PHASE_DIR=$(gsd_run query find-phase "${CURRENT_PHASE}" --pick directory)
@@ -327,7 +373,10 @@ VERIFICATION_NEXT_ACTION=$(printf '%s' "$VERIFICATION" | jq -r '.next_action')
 VERIFICATION_NEXT_COMMAND=$(printf '%s' "$VERIFICATION" | jq -r '.next_command')
 ```
 
-Track: `verification_status` — the `.status` field of the closed set (#5118); the query projects stale verification (`stale`, covered source changed after the verifier ran) and a missing report (`missing`) itself. A non-zero exit is a hard error (a report `status` outside `passed | gaps_found | human_needed`): surface it, never read it as "no status". Only `passed` routes as phase complete (Step 3); every other status routes back to close verification debt (Step 2) with the owner's `next_action` / `next_command`.
+Track `verification_status` as the `.status` field of the closed set (#5118). The query itself projects stale verification (`stale`, covered source changed after the verifier ran) and a missing report (`missing`). A non-zero exit is a hard error (a report `status` outside `passed | gaps_found | human_needed`). Show the error. Never read it as "no status".
+
+Only `passed` routes as phase complete (Step 3). Every other status routes back to close verification debt (Step 2) with the owner's `next_action` / `next_command`.
+
 
 **Step 2: Route based on counts**
 
@@ -336,19 +385,21 @@ Track: `verification_status` — the `.status` field of the closed set (#5118); 
 | uat_partial > 0 | UAT testing incomplete | Go to **Route E.2** |
 | uat_with_gaps > 0 | UAT gaps need fix plans | Go to **Route E** |
 | summaries < plans | Unexecuted plans exist | Go to **Route A** |
-| summaries = plans AND plans > 0 AND verification_status = gaps_found | Phase executed; verification found gaps | Go to **Route V.gaps** |
-| summaries = plans AND plans > 0 AND verification_status = human_needed | Phase executed; awaiting human verification | Go to **Route V.human** |
-| summaries = plans AND plans > 0 AND verification_status ≠ passed | Phase executed; verification not passed | Go to **Route V** |
+| summaries = plans AND plans > 0 AND verification_status = gaps_found | Phase executed. Verification found gaps | Go to **Route V.gaps** |
+| summaries = plans AND plans > 0 AND verification_status = human_needed | Phase executed. Awaiting human verification | Go to **Route V.human** |
+| summaries = plans AND plans > 0 AND verification_status ≠ passed | Phase executed. Verification not passed | Go to **Route V** |
 | summaries = plans AND plans > 0 AND verification_status = passed | Phase complete (verification passed) | Go to Step 3 |
 | plans = 0 | Phase not yet planned | Go to **Route B** |
 
-Rows are evaluated top to bottom; the first matching row wins. The `verification_status` rows must precede the passed row so non-`passed` verification is not reported as complete.
+Evaluate rows from top to bottom. Use the first matching row. The `verification_status` rows must precede the passed row so that routing does not report non-`passed` verification as complete.
+
 
 ---
 
 **Route A: Unexecuted plan exists**
 
-Find the first PLAN.md without matching SUMMARY.md.
+Find the first PLAN.md without a matching SUMMARY.md.
+
 Read its `<objective>` section.
 
 ```
@@ -369,9 +420,10 @@ Read its `<objective>` section.
 
 **Route B: Phase needs planning**
 
-Check if `{phase_num}-CONTEXT.md` exists in phase directory.
+Find whether `{phase_num}-CONTEXT.md` exists in the phase directory.
 
-Check if current phase has UI indicators:
+Find whether the current phase has UI indicators:
+
 
 ```bash
 PHASE_SECTION=$(gsd_run query roadmap.get-phase "${CURRENT_PHASE}" 2>/dev/null)
@@ -444,7 +496,8 @@ PHASE_HAS_UI=$(echo "$PHASE_SECTION" | grep -qi "UI hint.*yes" && echo "true" ||
 
 **Route E: UAT gaps need fix plans**
 
-UAT.md exists with gaps (diagnosed issues). User needs to plan fixes.
+UAT.md exists with gaps (diagnosed issues). The user needs to plan fixes.
+
 
 ```
 ---
@@ -470,7 +523,8 @@ UAT.md exists with gaps (diagnosed issues). User needs to plan fixes.
 
 **Route E.2: UAT testing incomplete (partial)**
 
-UAT.md exists with `status: partial` — testing session ended before all items resolved.
+UAT.md exists with `status: partial`. The testing session ended before all items were resolved.
+
 
 ```
 ---
@@ -496,7 +550,8 @@ UAT.md exists with `status: partial` — testing session ended before all items 
 
 **Route V: verification not passed**
 
-All plans have summaries, but canonical verification has not passed (`missing`, `stale`, `unparseable`, `phase_dir_not_found` — the owner's closed set, #5118). The phase is implementation-complete, not phase-complete. Present the owner's answer; never name a command of your own for these statuses:
+All plans have summaries, but canonical verification did not pass (`missing`, `stale`, `unparseable`, `phase_dir_not_found` — the owner's closed set, #5118). The phase is implementation-complete, not phase-complete. Show the owner's answer. Never name a command of your own for these statuses:
+
 
 ```
 ---
@@ -516,7 +571,8 @@ All plans have summaries, but canonical verification has not passed (`missing`, 
 
 **Route V.gaps: verification found gaps (gaps_found)**
 
-VERIFICATION.md exists with `status: gaps_found` — verification identified gaps that need fix plans. The phase is NOT complete.
+VERIFICATION.md exists with `status: gaps_found`. Verification found gaps that need fix plans. The phase is NOT complete.
+
 
 ```
 ---
@@ -534,9 +590,10 @@ VERIFICATION.md exists with `status: gaps_found` — verification identified gap
 
 ---
 
-**Route V.human: human verification required (human_needed)**
+**Route V.human: human verification need (human_needed)**
 
-VERIFICATION.md exists with `status: human_needed` — automated checks passed but manual verification items remain. The phase is NOT complete until they are resolved.
+VERIFICATION.md exists with `status: human_needed`. Automated checks passed, but manual verification items remain. The phase is NOT complete until those items are resolved.
+
 
 ```
 ---
@@ -554,7 +611,8 @@ VERIFICATION.md exists with `status: human_needed` — automated checks passed b
 
 ---
 
-**Step 3: Check milestone status (only when phase complete)**
+**Step 3: Examine milestone status (only when phase complete)**
+
 
 Read ROADMAP.md and identify:
 1. Current phase number
@@ -577,7 +635,8 @@ State: "Current phase is {X}. Milestone has {N} phases (highest: {Y})."
 
 Read ROADMAP.md to get the next phase's name and goal.
 
-Check if next phase has UI indicators:
+Find whether the next phase has UI indicators:
+
 
 ```bash
 NEXT_PHASE_SECTION=$(gsd_run query roadmap.get-phase "$((Z+1))" 2>/dev/null)
@@ -664,7 +723,8 @@ All {N} phases finished!
 
 **Route F: Between milestones (ROADMAP.md missing, PROJECT.md exists)**
 
-A milestone was completed and archived. Ready to start the next milestone cycle.
+A milestone was completed and archived. The project is ready to start the next milestone cycle.
+
 
 Read MILESTONES.md to find the last completed milestone version.
 
@@ -691,24 +751,27 @@ Ready to plan the next milestone.
 <step name="edge_cases">
 **Handle edge cases:**
 
-- Phase complete but next phase not planned → offer `/gsd:plan-phase [next] ${GSD_WS}`
-- All work complete → offer milestone completion
-- Blockers present → highlight before offering to continue
-- Handoff file exists → mention it, offer `/gsd:resume-work ${GSD_WS}`
+- If the phase is complete but the next phase is not planned, offer `/gsd:plan-phase [next] ${GSD_WS}`
+- If all work is complete, offer milestone completion
+- If blockers are present, highlight them before you offer to continue
+- If a handoff file exists, mention it and offer `/gsd:resume-work ${GSD_WS}`
+
 </step>
 
 <!-- gsd:section id="forensic-audit" when="flag:--forensic" -->
-If `section_manifest` is `null` or `"forensic-audit"` is in its `included` list: read and execute `gsd-core/workflows/progress/steps/forensic-audit.md`. Otherwise skip — do not read the file.
+If `section_manifest` is `null` or `"forensic-audit"` is in its `included` list, read and execute `gsd-core/workflows/progress/steps/forensic-audit.md`. Otherwise, skip it. Do not read the file.
+
 <!-- /gsd:section -->
 
 </process>
 
 <success_criteria>
 
-- [ ] Rich context provided (recent work, decisions, issues)
+- [ ] Detailed context provided (recent work, decisions, issues)
 - [ ] Current position clear with visual progress
-- [ ] What's next clearly explained
-- [ ] Smart routing: /gsd:execute-phase if plans exist, /gsd:plan-phase if not
+- [ ] What is next clearly explained
+- [ ] Routing: /gsd:execute-phase if plans exist, /gsd:plan-phase if not
 - [ ] User confirms before any action
-- [ ] Seamless handoff to appropriate gsd command
+- [ ] Handoff to the appropriate gsd command
+
       </success_criteria>
