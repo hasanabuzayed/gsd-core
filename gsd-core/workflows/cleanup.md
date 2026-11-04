@@ -1,6 +1,8 @@
 <purpose>
 
-Archive accumulated phase directories from completed milestones into `.planning/milestones/v{X.Y}-phases/`. Identifies which phases belong to each completed milestone, shows a dry-run summary, and moves directories on confirmation. Also offers retroactive archival of `.planning/quick/` (#2142) when it is non-empty.
+Archive phase directories from completed milestones into `.planning/milestones/v{X.Y}-phases/`. Find the phases for each completed milestone. Show a dry-run summary. Move the directories after confirmation.
+
+If `.planning/quick/` is not empty, also offer to archive it retroactively (#2142).
 
 </purpose>
 
@@ -19,20 +21,22 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output in `{response_language}`. This includes narration between tool calls, status updates, progress notes, and findings. It also includes questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 
 <step name="identify_completed_milestones">
 
-Read `.planning/MILESTONES.md` to identify completed milestones and their versions.
+Read `.planning/MILESTONES.md` to find completed milestones and their versions.
 
 ```bash
 cat .planning/MILESTONES.md
 ```
 
-Extract each milestone version (e.g., v1.0, v1.1, v2.0).
+Extract each milestone version (for example, v1.0, v1.1, v2.0).
 
-Check which milestone archive dirs already exist:
+Find the milestone archive directories that already exist:
 
 ```bash
 ls -d .planning/milestones/v*-phases 2>/dev/null || true
@@ -52,15 +56,15 @@ Stop here.
 
 <step name="determine_phase_membership">
 
-For each completed milestone without a `-phases` archive, read the archived ROADMAP snapshot to determine which phases belong to it:
+For each completed milestone without a `-phases` archive, read the archived ROADMAP snapshot. Find the phases that belong to the milestone:
 
 ```bash
 cat .planning/milestones/v{X.Y}-ROADMAP.md
 ```
 
-Extract phase numbers and names from the archived roadmap (e.g., Phase 1: Foundation, Phase 2: Auth).
+Extract phase numbers and names from the archived roadmap (for example, Phase 1: Foundation, Phase 2: Auth).
 
-Check which of those phase directories still exist in `.planning/phases/`:
+Find which of those phase directories still exist in `.planning/phases/`:
 
 ```bash
 ls -d .planning/phases/*/ 2>/dev/null || true
@@ -72,27 +76,31 @@ Match phase directories to milestone membership. Only include directories that s
 
 <step name="identify_quick_tasks">
 
-Check whether `.planning/quick/` has anything to retroactively archive (#2142):
+Find whether `.planning/quick/` has directories to archive retroactively (#2142):
 
 ```bash
 ls -d .planning/quick/*/ 2>/dev/null || true
 ```
 
-**If no directories are found:** `.planning/quick/` is empty (or absent) — say nothing about quick-task archival and do not offer the step. Skip straight to `show_dry_run` with no quick-task summary or prompt.
+**If you find no directories:** `.planning/quick/` is empty or absent. Say nothing about quick-task archival. Do not offer the step. Go to `show_dry_run` without a quick-task summary or prompt.
 
-**If at least one directory is found:** determine the target milestone. Unlike phase directories — whose milestone membership is derivable from the archived ROADMAP snapshot each completed milestone already has — quick tasks carry **no on-disk provenance** at all; there is no way to tell which milestone any given quick task directory belongs to. The target is therefore the single most recent completed milestone (from `.planning/MILESTONES.md`, already read in `identify_completed_milestones`, listed newest-first) that does not yet have a `-quick` archive directory:
+**If you find at least one directory:** Find the target milestone. Each completed milestone has an archived ROADMAP snapshot that identifies its phase directories. Quick tasks have **no on-disk provenance**. There is no way to find the milestone for a quick-task directory.
+
+The target is the single most recent completed milestone without a `-quick` archive directory. The entries in `.planning/MILESTONES.md` are newest-first. You already read that file in `identify_completed_milestones`:
 
 ```bash
 ls -d .planning/milestones/v*-quick 2>/dev/null || true
 ```
 
-Walk `.planning/MILESTONES.md`'s entries newest-first and pick the first version with no matching `v{version}-quick` directory above. If every completed milestone already has a `-quick` archive, or `.planning/MILESTONES.md` has no entries, there is no valid target — say so and skip the quick-task step entirely (do not prompt).
+Read the entries in `.planning/MILESTONES.md` newest-first. Pick the first version without a matching `v{version}-quick` directory in the list above.
+
+If every completed milestone already has a `-quick` archive, there is no valid target. If `.planning/MILESTONES.md` has no entries, there is no valid target. If there is no valid target, say so. Skip the quick-task step and do not prompt.
 
 </step>
 
 <step name="show_dry_run">
 
-Present a dry-run summary for each milestone:
+Show a dry-run summary for each milestone:
 
 ```
 ## Cleanup Summary
@@ -128,13 +136,13 @@ Destination: .planning/milestones/v{X.Y}-quick/
 
 **Stale local branches (upstream gone):**
 
-First, update remote-tracking refs so the candidate list matches the execution list exactly:
+First, update remote-tracking refs. This makes the candidate list match the execution list exactly:
 
 ```bash
 git fetch --prune 2>/dev/null || true
 ```
 
-Then enumerate candidates (protected branch names are excluded even if their upstream is gone):
+Then list candidates. Exclude protected branch names even if their upstream is gone:
 
 ```bash
 git branch -vv | awk '/: gone\]/ { if ($1 !~ /^\*$|^main$|^next$|^trunk$|^develop$/) print $1 }'
@@ -157,16 +165,18 @@ No quick tasks to archive either.
 Stop here.
 
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS`, set `TEXT_MODE=true`. If `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes need this because `AskUserQuestion` is not available. Examples include OpenAI Codex and Antigravity.
 AskUserQuestion: "Proceed with archiving and pruning?" with options: "Yes — archive phases and prune stale branches" | "Cancel"
 
 If "Cancel": Stop.
 
-**If a quick-task target milestone was determined in `identify_quick_tasks`**, ask a separate, explicit question — this is a distinct, bucket-all action and must not be silently folded into the "Yes" above:
+**If `identify_quick_tasks` found a quick-task target milestone**, ask a separate, explicit question. This is a distinct, bucket-all action and must not be silently included in the "Yes" above:
 
-AskUserQuestion: "Archive ALL {N} quick-task directories into v{X.Y} — {Milestone Name}? This buckets every remaining quick task into this ONE milestone; there is no way to split them per-milestone." with options: "Yes — archive quick tasks into v{X.Y}" | "Skip"
+AskUserQuestion: "Archive ALL {N} quick-task directories into v{X.Y} — {Milestone Name}? This buckets every remaining quick task into this ONE milestone. There is no way to split them per-milestone." with options: "Yes — archive quick tasks into v{X.Y}" | "Skip"
 
-If "Skip": do not run `archive_quick_tasks` — proceed to `archive_phases` (or `report`, if there were no phase directories to archive) with quick-task archival omitted.
+If "Skip": Do not run `archive_quick_tasks`. If there were no phase directories to archive, go to `report`. Otherwise, go to `archive_phases`. Omit quick-task archival.
 
 </step>
 
@@ -190,31 +200,37 @@ Repeat for all milestones in the cleanup set.
 
 <step name="archive_quick_tasks">
 
-Only run this step when the "Yes — archive quick tasks into v{X.Y}" option was confirmed in `show_dry_run`.
+Only run this step when the user confirmed the "Yes — archive quick tasks into v{X.Y}" option in `show_dry_run`.
 
-Uses the narrow `milestone.archive-quick` command (#2142 escalation) rather than `milestone.complete --archive-quick`: cleanup runs against milestones that are typically ALREADY completed, and `milestone.complete` is the full close-out — it archives ROADMAP/REQUIREMENTS and writes a MILESTONES.md entry, so re-running it against an already-completed milestone would clobber that milestone's archived ROADMAP/REQUIREMENTS snapshot (the very snapshot this cleanup depends on) and duplicate its MILESTONES.md entry. `milestone.archive-quick` shares the same move/README-index/table-reset logic as `milestone.complete --archive-quick` (same underlying helper) without any of that.
+Use the narrow `milestone.archive-quick` command (#2142 escalation), not `milestone.complete --archive-quick`. Cleanup typically runs against milestones that are ALREADY completed. `milestone.complete` does the full close-out. It archives ROADMAP/REQUIREMENTS and writes a MILESTONES.md entry.
+
+If you run it again for a completed milestone, it would overwrite that milestone's archived ROADMAP/REQUIREMENTS snapshot. This cleanup depends on that snapshot. It would also duplicate the milestone's MILESTONES.md entry.
+
+`milestone.archive-quick` uses the same underlying helper as `milestone.complete --archive-quick` for the move/README-index/table-reset logic. It does not do the other actions.
 
 ```bash
 gsd_run query milestone.archive-quick "v{X.Y}"
 ```
 
-This moves every directory under `.planning/quick/` into `.planning/milestones/v{X.Y}-quick/`, (re)writes that directory's `README.md` index, and clears STATE.md's `### Quick Tasks Completed` table rows — identical move/index/reset behavior to the `--archive-quick` flag documented in `complete-milestone.md`'s `archive_milestone` step, without touching ROADMAP.md, REQUIREMENTS.md, MILESTONES.md, or milestone-completion guards. Extract `archived` from the result to confirm.
+The command moves every directory under `.planning/quick/` into `.planning/milestones/v{X.Y}-quick/`. It writes or rewrites that directory's `README.md` index. It clears the `### Quick Tasks Completed` table rows in STATE.md.
+
+The move/index/reset behavior is identical to the `--archive-quick` flag in the `archive_milestone` step of `complete-milestone.md`. The command does not change ROADMAP.md, REQUIREMENTS.md, MILESTONES.md, or milestone-completion guards. Extract `archived` from the result to make sure.
 
 </step>
 
 <step name="prune_local_branches">
 
-After phase archival, prune local branches whose upstream has been deleted. Use the same filter as the dry-run so the execution list matches exactly what the user confirmed:
+After phase archival, prune local branches whose upstream was deleted. Use the same filter as the dry-run. Make the execution list match exactly what the user confirmed:
 
 ```bash
 git branch -vv | awk '/: gone\]/ { if ($1 !~ /^\*$|^main$|^next$|^trunk$|^develop$/) print $1 }' | xargs -r git branch -D
 ```
 
 Notes:
-- `git fetch --prune` already ran in `show_dry_run` — the tracking refs are current and this step enumerates from the same state the user confirmed.
-- `!~ /^\*$/` skips the currently checked-out branch (prefixed with `* ` in `git branch -vv` output, so `$1` yields `*`).
-- `!~ /^main$|^next$|^trunk$|^develop$/` excludes protected branch names even if their upstream is gone — matches the dry-run exclusion exactly.
-- `xargs -r` prevents `git branch -D` from running with no arguments when no stale branches exist.
+- `git fetch --prune` already ran in `show_dry_run`. The tracking refs are current. This step lists branches from the same state that the user confirmed.
+- `!~ /^\*$/` skips the currently checked-out branch. In `git branch -vv` output, this branch has the prefix `* `, so `$1` yields `*`.
+- `!~ /^main$|^next$|^trunk$|^develop$/` excludes protected branch names even if their upstream is gone. This matches the dry-run exclusion exactly.
+- When no stale branches exist, `xargs -r` prevents `git branch -D` from running with no arguments.
 
 </step>
 
@@ -226,7 +242,9 @@ Commit the changes:
 gsd_run query commit "chore: archive phase directories from completed milestones" --files .planning/milestones/ .planning/STATE.md --files-removed .planning/phases/ .planning/quick/
 ```
 
-`.planning/phases/` and `.planning/quick/` go under `--files-removed`, not `--files` (#4208): a `--files` directory entry stages everything under it, so it would also commit any in-flight phase or quick-task file a concurrent session had written there. `--files-removed` stages only the tracked files under those directories that the archival `mv` moved away, and leaves everything still present untouched.
+Put `.planning/phases/` and `.planning/quick/` under `--files-removed`, not `--files` (#4208). A `--files` directory entry stages everything under it. It would also commit any in-flight phase or quick-task file that a concurrent session wrote there.
+
+`--files-removed` stages only tracked files under those directories that the archival `mv` moved away. It leaves everything still present untouched.
 
 </step>
 
@@ -250,13 +268,13 @@ Pruned: {N} local branches whose upstream is gone.
 
 <success_criteria>
 
-- [ ] All completed milestones without existing phase archives identified
-- [ ] Phase membership determined from archived ROADMAP snapshots
-- [ ] Dry-run summary shown and user confirmed (covers both archival and pruning)
-- [ ] Phase directories moved to `.planning/milestones/v{X.Y}-phases/`
-- [ ] Stale local branches pruned (branches whose upstream is gone)
-- [ ] `.planning/quick/` checked; quick-task archival offered only when non-empty
-- [ ] When offered and confirmed, ALL remaining quick-task directories archived into the single named target milestone (bucket-all, not per-milestone) via `milestone.archive-quick`
-- [ ] Changes committed
+- [ ] Find all completed milestones without existing phase archives
+- [ ] Find phase membership from archived ROADMAP snapshots
+- [ ] Show a dry-run summary and get user confirmation for archival and pruning
+- [ ] Move phase directories to `.planning/milestones/v{X.Y}-phases/`
+- [ ] Prune stale local branches whose upstream is gone
+- [ ] Examine `.planning/quick/`. Offer quick-task archival only when it is not empty
+- [ ] When offered and confirmed, archive ALL remaining quick-task directories into the single named target milestone with `milestone.archive-quick` (bucket-all, not per-milestone)
+- [ ] Commit changes
 
 </success_criteria>

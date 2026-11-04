@@ -1,5 +1,5 @@
 <purpose>
-Verify threat mitigations for a completed phase. Confirm PLAN.md threat register dispositions are resolved. Update SECURITY.md.
+Make sure that threat mitigations exist for a completed phase. Make sure that the dispositions in the PLAN.md threat register are resolved. Update SECURITY.md.
 </purpose>
 
 <required_reading>
@@ -7,8 +7,8 @@ Verify threat mitigations for a completed phase. Confirm PLAN.md threat register
 </required_reading>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
-- gsd-security-auditor — Verifies threat mitigation coverage
+Valid GSD subagent types (use exact names — do not use 'general-purpose' instead):
+- gsd-security-auditor — Makes sure that threat mitigations provide coverage
 </available_agent_types>
 
 <process>
@@ -29,7 +29,7 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 AGENT_SKILLS_AUDITOR=$(gsd_run query agent-skills gsd-security-auditor ${GSD_WS:+--ws=${GSD_WS##* }})
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Parse: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`.
 
@@ -42,9 +42,9 @@ SECURITY_BLOCK_ON=$(gsd_run query config-get workflow.security_block_on --raw 2>
 
 Resolve active step hooks from `VERIFY_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "secure-phase"`.
 
-If no active secure-phase step hook exists: exit with "Security enforcement disabled. Enable via /gsd:settings."
+If no active secure-phase step hook exists, exit with "Security enforcement disabled. Enable via /gsd:settings."
 
-Display banner: `GSD > SECURE PHASE {N}: {name}`
+Show the banner: `GSD > SECURE PHASE {N}: {name}`
 
 ## 1. Detect Input State
 
@@ -54,25 +54,25 @@ PLAN_FILES=$(ls "${PHASE_DIR}"/*-PLAN.md 2>/dev/null)
 SUMMARY_FILES=$(ls "${PHASE_DIR}"/*-SUMMARY.md 2>/dev/null)
 ```
 
-- **State A** (`SECURITY_FILE` non-empty): Audit existing
-- **State B** (`SECURITY_FILE` empty, `PLAN_FILES` and `SUMMARY_FILES` non-empty): Run from artifacts
-- **State C** (`SUMMARY_FILES` empty): Exit — "Phase {N} not executed. Run /gsd:execute-phase {N} first."
+- **State A** (`SECURITY_FILE` non-empty): Audit the existing file.
+- **State B** (`SECURITY_FILE` empty, `PLAN_FILES` and `SUMMARY_FILES` non-empty): Run from artifacts.
+- **State C** (`SUMMARY_FILES` empty): Exit with "Phase {N} not executed. Run /gsd:execute-phase {N} first."
 
 ## 2. Discovery
 
 ### 2a. Read Phase Artifacts
 
-Read PLAN.md — extract `<threat_model>` block: trust boundaries, STRIDE register (`threat_id`, `category`, `component`, `severity`, `disposition`, `mitigation_plan`).
+Read PLAN.md. Extract the `<threat_model>` block: trust boundaries and the STRIDE register (`threat_id`, `category`, `component`, `severity`, `disposition`, `mitigation_plan`).
 
 ### 2b. Read Summary Threat Flags
 
-Read SUMMARY.md — extract `## Threat Flags` entries.
+Read SUMMARY.md. Extract the `## Threat Flags` entries.
 
 ### 2c. Build Threat Register
 
-Per threat: `{ threat_id, category, component, severity, disposition, mitigation_pattern, files_to_check }`
+For each threat, build: `{ threat_id, category, component, severity, disposition, mitigation_pattern, files_to_check }`
 
-Also set `register_authored_at_plan_time: true` if **at least one** PLAN file contained a parseable `<threat_model>` block; `false` if no PLAN files had any `<threat_model>` block (legacy phase authored before formal threat modelling was standard).
+If **at least one** PLAN file contained a parseable `<threat_model>` block, also set `register_authored_at_plan_time: true`. If no PLAN files had any `<threat_model>` block, set `false`. This is a legacy phase authored before formal threat modelling was standard.
 
 ## 3. Threat Classification
 
@@ -86,15 +86,15 @@ Classify each threat:
 Build: `{ threat_id, category, component, severity, disposition, status, evidence }`
 
 **Short-circuit rule:**
-- If `threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level == 1` → skip to Step 6 directly. No open threats at or above the block threshold remain (threats_open: 0); below-threshold open threats may remain and are non-blocking. L1 grep-depth is sufficient; no deeper verification required.
-- If `threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level >= 2` → **do NOT skip**. The preliminary threat classification is grep-level (L1 depth) and is insufficient for L2/L3. Proceed to Step 5 (spawn the auditor) so that L2 boundary-placement checks and L3 end-to-end trace checks are performed. Skipping the auditor here would defeat ASVS level scaling for "clean" phases.
-- If `threats_open: 0 AND register_authored_at_plan_time: false` → **do NOT skip**. Empty-by-no-planning must not rubber-stamp a clean SECURITY.md. Proceed to Step 5 in **retroactive-STRIDE mode** — the auditor builds a register from implementation files first, then verifies mitigations.
-- If `threats_open > 0` → proceed to Step 4 (present threat plan to user).
+- If `threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level == 1`, skip directly to Step 6. No open threats at or above the block threshold remain (threats_open: 0). Below-threshold open threats may remain and do not block advancement. L1 grep-depth is enough. There is no need for deeper verification.
+- If `threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level >= 2`, **do NOT skip**. The preliminary threat classification uses grep-level (L1 depth), which is not enough for L2/L3. Proceed to Step 5 and spawn the auditor for L2 boundary-placement checks and L3 end-to-end trace checks. Skipping the auditor here would defeat ASVS level scaling for "clean" phases.
+- If `threats_open: 0 AND register_authored_at_plan_time: false`, **do NOT skip**. An empty register because of no planning must not result in a clean SECURITY.md without review. Proceed to Step 5 in **retroactive-STRIDE mode**. The auditor first builds a register from implementation files, then verifies mitigations.
+- If `threats_open > 0`, proceed to Step 4 and present the threat plan to the user.
 
 ## 4. Present Threat Plan
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
-Call AskUserQuestion with threat table and options:
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes (OpenAI Codex, Antigravity, etc.) need this because `AskUserQuestion` is not available.
+Call AskUserQuestion with the threat table and options:
 1. "Verify all open threats" → Step 5
 2. "Accept all open — document in accepted risks log" → add to SECURITY.md accepted risks, set all CLOSED, Step 6
 3. "Cancel" → exit
@@ -103,8 +103,8 @@ Call AskUserQuestion with threat table and options:
 
 **Auditor constraint — varies by register origin:**
 
-- `register_authored_at_plan_time: true` — **Verify mitigations exist** — do not scan for new threats. The register is complete; verify each threat's mitigation is present in the implementation.
-- `register_authored_at_plan_time: false` (retroactive-STRIDE mode) — **Retroactive-STRIDE: build a STRIDE register from implementation files first, then verify mitigations.** The phase was authored before formal threat modelling; the auditor must construct the register from scratch before verifying.
+- `register_authored_at_plan_time: true` — **Make sure that mitigations exist.** Do not scan for new threats. The register is complete. Make sure that each threat's mitigation is present in the implementation.
+- `register_authored_at_plan_time: false` (retroactive-STRIDE mode) — **Retroactive-STRIDE: first build a STRIDE register from implementation files. Then make sure that mitigations exist.** The phase was authored before formal threat modelling. The auditor must construct the register from scratch before verification.
 
 Substitute `{SECURITY_ASVS}` with the value of `$SECURITY_ASVS` and `{SECURITY_BLOCK_ON}` with the value of `$SECURITY_BLOCK_ON` resolved in Step 0 via `config-get`.
 
@@ -112,11 +112,13 @@ Print: `◆ Spawning security auditor... (runs in a subagent — no output until
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatch on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in with `gsd_run query resolve-dispatch-type --requested <role> --raw`.
+>
+> On named-dispatch runtimes (Claude/OpenCode/…), the command returns the role unchanged. On kimi-code it maps the role to `coder`/`explore`/`plan` by role-suffix. The persona uses `${AGENT_SKILLS_<ROLE>}` (Phase 3) in either case. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`AUDITOR_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value for `model` (`AUDITOR_MODEL`) is `"inherit"` or empty, omit the parameter entirely. An empty value returns a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes. If you omit the parameter, the subagent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 ```
 Agent(
@@ -132,7 +134,9 @@ Agent(
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active.
+>
+> Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Resume only when the subagent result is available.
 
 Handle return:
 - `## SECURED` → record closures → Step 6
@@ -148,7 +152,7 @@ Handle return:
 
 **State A (update):**
 1. Update threat register statuses.
-2. Append to the audit trail through the owning verb — it compares against the LAST `## Security Audit` block and skips the write entirely when nothing material changed (#5105 R3; #4887 Defect 2: an unchanged register no longer grows a new identical row on every re-run):
+2. Append to the audit trail through the owning verb. It compares against the LAST `## Security Audit` block. If nothing material changed, it skips the write entirely (#5105 R3. #4887 Defect 2: an unchanged register no longer grows a new identical row on every re-run):
 
 ```bash
 gsd_run query verification.append-audit "${PHASE_DIR}/${PADDED_PHASE}-SECURITY.md" \
@@ -184,7 +188,7 @@ threats_open: 0 — no blocking threats remain (threats_open: 0).
 ▶ /gsd:verify-work {N}       run UAT; once UAT and verification pass it marks the phase complete (ROADMAP + STATE); if it refuses on stale verification, re-run /gsd:execute-phase {N} then verify again
 ```
 
-Display `/clear` reminder.
+Show the `/clear` reminder.
 
 </process>
 
@@ -193,8 +197,8 @@ Display `/clear` reminder.
 - [ ] Input state detected (A/B/C) — state C exits cleanly
 - [ ] PLAN.md threat model parsed, register built
 - [ ] SUMMARY.md threat flags incorporated
-- [ ] threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level == 1 → skip directly to Step 6 (L1 grep-depth sufficient)
-- [ ] threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level >= 2 → do NOT skip; auditor spawned for L2/L3 deep verification
+- [ ] threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level == 1 → skip directly to Step 6 (L1 grep-depth enough)
+- [ ] threats_open: 0 AND register_authored_at_plan_time: true AND asvs_level >= 2 → do NOT skip. Auditor spawned for L2/L3 deep verification
 - [ ] threats_open: 0 AND register_authored_at_plan_time: false → retroactive-STRIDE mode (Step 5), not skipped
 - [ ] User gate with threat table presented
 - [ ] Auditor spawned with complete context
