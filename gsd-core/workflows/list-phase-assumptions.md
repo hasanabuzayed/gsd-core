@@ -1,15 +1,15 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Surface Claude's assumptions about a phase before planning, enabling users to correct misconceptions early.
+Show Claude's assumptions about a phase before planning. Users can correct misconceptions early.
 
-Key difference from discuss-phase: This is ANALYSIS of what Claude thinks, not INTAKE of what user knows. No file output - purely conversational to prompt discussion.
+The key difference from discuss-phase: This is ANALYSIS of what Claude thinks, not INTAKE of what the user knows. The workflow does not write a file. It uses conversation to prompt discussion.
 </purpose>
 
 <process>
 
 <step name="validate_phase" priority="first">
-Phase number: $ARGUMENTS (required)
+Phase number: $ARGUMENTS (need)
 
 **If argument missing:**
 
@@ -23,7 +23,7 @@ Example: /gsd:discuss-phase 3 --assumptions
 Exit workflow.
 
 **If argument provided:**
-Validate phase exists in roadmap:
+Make sure that the phase exists in the roadmap:
 
 ```bash
 cat .planning/ROADMAP.md | grep -i "Phase ${PHASE}"
@@ -41,33 +41,33 @@ Available phases:
 Exit workflow.
 
 **If phase found:**
-Parse phase details from roadmap:
+Parse the phase details from the roadmap:
 
 - Phase number
 - Phase name
 - Phase description/goal
-- Any scope details mentioned
+- Any scope details in the roadmap
 
 Continue to analyze_phase.
 </step>
 
 <step name="analyze_phase">
-Based on roadmap description and project context, identify assumptions across five areas:
+Use the roadmap description and project context to identify assumptions across five areas:
 
 **1. Technical Approach:**
 What libraries, frameworks, patterns, or tools would Claude use?
-- "I'd use X library because..."
-- "I'd follow Y pattern because..."
-- "I'd structure this as Z because..."
+- "I would use X library because..."
+- "I would follow Y pattern because..."
+- "I would structure this as Z because..."
 
 **2. Implementation Order:**
 What would Claude build first, second, third?
-- "I'd start with X because it's foundational"
+- "I would start with X because it is foundational"
 - "Then Y because it depends on X"
 - "Finally Z because..."
 
 **3. Scope Boundaries:**
-What's included vs excluded in Claude's interpretation?
+What does Claude's interpretation include and exclude?
 - "This phase includes: A, B, C"
 - "This phase does NOT include: D, E, F"
 - "Boundary ambiguities: G could go either way"
@@ -76,22 +76,22 @@ What's included vs excluded in Claude's interpretation?
 Where does Claude expect complexity or challenges?
 - "The tricky part is X because..."
 - "Potential issues: Y, Z"
-- "I'd watch out for..."
+- "I would watch out for..."
 
 **5. Dependencies:**
-What does Claude assume exists or needs to be in place?
+What does Claude assume exists or needs to exist?
 - "This assumes X from previous phases"
 - "External dependencies: Y, Z"
-- "This will be consumed by..."
+- "This will be used by..."
 
 Be honest about uncertainty. Mark assumptions with confidence levels:
-- "Fairly confident: ..." (clear from roadmap)
+- "Fairly confident: ..." (clear from the roadmap)
 - "Assuming: ..." (reasonable inference)
 - "Unclear: ..." (could go multiple ways)
 </step>
 
 <step name="present_assumptions">
-Present assumptions in a clear, scannable format:
+Show the assumptions in a clear format that is easy to scan:
 
 ```
 ## My Assumptions for Phase ${PHASE}: ${PHASE_NAME}
@@ -151,7 +151,7 @@ Continue to offer_next.
 </step>
 
 <step name="offer_next">
-Present next steps:
+Show the next steps:
 
 ```
 What's next?
@@ -163,18 +163,20 @@ What's next?
 
 Wait for user selection.
 
-If "Discuss context": Note that CONTEXT.md will incorporate any corrections discussed here
-If "Plan this phase": Proceed knowing assumptions are understood
-If "Re-examine": Return to analyze_phase with updated understanding
+If "Discuss context": Note that CONTEXT.md will include any corrections discussed here.
+
+If "Plan this phase": Continue with the understanding that the assumptions are understood.
+
+If "Re-examine": Return to analyze_phase with the updated understanding.
 </step>
 
 </process>
 
 <success_criteria>
-- Phase number validated against roadmap
-- Assumptions surfaced across five areas: technical approach, implementation order, scope, risks, dependencies
-- Confidence levels marked where appropriate
-- "What do you think?" prompt presented
-- User feedback acknowledged
-- Clear next steps offered
+- The phase number matches the roadmap.
+- The assumptions cover five areas: technical approach, implementation order, scope, risks, dependencies.
+- Assumptions have confidence levels where appropriate.
+- The user sees the "What do you think?" prompt.
+- Claude acknowledges user feedback.
+- Claude offers clear next steps.
 </success_criteria>
