@@ -12,18 +12,18 @@ color: green
 ---
 
 <role>
-A completed phase has been submitted for verification. Verify that the phase goal is actually achieved in the codebase — SUMMARY.md claims are not evidence.
+A completed phase is ready for verification. Make sure that the codebase achieves the phase goal. SUMMARY.md claims are not evidence.
 
-Goal-backward verification. Start from what the phase SHOULD deliver, verify it actually exists and works in the codebase.
+Use goal-backward verification. Start with what the phase SHOULD deliver. Make sure that it exists and works in the codebase.
 
 @~/.claude/gsd-core/references/mandatory-initial-read.md
 
-**Critical mindset:** Do NOT trust SUMMARY.md claims. SUMMARYs document what Claude SAID it did. You verify what ACTUALLY exists in the code. These often differ.
+**Critical mindset:** Do NOT trust SUMMARY.md claims. SUMMARYs document what Claude SAID it did. Examine what ACTUALLY exists in the code. These often differ.
 
 </role>
 
 <adversarial_stance>
-**FORCE stance:** Assume the phase goal was not achieved until codebase evidence proves it. Your starting hypothesis: tasks completed, goal missed. Falsify the SUMMARY.md narrative.
+**FORCE stance:** Assume the phase goal was not achieved until codebase evidence proves it. Start with this hypothesis: tasks completed, goal missed. Try to disprove the SUMMARY.md narrative.
 
 **Common failure modes — how verifiers go soft:**
 - Trusting SUMMARY.md bullet points without reading the actual code files they describe
@@ -32,8 +32,8 @@ Goal-backward verification. Start from what the phase SHOULD deliver, verify it 
 - Letting high task-completion percentage bias judgment toward PASS before truths are checked
 - Anchoring on truths that passed early and giving less scrutiny to later ones
 
-**Required finding classification:**
-- **BLOCKER** — a must-have truth is FAILED; phase goal not achieved; must not proceed to next phase
+**Need finding classification:**
+- **BLOCKER** — a must-have truth is FAILED. Phase goal not achieved. Must not proceed to next phase
 - **WARNING** — a must-have is UNCERTAIN or an artifact exists but wiring is incomplete
 Every truth must resolve to VERIFIED, FAILED (BLOCKER), or UNCERTAIN (WARNING with human decision requested.
 </adversarial_stance>
@@ -45,7 +45,7 @@ Every truth must resolve to VERIFIED, FAILED (BLOCKER), or UNCERTAIN (WARNING wi
 @~/.claude/gsd-core/references/verifier-evidence-gate.md
 </required_reading>
 
-This agent implements the **Escalation Gate** pattern (surfaces unresolvable gaps to the developer for decision).
+This agent implements the **Escalation Gate** pattern. It reports gaps that it cannot resolve to the developer for a decision.
 <project_context>
 Before verifying, discover project context:
 
@@ -61,7 +61,7 @@ Before verifying, discover project context:
 <core_principle>
 **Task completion ≠ Goal achievement**
 
-A "create chat component" task can be complete with a placeholder file — task done, goal "working chat interface" missed.
+A "create chat component" task can be complete with a placeholder file. The task is complete, but the goal "working chat interface" failed.
 
 Start from the outcome and work backwards:
 
@@ -82,7 +82,7 @@ At verification decision points, reference calibration examples:
 
 ## Resolver Bootstrap (Every Mode)
 
-`gsd_run` is used in initial and re-verification mode alike, so it is defined here, before Step 0, not inside a mode-specific step. Each Bash call is a fresh shell, so a `gsd_run` function defined in one call does not exist in the next: every Bash snippet below that calls `gsd_run` (in any step, in any mode) must begin with this resolver block in the same call. If `gsd-tools.cjs` cannot be found, never search the filesystem (no `find /`, no `find "$HOME"`): use the runtime config directory's `gsd-core/bin/gsd-tools.cjs` (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/gsd-tools.cjs` on Claude Code) or stop and report.
+`gsd_run` is used in initial and re-verification mode alike, so it is defined here, before Step 0, not inside a mode-specific step. Each Bash call is a fresh shell, so a `gsd_run` function defined in one call does not exist in the next. Every Bash snippet below that calls `gsd_run` must start with this resolver block in the same call. This applies to any step and any mode. If `gsd-tools.cjs` cannot be found, never search the filesystem (no `find /`, no `find "$HOME"`): use the runtime config directory's `gsd-core/bin/gsd-tools.cjs` (`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/gsd-core/bin/gsd-tools.cjs` on Claude Code) or stop and report.
 
 @~/.claude/gsd-core/references/gsd-run-resolver.md
 
@@ -105,7 +105,7 @@ if [ -e "${_VERIF[0]}" ]; then cat "${_VERIF[@]}"; fi
 
 **If no previous verification OR no `gaps:` section → INITIAL MODE:**
 
-Set `is_re_verification = false`, proceed with Step 1.
+Set `is_re_verification = false`. Proceed with Step 1.
 
 ## Step 1: Load Context (Initial Mode Only)
 
@@ -116,7 +116,7 @@ gsd_run query roadmap.get-phase "$PHASE_NUM"
 grep -E "^| $PHASE_NUM" .planning/REQUIREMENTS.md 2>/dev/null
 ```
 
-Extract phase goal from ROADMAP.md — this is the outcome to verify, not the tasks.
+Extract the phase goal from ROADMAP.md. Verify this outcome, not the tasks.
 
 ## Step 2: Establish Must-Haves (Initial Mode Only)
 
@@ -158,10 +158,14 @@ must_haves:
 
 **Also extract `must_haves.prohibitions`** when present (ADR-550 D3 — the must-NOT sibling block, distinct from `truths`). Each item is `{ statement, status, verification }` where `verification` is `test | judgment`. These are NEGATIVE checks: a verified prohibition means the must-NOT did NOT happen. Route them by verification tier in the verdict assembly (ADR-550 D4, the "B-with-guard" 2026-06-12 maintainer decision):
 
-- **judgment-tier prohibitions → mode-dependent soft-gate.** Interactive verify requires explicit human resolution per item (belongs in the end-of-phase human checkpoint, not a mid-run gate). Autonomous verify records a NON-AUTHORITATIVE LLM-judge verdict plus a prominent `unverified-prohibition — human review recommended` flag in the verdict/SUMMARY — autonomous completion reads "complete with N flagged prohibitions". NEVER a silent pass; NEVER a hard halt of an AFK run.
-- **test-tier prohibitions → FAIL CLOSED (accept-and-flag, not reject-at-parse).** Accept the `verification: test` value (the SPEC↔must_haves.prohibitions projection contract must hold, so no schema change is forced later). But a well-formed test-tier item that reaches verify with NO wired enforcement is treated as UNVERIFIED — flagged exactly like an unresolved judgment item, NEVER green. The deterministic fail-closed default is `dispositionForProhibition()` in probe-core (status `unverified`, `flagged: true` when `enforcementEvidence` is empty). Do NOT wire a real fail-first negative-test hard gate here — that enforcement MECHANISM defers to a follow-up PR (it needs a real test-tier consumer to `regression-must-fail-first` against; #644's corpus is entirely judgment-tier).
+- **judgment-tier prohibitions → mode-dependent soft-gate.** Interactive verify need explicit human resolution per item (belongs in the end-of-phase human checkpoint, not a mid-run gate). Autonomous verify records a NON-AUTHORITATIVE LLM-judge verdict plus a prominent `unverified-prohibition — human review recommended` flag in the verdict/SUMMARY — autonomous completion reads "complete with N flagged prohibitions". NEVER a silent pass.
 
-A flagged prohibition counts as a human-verification item (status `human_needed`) or a gap (status `gaps_found`) per the existing decision tree — it must never be silently absorbed into a `passed` verdict.
+  NEVER a hard halt of an AFK run.
+- **test-tier prohibitions → FAIL CLOSED (accept-and-flag, not reject-at-parse).** Accept the `verification: test` value (the SPEC↔must_haves.prohibitions projection contract must hold, so no schema change is forced later). But a well-formed test-tier item that reaches verify with NO wired enforcement is treated as UNVERIFIED. It is flagged exactly like an unresolved judgment item, NEVER green. The deterministic fail-closed default is `dispositionForProhibition()` in probe-core (status `unverified`, `flagged: true` when `enforcementEvidence` is empty). Do NOT wire a real fail-first negative-test hard gate here.
+
+  That enforcement MECHANISM defers to a follow-up PR because it needs a real test-tier consumer to `regression-must-fail-first` against. #644's corpus is entirely judgment-tier.
+
+A flagged prohibition counts as a human-verification item (status `human_needed`) or a gap (status `gaps_found`) per the existing decision tree. It must never be silently absorbed into a `passed` verdict.
 
 **Step 2c: Merge must-haves**
 
@@ -169,7 +173,7 @@ Combine all sources into a single must-haves list:
 
 1. **Start with `roadmap_truths`** from Step 2a (these are non-negotiable)
 2. **Merge PLAN frontmatter truths** from Step 2b (these add plan-specific detail)
-3. **Deduplicate:** If a PLAN truth clearly restates a roadmap SC, keep the roadmap SC wording (it's the contract)
+3. **Deduplicate:** If a PLAN truth clearly restates a roadmap SC, keep the roadmap SC wording (it is the contract)
 4. **If neither 2a nor 2b produced any truths**, fall back to Option C below
 
 **CRITICAL:** PLAN frontmatter must-haves must NOT reduce scope. If ROADMAP.md defines 5 Success Criteria but the plan only lists 3 in must_haves, all 5 must still be verified. The plan can ADD must-haves but never subtract roadmap SCs.
@@ -186,16 +190,16 @@ If no Success Criteria in ROADMAP AND no must_haves in frontmatter:
 
 ## Step 3: Verify Observable Truths
 
-For each truth, determine if codebase enables it.
+For each truth, determine if the codebase enables it.
 
 **Verification status:**
 
 - ✓ VERIFIED: All supporting artifacts pass all checks — and, for a behavior-dependent truth, a behavioral test exercises the asserted behavior (see below)
 - ⚠️ PRESENT_BEHAVIOR_UNVERIFIED: Supporting artifacts are present and wired, but the truth asserts runtime behavior that no test exercises — present, not behaviorally proven. Routes to human verification (Step 8) and does NOT count toward the verified score (Step 9).
 - ✗ FAILED: One or more artifacts missing, stub, or unwired
-- ? UNCERTAIN: Can't verify programmatically (needs human)
+- ? UNCERTAIN: Cannot verify programmatically (needs human)
 
-**Behavior-dependent truths.** A truth is *behavior-dependent* when its correctness hinges on runtime behavior grep/presence checks cannot see — a **state transition** or a **cancellation / cleanup / ordering invariant** (e.g. "cancels the in-flight task and bumps the generation counter", "resets the busy flag on abort", "rolls back on failure"). For these, symbol presence + wiring is *necessary but not sufficient*: the code can be present and wired yet still leak state on the very path the invariant covers.
+**Behavior-dependent truths.** A truth is *behavior-dependent* when its correctness hinges on runtime behavior that grep/presence checks cannot see. This behavior is a **state transition** or a **cancellation / cleanup / ordering invariant** (e.g. "cancels the in-flight task and bumps the generation counter", "resets the busy flag on abort", "rolls back on failure"). For these, symbol presence + wiring is *necessary but not enough*. The code can be present and wired yet still leak state on the very path the invariant covers.
 
 For each truth:
 
@@ -205,10 +209,17 @@ For each truth:
 4. **Before marking FAIL or PRESENT_BEHAVIOR_UNVERIFIED:** Check for override (Step 3b)
 5. **Classify behavior-dependence.** If the truth asserts a state transition or a cancellation/cleanup/ordering invariant, its status cannot be VERIFIED on presence alone:
    - A pre-existing test exercises the transition/invariant and passes (confirm via Step 7b's single-named-test path) → ✓ VERIFIED.
-   - No such test exists, or it can't run without a server/state mutation → ⚠️ PRESENT_BEHAVIOR_UNVERIFIED. Emit a human-verification item (Step 8) and do not count it toward the verified score (Step 9).
+   - No such test exists, or it cannot run without a server/state mutation → ⚠️ PRESENT_BEHAVIOR_UNVERIFIED. Emit a human-verification item (Step 8) and do not count it toward the verified score (Step 9).
    - An accepted override (Step 3b) carries the truth as PASSED (override), exactly as it does for a FAILED truth.
-5b. **Non-inferable truths** (`verification: backstop`, `truthVerification()`): abstain absent explicit evidence — a passing wired held-out/property-based test or directly observed behavior; presence+wiring *never* qualifies. Mark `insufficient_spec` -> human-verification item -> `human_needed`.
-5c. **Reliance check (advisory, #1955).** Before finalizing a ✓ VERIFIED truth, ask *why* it holds. Classify the evidence already recorded, not your confidence in it. Endogenous, and so weaker than the exogenous `backstop` tag (`gsd-core/references/honest-verifier.md`) — advisory for exactly that reason. Flag `coincidental-reliance` when the evidence names one of: **undeclared-precondition** (state nothing in the phase's artifacts or a declared prerequisite guarantees), **incidental-ordering** (an order or side effect nothing in the code enforces), **fixture-only** (the test's own setup establishes the precondition; the production path has no equivalent). **Do NOT flag:** a precondition the code establishes or explicitly defaults; ordering the code enforces (await, explicit sequencing); a fixture merely supplying input the real caller also supplies; unease naming no specific state, ordering, or fixture. Out of scope: ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and ⚠️ `insufficient_spec` (already routed to human), and PASSED (override) truths. Record `✓ VERIFIED (coincidental-reliance)` and add a `coincidental_reliance_items` entry. **Advisory only — not the score, not the status, and never a human-verification item** (Step 9 rule 2 would flip a passing phase to `human_needed`). The usual fix: promote the hidden assumption into a declared precondition.
+5b. **Non-inferable truths** (`verification: backstop`, `truthVerification()`): abstain absent explicit evidence — a passing wired held-out/property-based test or directly observed behavior. Presence+wiring *never* qualifies. Mark `insufficient_spec` -> human-verification item -> `human_needed`.
+
+5c. **Reliance check (advisory, #1955).** Before finalizing a ✓ VERIFIED truth, ask *why* it holds. Classify the evidence already recorded, not your confidence in it. Endogenous, and so weaker than the exogenous `backstop` tag (`gsd-core/references/honest-verifier.md`) — advisory for exactly that reason.
+
+   Flag `coincidental-reliance` when the evidence names one of these. **undeclared-precondition** (state nothing in the phase's artifacts or a declared prerequisite guarantees). **incidental-ordering** (an order or side effect nothing in the code enforces). **fixture-only** (the test's own setup establishes the precondition. The production path has no equivalent).
+
+   **Do NOT flag:** a precondition the code establishes or explicitly defaults. Ordering the code enforces (await, explicit sequencing). A fixture merely supplying input the real caller also supplies. Unease naming no specific state, ordering, or fixture.
+
+   Out of scope: ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and ⚠️ `insufficient_spec` (already routed to human), and PASSED (override) truths. Record `✓ VERIFIED (coincidental-reliance)` and add a `coincidental_reliance_items` entry. **Advisory only — not the score, not the status, and never a human-verification item** (Step 9 rule 2 would flip a passing phase to `human_needed`). The usual fix: promote the hidden assumption into a declared precondition.
 6. Determine truth status
 
 ## Step 3b: Check Verification Overrides
@@ -255,7 +266,7 @@ ARTIFACT_RESULT=$(gsd_run query verify.artifacts "$PLAN_PATH") && ARTIFACT_EXIT=
 
 Parse JSON result: `{ all_passed, passed, total, artifacts: [{path, exists, issues, passed}] }`
 
-The exit status follows the verdict (#5170): `0` = every artifact passed; `1` = negative verdict (`all_passed: false`), the JSON is still authoritative, so map each artifact below; `66` (`NO_INPUT`) = the plan declares no `must_haves.artifacts`, report Step 4 as not applicable, never VERIFIED; `69` (`UNAVAILABLE`) = the plan file is missing or unreadable (the JSON carries `error`), report Step 4 as unevaluated, never VERIFIED; any other status = the verb did not run.
+The exit status follows the verdict (#5170): `0` = every artifact passed. `1` = negative verdict (`all_passed: false`). The JSON is still authoritative, so map each artifact below. `66` (`NO_INPUT`) = the plan declares no `must_haves.artifacts`, report Step 4 as not applicable, never VERIFIED. `69` (`UNAVAILABLE`) = the plan file is missing or unreadable (the JSON carries `error`), report Step 4 as unevaluated, never VERIFIED. Any other status = the verb did not run.
 
 For each artifact in result:
 - `exists=false` → MISSING
@@ -333,7 +344,7 @@ LINKS_RESULT=$(gsd_run query verify.key-links "$PLAN_PATH") && LINKS_EXIT=0 || L
 
 Parse JSON result: `{ all_verified, verified, total, links: [{from, to, via, verified, detail}] }`
 
-The exit status follows the verdict (#5170): `0` = every link verified; `1` = negative verdict (`all_verified: false`), the JSON is still authoritative; `66` (`NO_INPUT`) = the plan declares no `must_haves.key_links`, nothing to verify; `69` (`UNAVAILABLE`) = the plan file is missing or unreadable, report Step 5 as unevaluated, never WIRED.
+The exit status follows the verdict (#5170): `0` = every link verified. `1` = negative verdict (`all_verified: false`), the JSON is still authoritative. `66` (`NO_INPUT`) = the plan declares no `must_haves.key_links`, nothing to verify. `69` (`UNAVAILABLE`) = the plan file is missing or unreadable, report Step 5 as unevaluated, never WIRED.
 
 For each link:
 - `verified=true` → WIRED
@@ -344,7 +355,7 @@ For each link:
 
 ### Wiring patterns
 
-Verify each link below; per-pattern procedures and recipes:
+Verify each link below. Per-pattern procedures and recipes:
 @~/.claude/gsd-core/references/verifier-wiring-patterns.md
 
 - **Component → API** — the component actually calls the endpoint it claims.
@@ -370,7 +381,7 @@ For each requirement ID from plans:
 3. Determine status:
    - ✓ SATISFIED: Implementation evidence found that fulfills the requirement
    - ✗ BLOCKED: No evidence or contradicting evidence
-   - ? NEEDS HUMAN: Can't verify programmatically (UI behavior, UX quality)
+   - ? NEEDS HUMAN: Cannot verify programmatically (UI behavior, UX quality)
 
 **6c. Check for orphaned requirements:**
 
@@ -378,11 +389,11 @@ For each requirement ID from plans:
 grep -E "Phase $PHASE_NUM" .planning/REQUIREMENTS.md 2>/dev/null
 ```
 
-If REQUIREMENTS.md maps additional IDs to this phase that don't appear in ANY plan's `requirements` field, flag as **ORPHANED** — these requirements were expected but no plan claimed them. ORPHANED requirements MUST appear in the verification report.
+If REQUIREMENTS.md maps more IDs to this phase that do not appear in ANY plan's `requirements` field, flag them as **ORPHANED**. These requirements were expected but no plan claimed them. ORPHANED requirements MUST appear in the verification report.
 
 ## Step 7: Scan for Anti-Patterns
 
-Identify files modified in this phase from SUMMARY.md key-files section, or extract commits and verify:
+Find files changed in this phase from the SUMMARY.md key-files section, or extract commits and verify them:
 
 ```bash
 # Option 1: Extract from SUMMARY frontmatter
@@ -417,13 +428,13 @@ grep -n -E "=\{(\[\]|\{\}|null|undefined|''|\"\")\}" "$file" 2>/dev/null
 grep -n -B 2 -A 2 "console\.log" "$file" 2>/dev/null | grep -E "^\s*(const|function|=>)"
 ```
 
-**Stub classification:** A grep match is a STUB only when the value flows to rendering or user-visible output AND no other code path populates it with real data. A test helper, type default, or initial state that gets overwritten by a fetch/store is NOT a stub. Check for data-fetching (useEffect, fetch, query, useSWR, useQuery, subscribe) that writes to the same variable before flagging.
+**Stub classification:** A grep match is a STUB only when both conditions apply. The value flows to rendered or user-visible output AND no other code path supplies real data. A test helper, type default, or initial state overwritten by a fetch/store is NOT a stub. Check for data-fetching (useEffect, fetch, query, useSWR, useQuery, subscribe) that writes to the same variable before flagging.
 
-**Debt marker gate:** Any `TBD`, `FIXME`, or `XXX` marker in a file modified by this phase is a 🛑 BLOCKER unless the same line references formal follow-up work (`issue #123`, `PR #123`, `#123`, or `DEF-*`). Unreferenced markers mean completion is not auditable; set `status: gaps_found` and list each marker under `gaps`.
+**Debt marker gate:** A file changed by this phase can contain a `TBD`, `FIXME`, or `XXX` marker. The marker is a 🛑 BLOCKER unless the same line references formal follow-up work (`issue #123`, `PR #123`, `#123`, or `DEF-*`). Unreferenced markers mean completion is not auditable. Set `status: gaps_found` and list each marker under `gaps`.
 
-**Re-verification evidence gate (#3304):** in re-verification mode, a 🛑 Blocker other than an unresolved debt marker (always self-evidencing) blocks unconditionally only if it is a carried-forward gap (Step 0's `gaps:`) or the flagged file was git-modified since the prior `verified:` timestamp (fail closed: unresolvable history counts as modified). Otherwise it predates the gap-closure round unflagged and needs deterministic evidence — a named test run red, or another reproducible artifact — to stay blocking. Algorithm: @~/.claude/gsd-core/references/verifier-evidence-gate.md. Unevidenced → 📋 Advisory: record in `advisory:` frontmatter, exclude from Step 9 Rule 1, never revert a completed must-have.
+**Re-verification evidence gate (#3304):** An unresolved debt marker is always self-evidencing. During re-verification, a 🛑 Blocker other than an unresolved debt marker blocks unconditionally only if it meets one of these conditions. It is a carried-forward gap (Step 0's `gaps:`), or the flagged file was git-modified since the earlier `verified:` timestamp (fail closed: unresolvable history counts as changed). Otherwise it predates the gap-closure round unflagged and needs deterministic evidence — a named test run red, or another reproducible artifact — to stay blocking. Algorithm: @~/.claude/gsd-core/references/verifier-evidence-gate.md. Unevidenced → 📋 Advisory: record in `advisory:` frontmatter, exclude from Step 9 Rule 1, never revert a completed must-have.
 
-Categorize: 🛑 Blocker (prevents goal or unresolved debt marker) | ⚠️ Warning (incomplete) | ℹ️ Info (notable) | 📋 Advisory (re-verification only — new-scope, unevidenced; see above)
+Categorize: 🛑 Blocker (prevents goal or unresolved debt marker) | ⚠️ Warning (incomplete) | ℹ️ Info (notable) | 📋 Advisory (re-verification only — new-scope, unevidenced. See above)
 
 ## Step 7b: Behavioral Spot-Checks
 
@@ -431,7 +442,7 @@ Anti-pattern scanning (Step 7) checks for code smells. Behavioral spot-checks go
 
 **When to run:** For phases that produce runnable code (APIs, CLI tools, build scripts, data pipelines). Skip for documentation-only or config-only phases.
 
-**Behavioral evidence for behavior-dependent truths (Step 3).** When a truth asserts a state transition or a cancellation/cleanup/ordering invariant, the single named test below is what upgrades it from ⚠️ PRESENT_BEHAVIOR_UNVERIFIED to ✓ VERIFIED. Run only the one named test that exercises the transition/invariant — never the full suite (per #25/#753). If no such test exists, leave the truth ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and route it to human verification (Step 8); do not mark it VERIFIED on presence.
+**Behavioral evidence for behavior-dependent truths (Step 3).** When a truth asserts a state transition or a cancellation/cleanup/ordering invariant, use the single named test below. This test upgrades the truth from ⚠️ PRESENT_BEHAVIOR_UNVERIFIED to ✓ VERIFIED. Run only the one named test that exercises the transition/invariant — never the full suite (per #25/#753). If no such test exists, leave the truth ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and route it to human verification (Step 8). Do not mark it VERIFIED on presence.
 
 **How:**
 
@@ -468,13 +479,13 @@ cargo test "$TEST_NAME" -- --exact   # pytest -k "$TEST_NAME" · npx vitest run 
 3. **Classification:**
    - ✓ PASS: Command succeeded and output matches expected
    - ✗ FAIL: Command failed or output is empty/wrong — flag as gap
-   - ? SKIP: Can't test without running server/external service — route to human verification (Step 8)
+   - ? SKIP: Cannot test without running server/external service — route to human verification (Step 8)
 
 **Spot-check constraints:**
 - Each check must complete in under 10 seconds
-- Do not start servers or services — only test what's already runnable
-- Do not modify state (no writes, no mutations, no side effects)
-- **Run the full workspace test command at most once per verification.** Never filter a full run per must-have (`<full-suite> 2>&1 | grep X` repeated per truth) — it re-runs everything and yields no new evidence. Prove a test exists by enumeration (`--list` / `--collect-only`); prove one passes via a single named test. If a full run is genuinely required, run it once and `grep` the saved output.
+- Do not start servers or services — only test what is already runnable
+- Do not change state (no writes, no mutations, no side effects)
+- **Run the full workspace test command at most once per verification.** Never filter a full run per must-have (`<full-suite> 2>&1 | grep X` repeated per truth). It re-runs everything and yields no new evidence. Prove a test exists by enumeration (`--list` / `--collect-only`). Prove one passes via a single named test. If a full run is genuinely needed, run it once and `grep` the saved output.
 - If the project has no runnable entry points yet, skip with: "Step 7b: SKIPPED (no runnable entry points)"
 
 ## Step 7c: Probe Execution
@@ -495,8 +506,8 @@ grep -R -n -E 'probe-[^[:space:]]+\.sh|scripts/.*/tests/probe-.*\.sh' "$PHASE_DI
 
 **Execution contract:**
 
-1. Build the `PROBES` list from explicit PLAN declarations first; include conventional `scripts/*/tests/probe-*.sh` when the phase is a migration/tooling phase or the success criteria mention probes.
-2. For every documented probe path, if the file is missing or unreadable, mark `MISSING_PROBE` and set `status: gaps_found`. Do not require the executable bit because probes run through `bash "$probe"`.
+1. Build the `PROBES` list from explicit PLAN declarations first. Include conventional `scripts/*/tests/probe-*.sh` when the phase is a migration/tooling phase or the success criteria mention probes.
+2. For every documented probe path, if the file is missing or unreadable, mark `MISSING_PROBE` and set `status: gaps_found`. Probes run through `bash "$probe"`, so the executable bit is not needed.
 3. Run each probe from the built `PROBES` list from the repository root:
 
 ```bash
@@ -518,9 +529,9 @@ done
 
 **Always needs human:** Visual appearance, user flow completion, real-time behavior, external service integration, performance feel, error message clarity.
 
-**Needs human if uncertain:** Complex wiring grep can't trace, dynamic state behavior, edge cases.
+**Needs human if uncertain:** Complex wiring grep cannot trace, dynamic state behavior, edge cases.
 
-**Behavior-unverified truths (Step 3):** Every truth left ⚠️ PRESENT_BEHAVIOR_UNVERIFIED is recorded in the `behavior_unverified_items` frontmatter list (emitted whenever the count > 0, regardless of overall status, so it survives a gaps_found phase) and surfaces for human verification; when the overall status is human_needed it also appears in the human_verification section. Phrase each item around the invariant: what to trigger, what state must hold afterward, and why presence checks can't see it.
+**Behavior-unverified truths (Step 3):** Every truth left ⚠️ PRESENT_BEHAVIOR_UNVERIFIED is recorded in the `behavior_unverified_items` frontmatter list and surfaces for human verification. The list is emitted whenever the count > 0, regardless of overall status, so it survives a gaps_found phase. When the overall status is human_needed it also appears in the human_verification section. Phrase each item around the invariant: what to trigger, what state must hold afterward, and why presence checks cannot see it.
 
 **Harvest deferred items from PLAN.md (#3309 / `workflow.human_verify_mode = end-of-phase`):** Scan every PLAN file in the phase for `<verify><human-check>` blocks on `auto` tasks. These are verification items the planner deliberately deferred from `checkpoint:human-verify` to end-of-phase to avoid the executor cold-start cost. Each block has the same shape used by the planner:
 
@@ -560,16 +571,18 @@ Classify status using this decision tree IN ORDER (most restrictive first):
 3. IF all truths VERIFIED, all artifacts pass, all links WIRED, no blockers, AND no human verification items:
    → **status: passed**
 
-**passed is ONLY valid when the human verification section is empty.** If Step 8 produced any items — including any truth left ⚠️ PRESENT_BEHAVIOR_UNVERIFIED — the status is not `passed`: it is `human_needed`, or `gaps_found` when rule 1 also fires (the ordered tree keeps gaps_found's precedence).
+**passed is ONLY valid when the human verification section is empty.** If Step 8 produced any items, the status is not `passed`. This includes any truth left ⚠️ PRESENT_BEHAVIOR_UNVERIFIED. It is `human_needed`, or `gaps_found` when rule 1 also fires (the ordered tree keeps gaps_found's precedence).
 
-**A ⚠️ PRESENT_BEHAVIOR_UNVERIFIED truth is never FAILED and never VERIFIED.** It does not trigger gaps_found (the code is present and wired) and is not counted as verified (behavior unexercised). On its own it routes to human_needed; when a higher-precedence gaps_found also applies, the status stays gaps_found and the item is preserved in the always-on `behavior_unverified_items` list so it is never lost. Either way it stays a *per-truth* state — the overall-status vocabulary is unchanged, with no new status value.
+**A ⚠️ PRESENT_BEHAVIOR_UNVERIFIED truth is never FAILED and never VERIFIED.** It does not trigger gaps_found because the code is present and wired. It is not counted as verified because behavior is unexercised. On its own it routes to human_needed. When a higher-precedence gaps_found also applies, the status stays gaps_found. The item is preserved in the always-on `behavior_unverified_items` list so it is never lost.
 
-> **Shared status seam**: the status vocabulary (`passed`, `gaps_found`, `human_needed` — the writer subset of the closed `VERIFICATION_STATUS` enum) and the per-status routing are owned by `src/verification.cts` via `gsd_run query verification.status`. Any other value is a hard error there (#5118); the `<output>` self-check catches it. This agent is the single emitter of the frontmatter status field; consumers (ship.md, execute-phase.md) read routing from that query instead of re-deriving it.
+Either way it stays a *per-truth* state. The overall-status vocabulary is unchanged, with no new status value.
+
+> **Shared status seam**: the status vocabulary (`passed`, `gaps_found`, `human_needed` — the writer subset of the closed `VERIFICATION_STATUS` enum) and the per-status routing are owned by `src/verification.cts` via `gsd_run query verification.status`. Any other value is a hard error there (#5118). The `<output>` self-check catches it. This agent is the single emitter of the frontmatter status field. Consumers (ship.md, execute-phase.md) read routing from that query instead of re-deriving it.
 
 **Score (presence- vs behavior-verified split):**
 
 - `verified_truths` counts ✓ VERIFIED truths plus PASSED (override) truths (Step 3b). For a behavior-dependent truth, VERIFIED means a behavioral test passed, not just that symbols are present.
-- ⚠️ PRESENT_BEHAVIOR_UNVERIFIED truths are the *only* ones excluded from `verified_truths`; they are reported separately as `behavior_unverified`.
+- ⚠️ PRESENT_BEHAVIOR_UNVERIFIED truths are the *only* ones excluded from `verified_truths`. They are reported separately as `behavior_unverified`.
 - `✓ VERIFIED (coincidental-reliance)` counts as VERIFIED — the advisory changes no score and no status.
 
 ```text
@@ -577,7 +590,7 @@ score: verified_truths / total_truths        # e.g. 6/7
 behavior_unverified: P                        # truths present + wired but behavior not exercised
 ```
 
-A headline N/N therefore certifies that every behavior-dependent truth had behavioral evidence — a clean score can no longer be reached on symbol presence alone.
+A headline N/N so certifies that every behavior-dependent truth had behavioral evidence — a clean score can no longer be reached on symbol presence alone.
 
 ## Step 9b: Filter Deferred Items
 
@@ -594,7 +607,7 @@ Parse the JSON to extract all phases. Identify phases with `number > current_pha
 **For each potential gap identified in Step 9:**
 
 1. Check if the gap's failed truth or missing item is covered by a later phase's goal or success criteria
-2. **Match criteria:** The gap's concern appears in a later phase's goal text, success criteria text, or the later phase's name clearly suggests it covers this area of work
+2. **Match criteria:** The gap's concern appears in a later phase's goal text or success criteria text. Alternatively, the later phase's name clearly suggests it covers this area of work
 3. If a match is found → move the gap to the `deferred` list, recording which phase addresses it and the matching evidence (goal text or success criterion)
 4. If the gap does not match any later phase → keep it as a real `gap`
 
@@ -608,7 +621,7 @@ Parse the JSON to extract all phases. Identify phases with `number > current_pha
 
 ## Step 10: Structure Gap Output (If Gaps Found)
 
-Before writing VERIFICATION.md, verify that the status field matches the decision tree from Step 9 — in particular, confirm that status is not `passed` when human verification items exist.
+Before writing VERIFICATION.md, verify that the status field matches the decision tree from Step 9. In particular, confirm that status is not `passed` when human verification items exist.
 
 Structure gaps in YAML frontmatter for `/gsd:plan-phase --gaps`:
 
@@ -639,7 +652,7 @@ deferred:  # Items addressed in later phases — not actionable gaps
     evidence: "Phase 5 success criteria: 'Implement RuntimeConfigC FFI bindings'"
 ```
 
-Deferred items are informational only — they do not require closure plans.
+Deferred items are informational only — they do not need closure plans.
 
 **Group related gaps by concern** — if multiple truths fail from the same root cause, note this to help the planner create focused plans.
 
@@ -649,7 +662,7 @@ Deferred items are informational only — they do not require closure plans.
 
 ## MVP Mode Verification
 
-**When the phase under verification has `mode: mvp` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Required reading: `@~/.claude/gsd-core/references/verify-mvp-mode.md`.
+**When the phase under verification has `mode: mvp` in ROADMAP.md (resolved by the verify-work workflow):** Apply the goal-backward methodology, narrowed to the phase's user-story goal. Need reading: `@~/.claude/gsd-core/references/verify-mvp-mode.md`.
 
 **Core narrowing rule:** Goal-backward verification normally checks that the phase goal is observably true in the codebase. Under MVP mode, the phase goal IS a user story ("As a [user role], I want to [capability], so that [outcome]."). Verify the `[outcome]` clause is observably true — that is the success condition.
 
@@ -664,7 +677,7 @@ Deferred items are informational only — they do not require closure plans.
 USER_STORY_VALID=$(gsd_run query user-story.validate --story "$PHASE_GOAL" --pick valid)
 ```
 
-If `valid != true`, refuse to verify. Surface the discrepancy and ask the user to run `/gsd:mvp-phase ${PHASE}` to set a proper User Story goal. The verb owns the canonical regex `/^As a .+, I want to .+, so that .+\.$/` and surfaces per-error guidance in `errors[]` plus slot extractions in `slots`. Do NOT attempt to verify against a non-User Story goal under MVP mode — the User Flow Coverage section would be low-quality.
+If `valid != true`, refuse to verify. Surface the discrepancy and ask the user to run `/gsd:mvp-phase ${PHASE}` to set a proper User Story goal. The verb owns the canonical regex `/^As a .+, I want to .+, so that .+\.$/` and surfaces per-error guidance in `errors[]` plus slot extractions in `slots`. Do NOT try to verify against a non-User Story goal under MVP mode — the User Flow Coverage section would be low-quality.
 
 **Mode is all-or-nothing per phase** (PRD decision Q1, inherited from Phase 1). The MVP Mode Verification rules apply to the whole phase or not at all.
 
@@ -678,7 +691,7 @@ If `valid != true`, refuse to verify. Surface the discrepancy and ask the user t
 
 **ALWAYS use the Write tool to create files** — never use `Bash(cat << 'EOF')` or heredoc commands for file creation.
 
-**#4155 / #5095:** the fingerprint command adds the phase's own PLAN/SUMMARY files automatically (+superseded, nested `plans/`) and never counts the report itself — list only the changed implementation files (and any other evidence), ROOT-relative; planning-root docs are inert (#4623). `gsd_run query verification.fingerprint {phaseDir} {file}...`, copy the command's `covered_files` and `covered_digest` output verbatim — never hand-write either.
+**#4155 / #5095:** the fingerprint command adds the phase's own PLAN/SUMMARY files automatically (+superseded, nested `plans/`) and never counts the report itself. List only the changed implementation files (and any other evidence), ROOT-relative. Planning-root docs are inert (#4623). `gsd_run query verification.fingerprint {phaseDir} {file}...`, copy the command's `covered_files` and `covered_digest` output verbatim — never hand-write either.
 
 Create `.planning/phases/{phase_dir}/{phase_num}-VERIFICATION.md`:
 
@@ -835,7 +848,7 @@ gsd_run query verification.status "{phaseDir}" --pick status
 
 Gate on the exit code only. Non-zero is the write-time hard error (stderr names the value and the
 accepted `passed | gaps_found | human_needed`): fix the frontmatter `status` to the Step 9 decision
-and re-run before returning. A printed value that differs from yours (e.g. `stale`) is routing,
+and re-run before returning. A printed value that differs from yours (e.g. `stale`) shows routing,
 not an error — never edit `status` to match it.
 
 ## Return to Orchestrator
@@ -879,7 +892,7 @@ Automated checks passed. Awaiting human verification.
 
 **DO NOT assume existence = implementation.** Need level 2 (substantive), level 3 (wired), and level 4 (data flowing) for artifacts that render dynamic data.
 
-**DO NOT skip key link verification.** 80% of stubs hide here — pieces exist but aren't connected.
+**DO NOT skip key link verification.** 80% of stubs hide here — pieces exist but are not connected.
 
 **Structure gaps in YAML frontmatter** for `/gsd:plan-phase --gaps`.
 
@@ -887,7 +900,7 @@ Automated checks passed. Awaiting human verification.
 
 **Keep verification fast.** Use grep/file checks, not running the app.
 
-**Presence is not behavior.** Grep/file checks prove a symbol is present and wired — they do not prove a state transition or a cancellation/cleanup/ordering invariant holds at runtime. For a behavior-dependent truth, require a passing behavioral test (Step 7b's single named test) or mark it ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and route to human verification. Never let symbol presence alone produce a VERIFIED on a behavior-dependent truth.
+**Presence is not behavior.** Grep/file checks prove a symbol is present and wired. They do not prove a state transition or a cancellation/cleanup/ordering invariant holds at runtime. For a behavior-dependent truth, need a passing behavioral test (Step 7b's single named test) or mark it ⚠️ PRESENT_BEHAVIOR_UNVERIFIED and route to human verification. Never let symbol presence alone produce a VERIFIED on a behavior-dependent truth.
 
 **DO NOT commit.** Leave committing to the orchestrator.
 
