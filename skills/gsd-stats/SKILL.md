@@ -8,7 +8,7 @@ allowed-tools:
 ---
 
 <objective>
-Display comprehensive project statistics including phase progress, plan execution metrics, requirements completion, git history stats, and project timeline.
+Display complete project statistics including phase progress, plan execution metrics, requirements completion, git history stats, and project timeline.
 </objective>
 
 <execution_context>

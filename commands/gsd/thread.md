@@ -17,7 +17,7 @@ The text inside `<arguments>` is exactly what the user typed after the command n
 <objective>
 Create, list, close, or resume persistent context threads. Threads are lightweight
 cross-session knowledge stores for work that spans multiple sessions but
-doesn't belong to any specific phase.
+does not belong to any specific phase.
 </objective>
 
 <execution_context>
