@@ -2,11 +2,15 @@
 
 # Reapply Local Patches Workflow
 
-Invoked by `/gsd:update --reapply` (`commands/gsd/update.md`).
+`/gsd:update --reapply` invokes this workflow (`commands/gsd/update.md`).
 
-After a GSD update wipes and reinstalls files, this workflow merges user's previously saved local modifications back into the new version. Uses three-way comparison (pristine baseline, user-modified backup, newly installed version) to reliably distinguish user customizations from version drift.
+A GSD update removes and reinstalls files. After the update, this workflow merges the user's saved local changes into the new version.
 
-**Critical invariant:** Every file in `gsd-local-patches/` was backed up because the installer's hash comparison detected it was modified. The workflow must NEVER conclude "no custom content" for any backed-up file — that is a logical contradiction. When in doubt, classify as CONFLICT requiring user review, not SKIP.
+It uses a three-way comparison to distinguish user customizations from version drift. The comparison uses the pristine baseline, the user-modified backup, and the newly installed version.
+
+**Critical invariant:** The installer backed up every file in `gsd-local-patches/` because its hash comparison found a change. The workflow must NEVER conclude "no custom content" for any backed-up file. That conclusion is a logical contradiction.
+
+When in doubt, classify the file as CONFLICT that needs user review, not SKIP.
 
 <process>
 
@@ -14,20 +18,20 @@ After a GSD update wipes and reinstalls files, this workflow merges user's previ
 
 Read the arguments passed after `--reapply`:
 
-- no `--interactive` → `INTERACTIVE_MODE=off` (the default; Step 4 runs exactly as before)
+- no `--interactive` → `INTERACTIVE_MODE=off` (the default. Step 4 runs exactly as before)
 - bare `--interactive` or `--interactive=exceptions` → `INTERACTIVE_MODE=exceptions`
 - `--interactive=all` → `INTERACTIVE_MODE=all`
 - any other `--interactive=<value>` → STOP with: `unknown --interactive value '<value>' (expected exceptions or all)`. Do not reapply anything.
 
-When the mode is not `off`, tell the user once, before the first prompt: on the first interactive run
-for this install, `--interactive=all` is recommended, because the recommendations have not yet been
-checked against this install's customizations.
+When the mode is not `off`, tell the user the following once, before the first prompt. For the first interactive run for this install, `--interactive=all` is recommended. The recommendations have not yet been checked against this install's customizations.
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in the arguments OR `workflow.text_mode` is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in the arguments OR `workflow.text_mode` is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes need this because `AskUserQuestion` is not available.
 
 ## Step 1: Detect backed-up patches
 
-Check for local patches directory:
+Look for the local patches directory:
 
 ```bash
 expand_home() {
@@ -141,7 +145,7 @@ Exit.
 
 ## Step 2: Determine baseline for three-way comparison
 
-The quality of the merge depends on having a **pristine baseline** — the original unmodified version of each file from the pre-update GSD release. This enables three-way comparison:
+The quality of the merge depends on a **pristine baseline**. This is the original, unchanged version of each file from the pre-update GSD release. The baseline lets the workflow compare three versions:
 - **Pristine baseline** (original GSD file before any user edits)
 - **User's version** (backed up in `gsd-local-patches/`)
 - **New version** (freshly installed after update)
@@ -156,7 +160,7 @@ if git -C "$CONFIG_DIR" rev-parse --git-dir >/dev/null 2>&1; then
   HAS_GIT=true
 fi
 ```
-When `HAS_GIT=true`, use the `pristine_hashes` recorded in `backup-meta.json` to locate the correct baseline commit. For each file, iterate commits that touched it and find the one whose blob SHA-256 matches the recorded pristine hash:
+When `HAS_GIT=true`, use the `pristine_hashes` recorded in `backup-meta.json` to find the correct baseline commit. For each file, iterate commits that touched it and find the one whose blob SHA-256 matches the recorded pristine hash:
 ```bash
 # Get the expected pristine SHA-256 from backup-meta.json
 PRISTINE_HASH=$(jq -r ".pristine_hashes[\"${file_path}\"] // empty" "$PATCHES_DIR/backup-meta.json")
@@ -183,14 +187,20 @@ Extract the pristine version from the matched commit:
 git -C "$CONFIG_DIR" show "${BASELINE_COMMIT}:${file_path}"
 ```
 
-**Why this matters:** `git log --diff-filter=A` returns the commit that *first added* the file, which is the wrong baseline on repos that have been through multiple GSD update cycles. The `pristine_hashes` field in `backup-meta.json` records the SHA-256 of the file as it existed in the pre-update GSD release — matching against it finds the correct baseline regardless of how many updates have occurred.
+**Why this matters:** `git log --diff-filter=A` returns the commit that *first added* the file. That is the wrong baseline for repos with multiple GSD update cycles.
+
+The `pristine_hashes` field in `backup-meta.json` records the file's SHA-256 from the pre-update GSD release. Matching against it finds the correct baseline regardless of how many updates occurred.
 
 ### Option B: Pristine snapshot directory
 Check if a `gsd-pristine/` directory exists alongside `gsd-local-patches/`:
 ```bash
 PRISTINE_DIR="$CONFIG_DIR/gsd-pristine"
 ```
-If it exists, the installer saved pristine copies at install time. Use these as the baseline. Both the deterministic verifier and the installer's preserve-check resolve each file's snapshot at its canonical path first and, when that misses, by the SHA-256 recorded in `pristine_hashes` — so a snapshot stored at a legacy path (for example, without the `gsd-core/` prefix an earlier release dropped) is still found and, on the next update, relocated to its canonical path (#4145). When no snapshot resolves under `gsd-pristine/`, the deterministic verifier additionally falls back to Option A's git-history walk itself (read-only, same recorded-hash match), which is what keeps Step 5a coverage non-zero on multi-version updates where the hash-validated regeneration had nothing it could promote (#4135).
+If it exists, the installer saved pristine copies at install time. Use these as the baseline. Both the deterministic verifier and the installer's preserve-check first resolve each file's snapshot at its canonical path. When that misses, they resolve it by the SHA-256 recorded in `pristine_hashes`. 
+
+They can still find a snapshot at a legacy path. For example, an earlier release dropped the `gsd-core/` prefix. On the next update, they relocate the snapshot to its canonical path (#4145).
+
+When no snapshot resolves under `gsd-pristine/`, the deterministic verifier also falls back to Option A's git-history walk. The walk is read-only and uses the same recorded-hash match. This keeps Step 5a coverage non-zero on multi-version updates. In these updates, hash-validated regeneration had nothing it could promote (#4135).
 
 ### Option C: No baseline available (two-way fallback)
 If neither git history nor pristine snapshots are available, fall back to two-way comparison — but with **strengthened heuristics** (see Step 3).
@@ -215,14 +225,9 @@ If neither git history nor pristine snapshots are available, fall back to two-wa
 
 ### Step 4 pre-flight: classify superseded customizations (#4136)
 
-Before merging anything, run the deterministic classifier. It computes, per backed-up file,
-whether the user's added lines (diff of the backup against the hash-validated pristine
-baseline) are ALREADY present verbatim in the newly installed version — i.e. upstream
-adopted the customization. That is the only ground on which the `Incorporated` status
-below is valid. Never conclude `Incorporated` from a signature line, a heading, or general
-resemblance: the classifier excludes structural/trivial lines and requires every
-significant user-added line to be present, because a false `Incorporated` silently retires
-a live customization.
+Before you merge anything, run the deterministic classifier. For each backed-up file, it finds the user's added lines from the diff against the hash-validated pristine baseline. It determines whether those lines are ALREADY present verbatim in the newly installed version. This means that upstream adopted the customization. This is the only valid ground for the `Incorporated` status below.
+
+Never conclude `Incorporated` from a signature line, a heading, or general resemblance. The classifier excludes structural/trivial lines and needs every significant user-added line to be present. A false `Incorporated` status silently retires a live customization.
 
 ```bash
 PRISTINE_DIR="${CONFIG_DIR}/gsd-pristine"
@@ -246,31 +251,30 @@ INCORPORATED_FILES="$(echo "$CLASSIFY_OUTPUT" | node -e "const d=JSON.parse(requ
 
 - **Do NOT merge it. Do NOT re-apply its diff.** Leave the newly installed file exactly as
   shipped — the user's customization is already in it. Re-grafting the diff onto a version
-  that already contains it duplicates the content (both copies run; a stale graft can
+  that already contains it duplicates the content (both copies run. A stale graft can
   contradict a richer native upstream step that replaced it).
 - Report the per-file status `Incorporated` — "Already in upstream v{version}" — in the
   Step 3 summary and the Step 7 report.
-- No Hunk Verification Table rows are required for these files (nothing was merged); the
+- These files need no Hunk Verification Table rows (nothing was merged). The
   classifier's structured output is the evidence. If EVERY backed-up file is Incorporated,
   still emit the table with a header row and a single note line naming the incorporated
-  files, so the Step 5b absent-table halt is not tripped. Step 5a passes these files
+  files. This prevents the Step 5b absent-table halt. Step 5a passes these files
   without special-casing — every user-added line is present in the untouched install.
 - This is what ends the re-graft cycle: because the installed file stays identical to what
-  the release ships, the next update's hash comparison no longer flags it as modified, and
+  the release ships, the next update's hash comparison no longer flags it as change, and
   the file drops out of `gsd-local-patches/` on the next cycle.
 
 Files NOT in `INCORPORATED_FILES` — reported `needs_merge` (with the lines still missing
 from the new version) or `unknown` (no confirmable pristine baseline) — take the normal
 merge paths below, unchanged. If the classifier cannot run at all (e.g. `GSD_HOME`
-unset), fall back to merging every file as before; never report `Incorporated` without the
+unset), fall back to merging every file as before. Never report `Incorporated` without the
 classifier's structured confirmation.
 
 ### Step 4 interactive review (#4435) — only when `INTERACTIVE_MODE` is not `off`
 
-Verbatim matching cannot see an edit that upstream adopted in different words, an edit whose
-surrounding stock text upstream rewrote, or an edit whose anchor lines upstream deleted. Interactive
-mode shows each user edit (hunk) and lets the USER decide. Present and gate: the tool recommends,
-the user decides, and nothing is retired without the user's answer.
+Verbatim matching cannot see an edit that upstream adopted in different words. It cannot see an edit whose surrounding stock text upstream rewrote. It cannot see an edit whose anchor lines upstream deleted.
+
+Interactive mode shows each user edit (hunk) and lets the USER decide. Present and gate each edit. The tool recommends, the user decides, and nothing is retired without the user's answer.
 
 ```bash
 DECISIONS_FILE="$(mktemp "${TMPDIR:-/tmp}/gsd-reapply-decisions.XXXXXX")"
@@ -298,22 +302,23 @@ For each file in `HUNKS_OUTPUT.files`, for each hunk:
   without asking. Print one summary line for each:
   `kept without review: {file} hunk {hunk_id}: "{first user line, truncated to 60 chars}"`.
 
-Presenting a hunk means asking the user one question (`AskUserQuestion`, or under TEXT_MODE a
-plain-text numbered list the user answers by number) that shows:
+Present a hunk by asking the user one question with `AskUserQuestion`. Under TEXT_MODE, use a
+plain-text numbered list that the user answers by number. The question shows:
 
 - **Stock text:** `stock_lines` (or "(none — your lines were inserted)" when empty)
 - **Your text:** `user_lines` (or "(none — you deleted the stock text)" when empty)
 - **Recommendation:** `recommendation`, with `reasons` explained in plain words:
-  `already_upstream` (the shipped file already has it), `partially_upstream` (only some of it is
-  there), `region_changed_upstream` (upstream also changed this spot, for example by rewording it),
-  `anchor_orphaned` (the lines it sat between are gone), `baseline_unconfirmed` (no verified
-  pre-update copy, so read the whole file), `diff_too_large` (the file changed too much to split it
-  into separate edits)
-- Options: **Keep** (graft it), **Retire** (drop it; keep upstream's text), **Rewrite** (the user
+  - `already_upstream` (the shipped file already has it)
+  - `partially_upstream` (only some of it is there)
+  - `region_changed_upstream` (upstream also changed this spot, for example by rewording it)
+  - `anchor_orphaned` (the lines it sat between are gone)
+  - `baseline_unconfirmed` (no verified pre-update copy, so read the whole file)
+  - `diff_too_large` (the file changed too much to split it into separate edits)
+- Options: **Keep** (graft it), **Retire** (drop it. Keep upstream's text), **Rewrite** (the user
   supplies replacement text, which is applied instead)
 
 Write a decision entry only from the user's answer to that hunk's question. Never write `retire` or
-`rewrite` for a hunk the user was not asked about, and never pick an answer on the user's behalf,
+`rewrite` for a hunk the user was not asked about. Never pick an answer on the user's behalf,
 even when the recommendation is `retire`. A hunk kept without review in `exceptions` mode is
 recorded as `keep`. Record each answer in `DECISIONS_FILE` as JSON:
 
@@ -322,7 +327,7 @@ recorded as `keep`. Record each answer in `DECISIONS_FILE` as JSON:
 ```
 
 A `rewrite` entry must also carry `"replacement_lines": [...]` — exactly the lines the user supplied.
-The Step 5a gate then requires those lines to be present in the merged file, so a rewrite is verified
+The Step 5a gate then need those lines to be present in the merged file, so a rewrite is verified
 like any kept edit. `keep` and `retire` entries never carry `replacement_lines`.
 
 Shell variables do not survive between separate command invocations. Write `INTERACTIVE_MODE` and the
@@ -336,7 +341,7 @@ reported `Incorporated` ("Retired by user decision"). A file with some hunks ret
 
 For each file in `backup-meta.json`:
 
-1. **Read the backed-up version** (user's modified copy from `gsd-local-patches/`)
+1. **Read the backed-up version** (user's change copy from `gsd-local-patches/`)
 2. **Read the newly installed version** (current file after update)
 3. **If available, read the pristine baseline** (from git history or `gsd-pristine/`)
 
@@ -353,26 +358,26 @@ Compare the three versions to isolate changes:
 - Sections unchanged by either → use new version (identical to all three)
 - User-added content already present verbatim in the new version → already incorporated
   upstream — do NOT re-apply it (the file-level outcome is `Incorporated` when ALL
-  user-added content is thus present, as determined by the Step 4 pre-flight classifier)
+  user-added content is present, as determined by the Step 4 pre-flight classifier)
 
 ### Two-way merge (fallback when no baseline)
 
 When no pristine baseline is available, use these **strengthened heuristics**:
 
-**CRITICAL RULE: Every file in this backup directory was explicitly detected as modified by the installer's SHA-256 hash comparison. "No custom content" is never a valid conclusion.**
+**CRITICAL RULE: Every file in this backup directory was explicitly detected as change by the installer's SHA-256 hash comparison. "No custom content" is never a valid conclusion.**
 
 For each file:
 a. Read both versions completely
 b. Identify ALL differences, then classify each as:
    - **Mechanical drift** — path substitutions (e.g. `/Users/xxx/.claude/` → `$HOME/.claude/`), variable additions (`${GSD_WS}`, `${AGENT_SKILLS_*}`), error handling additions (`|| true`)
-   - **User customization** — added steps/sections, removed sections, reordered content, changed behavior, added frontmatter fields, modified instructions
+   - **User customization** — added steps/sections, removed sections, reordered content, changed behavior, added frontmatter fields, change instructions
 
 c. **If ANY differences remain after filtering out mechanical drift → those are user customizations. Merge them.**
-d. **If ALL differences appear to be mechanical drift → still flag as CONFLICT.** The installer's hash check already proved this file was modified. Ask the user: "This file appears to only have path/variable differences. Were there intentional customizations?" Do NOT silently skip.
+d. **If ALL differences appear to be mechanical drift → still flag as CONFLICT.** The installer's hash check already proved this file was changed. Ask the user: "This file appears to only have path/variable differences. Were there intentional customizations?" Do NOT silently skip.
 
 ### Git-enhanced two-way merge
 
-When the config directory is a git repo but the pristine install commit can't be found, use commit history to identify user changes:
+When the config directory is a git repo but the pristine install commit cannot be found, use commit history to identify user changes:
 ```bash
 # Find non-update commits that touched this file
 git -C "$CONFIG_DIR" log --oneline --no-merges -- "{file_path}" | grep -v "gsd:update\|gsd-update\|GSD update\|gsd-install"
@@ -386,7 +391,7 @@ Each matching commit represents an intentional user modification. Use the commit
 After writing each merged file, verify that user modifications survived the merge:
 
 1. **Line-count check:** Count lines in the backup and the merged result. If the merged result has fewer lines than the backup minus the expected upstream removals, flag for review.
-2. **Hunk presence check:** For each user-added section identified during diff analysis, search the merged output for at least the first significant line (non-blank, non-comment) of each addition. Missing signature lines indicate a dropped hunk.
+2. **Hunk presence check:** Identify user-added sections during diff analysis. For each section, search the merged output for at least the first significant line (non-blank, non-comment) of each addition. Missing signature lines show a dropped hunk.
 3. **Report warnings inline** (do not block):
    ```
    ⚠ Potential dropped content in {file_path}:
@@ -410,7 +415,7 @@ After writing each merged file, verify that user modifications survived the merg
 6. **Report status per file:**
    - `Merged` — user modifications applied cleanly (show summary of what was preserved)
    - `Conflict` — user reviewed and chose resolution
-   - `Incorporated` — user's modification was already adopted upstream (only valid when pristine baseline confirms this — determined exclusively by the Step 4 pre-flight classifier's `incorporated_files`, never by inspection)
+   - `Incorporated` — user's modification was already adopted upstream. This status is valid only when the pristine baseline confirms this. Only the Step 4 pre-flight classifier's `incorporated_files` determines this, never inspection.
 
 **Never report `Skipped — no custom content`.** If a file is in the backup, it has custom content.
 
@@ -420,9 +425,9 @@ Two layered gates. Both must pass before proceeding to cleanup.
 
 ### 5a: Deterministic verifier (binding gate, #2969)
 
-Run the deterministic verifier script. Do NOT rely solely on the free-text `verified: yes/no` Hunk Verification Table from Step 4 — bug #2969 traced repeated false-positive `verified: yes` reports to that table being filled in without an actual content-presence check. The script performs the check structurally and exits non-zero on any miss.
+Run the deterministic verifier script. Do NOT rely solely on the free-text `verified: yes/no` Hunk Verification Table from Step 4. Bug #2969 traced repeated false-positive `verified: yes` reports to that table. The table was filled in without an actual content-presence check. The script does the check structurally and exits non-zero on any miss.
 
-Run the verifier as a child process (the gsd-tools binary directory is not required — the script ships under `gsd-core/bin/` in the source repo and is installed to `${GSD_HOME}/gsd-core/bin/`):
+Run the verifier as a child process. You do not need to use the gsd-tools binary directory. The script ships under `gsd-core/bin/` in the source repo. It is installed to `${GSD_HOME}/gsd-core/bin/`:
 
 ```bash
 PRISTINE_DIR="${CONFIG_DIR}/gsd-pristine"
@@ -451,7 +456,7 @@ VERIFY_OUTPUT="$(node "${GSD_HOME}/gsd-core/bin/verify-reapply-patches.cjs" "${V
 VERIFY_STATUS=$?
 ```
 
-**Step 5a: drift check** — even when `VERIFY_STATUS` is 0, the report may signal that one or more files were skipped due to pristine-snapshot drift (Bug #3657) or a missing baseline (Bug #934). Parse the JSON and check:
+**Step 5a: drift check** — even when `VERIFY_STATUS` is 0, the report may signal skipped files. One or more files may be skipped because of pristine-snapshot drift (Bug #3657) or a missing baseline (Bug #934). Parse the JSON and check:
 
 ```bash
 DRIFTED_COUNT="$(echo "$VERIFY_OUTPUT" | node -e "const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));process.stdout.write(String(d.drifted||0))")"
@@ -471,11 +476,11 @@ Baseline coverage: {BASELINE_COVERED} of {CHECKED_COUNT} file(s) verified agains
 baseline ({CHECKED_COUNT - BASELINE_COVERED} unverified)
 ```
 
-The verifier also reports this on every run (JSON field `baseline_covered`; the human summary
+The verifier also reports this on every run (JSON field `baseline_covered`. The human summary
 leads with the same line). Operators who want the gate itself to fail on low coverage (cautious
 environments) pass the opt-in strict flag when invoking the verifier:
-`--min-baseline-coverage <fraction between 0 and 1>` — below the threshold the verifier exits
-with code 3 (a real content failure still exits 1 and outranks it). Without the flag the
+`--min-baseline-coverage <fraction between 0 and 1>`. Below the threshold the verifier exits
+with code 3. A real content failure still exits 1 and outranks it. Without the flag the
 default advisory posture is unchanged.
 
 **If `NO_BASELINE_COUNT` is greater than 0**, emit an advisory warning (non-blocking — the gate still exits 0 for these files). Do NOT halt:
@@ -546,22 +551,22 @@ Then re-run /gsd:update --reapply to re-verify.
 Do not proceed to cleanup until the verifier exits 0.
 
 **If `VERIFY_STATUS` is 2 and stderr names a `stale decision`** (#4435), a recorded answer no longer
-matches its hunk because the backup or baseline changed after the user saw it. STOP, discard
+matches its hunk. The backup or baseline changed after the user saw the hunk. STOP, discard
 `DECISIONS_FILE`, and re-run `/gsd:update --reapply --interactive` so the user decides on the current
 text. Never edit the decisions file to make it match.
 
-When decisions were passed, the JSON report carries `decisions.retired` — every hunk excused by a
+When decisions were passed, the JSON report carries `decisions.retired` — every retired/rewritten hunk excused by a
 user `retire` or `rewrite` decision. Before Step 6, show the user this list (file, hunk id,
 disposition) and ask them to confirm that each one is a decision they made. The gate can prove that a
-decision matches the exact text that was shown, but not who made it, so the user's confirmation of
+decision matches the exact text that was shown, but not who made it. The user's confirmation of
 this list is the final check. If the user disowns any entry, restore that hunk from the backup and
 re-run Step 5a without it. List each confirmed entry in the Step 7 report.
 
-**Only when `VERIFY_STATUS` is 0** (or when all files had zero significant user-added lines, which the verifier reports as `Failures: 0`) may execution continue to gate 5b.
+**Only when `VERIFY_STATUS` is 0** may execution continue to gate 5b. Execution may also continue when all files had zero significant user-added lines. The verifier reports this as `Failures: 0`.
 
 ### 5b: Hunk Verification Table review (advisory gate, #1999)
 
-The Hunk Verification Table produced in Step 4 must also be reviewed before proceeding. This is advisory after the script gate but is preserved as a defense-in-depth check — if the script ever has a bug or the pristine baseline is unavailable, the table-based gate still catches obvious regressions.
+The Hunk Verification Table produced in Step 4 must also be reviewed before proceeding. This is advisory after the script gate but remains a defense-in-depth check. If the script ever has a bug or the pristine baseline is unavailable, the table-based gate still catches obvious regressions.
 
 **If the Hunk Verification Table is absent** (Step 4 silently produced nothing), STOP and report:
 
@@ -590,7 +595,9 @@ Review the merged file manually, then either:
 
 Do not proceed to cleanup until both gates (5a and 5b) pass.
 
-**Why both gates?** 5a (the script) is the binding gate — it does the actual substring check structurally and cannot be shortcut by the LLM. 5b (the table review) is the advisory gate — it provides a redundant safety net via the Step 4 prose summary, ensuring that even a script regression or absent pristine baseline cannot silently allow a `verified: no` row to slip past, nor can a missing table go unnoticed. Layered gates favour false-positive halts (recoverable) over silent successes on lost content (unrecoverable).
+**Why both gates?** 5a (the script) is the binding gate. It does the actual substring check structurally and the LLM cannot shortcut it. 5b (the table review) is the advisory gate. It provides a redundant safety net via the Step 4 prose summary.
+
+Even with a script regression or absent pristine baseline, a `verified: no` row cannot silently pass. A missing table cannot go unnoticed. Layered gates favour false-positive halts (recoverable) over silent successes on lost content (unrecoverable).
 
 ## Step 6: Cleanup option
 
@@ -618,12 +625,12 @@ Ask user:
 
 <success_criteria>
 - [ ] All backed-up patches processed — zero files left unhandled
-- [ ] No file classified as "no custom content" or "SKIP" — every backed-up file is definitionally modified
+- [ ] No file classified as "no custom content" or "SKIP" — every backed-up file is definitionally change
 - [ ] Three-way merge used when pristine baseline available (git history or gsd-pristine/)
 - [ ] User modifications identified and merged into new version
 - [ ] Superseded customizations classified `Incorporated` by the deterministic pre-flight classifier (pristine-confirmed) and not re-grafted
 - [ ] Conflicts surfaced to user with both versions shown
-- [ ] With `--interactive`, every presented hunk was decided by the user (never by the agent), retired/rewritten hunks were passed to the Step 5a gate through the hash-bound decisions file, and each retirement is listed in the report
+- [ ] With `--interactive`, the user decided every presented hunk (never the agent). The retired/rewritten hunks were passed to the Step 5a gate through the hash-bound decisions file. Each retirement is listed in the report
 - [ ] Status reported for each file with summary of what was preserved
 - [ ] Post-merge verification checks each file for dropped hunks and warns if content appears missing
 </success_criteria>
