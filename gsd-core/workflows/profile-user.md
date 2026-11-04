@@ -1,11 +1,11 @@
 <purpose>
-Orchestrate the full developer profiling flow: consent, session analysis (or questionnaire fallback), profile generation, result display, and artifact creation.
+Manage the developer profiling flow: consent, session analysis or questionnaire fallback, profile generation, result display, and artifact creation.
 
-This workflow wires Phase 1 (session pipeline) and Phase 2 (profiling engine) into a cohesive user-facing experience. All heavy lifting is done by existing `gsd_run query` handlers and the gsd-user-profiler agent -- this workflow orchestrates the sequence, handles branching, and provides the UX.
+This workflow connects Phase 1 (session pipeline) and Phase 2 (profiling engine) for the user. Existing `gsd_run query` handlers and the gsd-user-profiler agent do the main work. This workflow manages the sequence and branches and provides the UX.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 
 Key references:
 - @$HOME/.claude/gsd-core/references/ui-brand.md (display patterns)
@@ -19,7 +19,9 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 ## 1. Initialize
 
@@ -36,7 +38,11 @@ PROFILE_PATH="$HOME/.claude/gsd-core/USER-PROFILE.md"
 
 **If profile exists AND --refresh NOT set AND --questionnaire NOT set:**
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `$ARGUMENTS` contains `--text` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
+
+Non-Claude runtimes, such as OpenAI Codex and Antigravity, need this because `AskUserQuestion` is not available.
 Use AskUserQuestion:
 - header: "Existing Profile"
 - question: "You already have a profile. What would you like to do?"
@@ -65,7 +71,7 @@ Continue to step 2.
 
 ## 2. Consent Gate (ACTV-06)
 
-**Skip if** `--questionnaire` flag is set (no JSONL reading occurs -- jump directly to step 4b).
+**If** the `--questionnaire` flag is set, skip this step. The workflow does not read JSONL. Go directly to step 4b.
 
 Display consent screen:
 
@@ -121,7 +127,7 @@ Use AskUserQuestion:
 - header: "Ready?"
 - question: "Ready to analyze your sessions?"
 - options:
-  - "Let's go" -- Proceed to step 3 (session analysis)
+  - "Let us go" -- Proceed to step 3 (session analysis)
   - "Use questionnaire instead" -- Jump to step 4b (questionnaire path)
   - "Not now" -- Display "No worries. Run /gsd:profile-user when ready." and exit
 
@@ -168,11 +174,11 @@ PROFILER_MODEL=$(gsd_run query resolve-model gsd-user-profiler --raw)
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`PROFILER_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If `PROFILER_MODEL` is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases. Non-Claude runtimes do not have native tier aliases by default. If you omit the parameter, the agent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 **Spawn gsd-user-profiler agent using Task tool:**
 
-Use the Task tool to spawn the `gsd-user-profiler` agent, passing `model="{PROFILER_MODEL}"` (omit the parameter per the rule above when the value is `"inherit"` or empty). Provide it with:
+Use the Task tool to spawn the `gsd-user-profiler` agent. Pass `model="{PROFILER_MODEL}"`. If the value is `"inherit"` or empty, omit the parameter as the rule above specifies. Provide the agent with:
 - The sampled JSONL file path from profile-sample output
 - The user-profiling reference doc at `$HOME/.claude/gsd-core/references/user-profiling.md`
 
@@ -198,9 +204,9 @@ Write the analysis JSON to `$ANALYSIS_PATH`.
 
 Display: "✓ Analysis complete (N dimensions scored)"
 
-**Check for thin data:**
-- Read the analysis JSON and check the total message count
-- If < 50 messages were analyzed: Note that a questionnaire supplement could improve accuracy. Display: "Note: Limited session data (N messages). Results may have lower confidence."
+**Examine thin data:**
+- Read the analysis JSON. Find the total message count.
+- If the analysis included < 50 messages: Note that a questionnaire supplement could improve accuracy. Display: "Note: Limited session data (N messages). Results may have lower confidence."
 
 Continue to step 5.
 
@@ -220,11 +226,11 @@ Parse the questions JSON. It contains 8 questions, one per dimension.
 **Present each question to the user via AskUserQuestion:**
 
 For each question in the questions array:
-- header: The dimension name (e.g., "Communication Style")
+- header: The dimension name (for example, "Communication Style")
 - question: The question text
 - options: The answer options from the question definition
 
-Collect all answers into an answers JSON object mapping dimension keys to selected answer values.
+Collect all answers in an answers JSON object. Map dimension keys to selected answer values.
 
 **Save answers to temp file:**
 ```bash
@@ -251,31 +257,31 @@ ANALYSIS_PATH=$(mktemp "${TMPDIR:-/tmp}/gsd-profile-analysis-XXXXXX") && mv "$AN
 
 Write the analysis JSON to `$ANALYSIS_PATH`.
 
-Continue to step 5 (skip split resolution since questionnaire handles ambiguity internally).
+Continue to step 5. Skip split resolution because the questionnaire handles ambiguity internally.
 
 ---
 
 ## 5. Split Resolution
 
-**Skip if** questionnaire-only path (splits already handled internally).
+**If** the workflow uses the questionnaire-only path, skip this step. The questionnaire already handles splits internally.
 
 Read the analysis JSON from `$ANALYSIS_PATH`.
 
-Check each dimension for `cross_project_consistent: false`.
+Examine each dimension for `cross_project_consistent: false`.
 
 **For each split detected:**
 
 Use AskUserQuestion:
-- header: The dimension name (e.g., "Communication Style")
-- question: "Your sessions show different patterns:" followed by the split context (e.g., "CLI/backend projects -> terse-direct, Frontend/UI projects -> detailed-structured")
+- header: The dimension name (for example, "Communication Style")
+- question: "Your sessions show different patterns:" followed by the split context (for example, "CLI/backend projects -> terse-direct, Frontend/UI projects -> detailed-structured")
 - options:
-  - Rating option A (e.g., "terse-direct")
-  - Rating option B (e.g., "detailed-structured")
+  - Rating option A (for example, "terse-direct")
+  - Rating option B (for example, "detailed-structured")
   - "Context-dependent (keep both)"
 
 **If user picks a specific rating:** Update the dimension's `rating` field in the analysis JSON to the selected value.
 
-**If user picks "Context-dependent":** Keep the dominant rating in the `rating` field. Add a `context_note` to the dimension's summary describing the split (e.g., "Context-dependent: terse in CLI projects, detailed in frontend projects").
+**If user picks "Context-dependent":** Keep the dominant rating in the `rating` field. Add a `context_note` to the dimension's summary for the split (for example, "Context-dependent: terse in CLI projects, detailed in frontend projects").
 
 Write updated analysis JSON back to `$ANALYSIS_PATH`.
 
@@ -360,7 +366,7 @@ Use AskUserQuestion with multiSelect:
 
 ## 9. Artifact Generation
 
-Generate selected artifacts sequentially (file I/O is fast, no benefit from parallel agents):
+Generate selected artifacts in sequence. File I/O is fast, so parallel agents give no benefit:
 
 **For /gsd-dev-preferences (if selected):**
 
@@ -386,7 +392,7 @@ gsd_run query generate-claude-profile --analysis "$ANALYSIS_PATH" --global --jso
 
 Display: "✓ Added profile section to $HOME/.claude/CLAUDE.md"
 
-**Error handling:** If any `gsd_run query` call fails, display the error message and use AskUserQuestion to offer "Retry" or "Skip this artifact". On retry, re-run the command. On skip, continue to next artifact.
+**Error handling:** If any `gsd_run query` call fails, display the error message. Use AskUserQuestion to offer "Retry" or "Skip this artifact". On retry, run the command again. On skip, continue to the next artifact.
 
 ---
 
@@ -394,14 +400,14 @@ Display: "✓ Added profile section to $HOME/.claude/CLAUDE.md"
 
 **If --refresh path:**
 
-Read both old backup and new analysis to compare dimension ratings/confidence.
+Read the old backup and the new analysis to compare dimension ratings/confidence.
 
 Read the backed-up profile:
 ```bash
 BACKUP_PATH="$HOME/.claude/USER-PROFILE.backup.md"
 ```
 
-Compare each dimension's rating and confidence between old and new. Display diff table showing only changed dimensions:
+Compare each dimension's rating and confidence between old and new. Show a diff table with only changed dimensions.
 
 ```
 ## Changes
@@ -430,38 +436,38 @@ Artifacts:
   ✓ Global CLAUDE.md        $HOME/.claude/CLAUDE.md
 ```
 
-(Show the `claude_md_path` actually returned by the command — it defaults to `./.claude/CLAUDE.md` but may be overridden by config or `--output`.)
+(Show the `claude_md_path` that the command returned. It defaults to `./.claude/CLAUDE.md` but config or `--output` may override it.)
 
-(Only show artifacts that were actually generated.)
+(Show only artifacts that the workflow generated.)
 
 **Clean up temp files:**
 
-Remove the temp directory created by profile-sample (contains sample JSONL and analysis JSON):
+Remove the temp directory that profile-sample created. It contains sample JSONL and analysis JSON.
 ```bash
 rm -rf "$TEMP_DIR"
 ```
 
-Also remove any standalone temp files created for questionnaire answers:
+Also remove any standalone temp files that the workflow created for questionnaire answers.
 ```bash
 rm -f "$ANSWERS_PATH" 2>/dev/null
 rm -f "$ANALYSIS_PATH" 2>/dev/null
 ```
 
-(Only clean up temp paths that were actually created during this workflow run.)
+(Remove only temp paths that the workflow created during this run.)
 
 </process>
 
 <success_criteria>
-- [ ] Initialization detects existing profile and handles all three responses (view/refresh/cancel)
-- [ ] Consent gate shown for session analysis path, skipped for questionnaire path
-- [ ] Session scan discovers sessions and reports statistics
-- [ ] Session analysis path: samples messages, spawns profiler agent, extracts analysis JSON
-- [ ] Questionnaire path: presents 8 questions, collects answers, converts to analysis JSON
-- [ ] Split resolution presents context-dependent splits with user resolution options
-- [ ] Profile written to USER-PROFILE.md via write-profile subcommand
-- [ ] Result display shows report card table and highlight reel with evidence
+- [ ] Initialization detects an existing profile and handles all three responses (view/refresh/cancel)
+- [ ] The workflow shows the consent gate for the session analysis path and skips it for the questionnaire path
+- [ ] Session scan finds sessions and reports statistics
+- [ ] Session analysis path: samples messages, spawns the profiler agent, and extracts analysis JSON
+- [ ] Questionnaire path: shows 8 questions, collects answers, and converts them to analysis JSON
+- [ ] Split resolution shows context-dependent splits with user resolution options
+- [ ] The write-profile subcommand writes the profile to USER-PROFILE.md
+- [ ] Result display shows a report card table and highlight reel with evidence
 - [ ] Artifact selection uses multiSelect with all options pre-selected
-- [ ] Artifacts generated sequentially via `gsd_run query` subcommands
-- [ ] Refresh diff shows changed dimensions when --refresh was used
-- [ ] Temp files cleaned up on completion
+- [ ] `gsd_run query` subcommands generate artifacts in sequence
+- [ ] If --refresh was used, the refresh diff shows changed dimensions
+- [ ] The workflow removes temp files on completion
 </success_criteria>

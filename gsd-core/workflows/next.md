@@ -1,18 +1,18 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Detect current project state and automatically advance to the next logical GSD workflow step.
-Reads project state to determine: discuss → plan → execute → verify → complete progression.
+Detect the current project state. Automatically advance to the next logical GSD workflow step.
+Read the project state to determine the progression: discuss → plan → execute → verify → complete.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
 
 <step name="detect_state">
-Read project state to determine current position:
+Read the project state to determine the current position:
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@opengsd/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @opengsd/gsd-core - it is either a different package or an @opengsd/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
@@ -28,7 +28,7 @@ Extract:
 - `current_phase` — which phase is active
 - `plan_of` / `plans_total` — plan execution progress
 - `progress` — overall percentage
-- `status` — active, paused, etc.
+- `status` — active, paused, or another status.
 
 If no `.planning/` directory exists:
 ```
@@ -38,14 +38,15 @@ Exit.
 </step>
 
 <step name="safety_gates">
-Run hard-stop checks before routing. Exit on first hit unless `--force` was passed.
+Before routing, run hard-stop checks. Unless the user passed `--force`, exit on the first hit.
 
-If `--force` flag was passed, skip all gates, Route 0, and the prior-phase completeness prompt.
+If the user passed the `--force` flag, skip all gates, Route 0, and the prior-phase completeness prompt.
 Print a one-line warning: `⚠ --force: skipping safety gates`
-Then proceed directly to `determine_next_action`. (Route 0 and `prior_phase_completeness` are NOT reached under `--force`.)
+Then proceed directly to `determine_next_action`.
+Under `--force`, the workflow does not reach Route 0 or `prior_phase_completeness`.
 
 **Gate 1: Unresolved checkpoint**
-Check if `.planning/.continue-here.md` exists:
+Determine whether `.planning/.continue-here.md` exists:
 ```bash
 [ -f .planning/.continue-here.md ]
 ```
@@ -62,7 +63,7 @@ Use `--force` to bypass this check.
 Exit (do not route).
 
 **Gate 2: Error state**
-Check if STATE.md contains `status: error` or `status: failed`:
+Determine whether STATE.md contains `status: error` or `status: failed`:
 If found:
 ```
 ⛔ Hard stop: Project in error state
@@ -74,7 +75,7 @@ Use `--force` to bypass this check.
 Exit.
 
 **Gate 3: Unchecked verification**
-Check if the current phase has a VERIFICATION.md with any `FAIL` items that don't have overrides:
+Determine whether the current phase has a VERIFICATION.md with any `FAIL` items without overrides:
 If found:
 ```
 ⛔ Hard stop: Unchecked verification failures
@@ -89,15 +90,24 @@ After all three hard-stop gates pass, continue to `resume_incomplete_phase`.
 </step>
 
 <step name="resume_incomplete_phase">
-**Hard invariant: any phase with PLAN.md files lacking matching SUMMARY.md files must be completed before `/gsd:progress --next` routes to any forward action.**
+**Hard invariant:** A phase can have PLAN.md files without matching SUMMARY.md files. The phase must be completed before `/gsd:progress --next` routes to any forward action.
 
-This catches the common failure mode where a session died mid-execution (hang, token exhaustion, API connection drop) and STATE.md's `current_phase` got advanced past the phase that actually has unfinished work. Without this gate, `/gsd:progress --next` would route by `current_phase` and silently skip the partially-executed phase.
+This gate catches a common failure. A session can stop during execution because of a hang, token exhaustion, or an API connection drop. STATE.md's `current_phase` can advance past the phase with unfinished work.
 
-**Skip if `--no-resume` was passed** (fall through to `prior_phase_completeness`). (`--force` already bypassed all gates and Route 0 at `safety_gates` — it never reaches this step.)
+Without this gate, `/gsd:progress --next` would route by `current_phase` and silently skip the partially executed phase.
 
-**Why Route 0 runs here (after Gates 1-3, before the prior-phase defer prompt):** This step is a hard invariant independent of `current_phase`'s value — it must run before any routing rule that reads `current_phase`. Gates 1-3 are cheap repo/state validity checks that must always run — skipping them on the resume path would risk advancing into a broken-state project. The prior-phase completeness-scan DEFER PROMPT, however, must NOT run in the default (no-flag) case when Route 0 is about to resume the phase automatically: that would force a double-decision (prompt first, then resume anyway), overriding the user's choice. Route 0 placed here means: default = resume silently (no defer prompt); `--no-resume` = skip Route 0 and fall through to the prior-phase defer prompt in `prior_phase_completeness`; `--force` = jump straight to `determine_next_action` at `safety_gates` (never reaches Route 0 or `prior_phase_completeness` at all).
+**If the user passed `--no-resume`, skip this step** and continue to `prior_phase_completeness`.
+At `safety_gates`, `--force` already bypassed all gates and Route 0. The workflow does not reach this step under `--force`.
 
-Scan ALL phases in ROADMAP order (lowest-numbered to highest) for incomplete-execution state. Use `gsd_run query roadmap.analyze` to get the phase list, then for each phase number `N` query `gsd_run query find-phase <N>` JSON and inspect its `plans` and `summaries` arrays. A phase is **incomplete-execution** when `plans.length > summaries.length` (at least one PLAN.md has no matching SUMMARY.md).
+**Why Route 0 runs here (after Gates 1-3, before the prior-phase defer prompt):** This hard invariant does not depend on the value of `current_phase`. It must run before any routing rule that reads `current_phase`. Gates 1-3 are low-cost checks of repo/state validity. They must always run. If the workflow skips them on the resume path, it risks advancing a project with a broken state.
+
+In the default case (no flag), Route 0 automatically resumes the phase. The prior-phase completeness-scan DEFER PROMPT must NOT run in this case. The prompt would force a double decision: prompt first, then resume anyway. This would override the user's choice.
+
+In this position, Route 0 resumes silently by default, without a defer prompt. `--no-resume` skips Route 0 and continues to the prior-phase defer prompt in `prior_phase_completeness`. At `safety_gates`, `--force` goes directly to `determine_next_action`. It never reaches Route 0 or `prior_phase_completeness`.
+
+Scan ALL phases in ROADMAP order, from lowest-numbered to highest, for incomplete execution. Use `gsd_run query roadmap.analyze` to get the phase list.
+
+For each phase number `N`, query `gsd_run query find-phase <N>` JSON. Inspect its `plans` and `summaries` arrays. A phase has **incomplete-execution** when `plans.length > summaries.length` (at least one PLAN.md has no matching SUMMARY.md).
 
 Stop at the first such phase. Record its phase number as `INCOMPLETE_PHASE`. This is the lowest-numbered phase that needs continued execution.
 
@@ -139,7 +149,7 @@ else
 fi
 ```
 
-**If `INCOMPLETE_PHASE` is non-empty:** route to `/gsd:execute-phase $INCOMPLETE_PHASE` and exit. Display a one-line notice before invoking:
+**If `INCOMPLETE_PHASE` is non-empty:** route to `/gsd:execute-phase $INCOMPLETE_PHASE` and exit. Before you invoke it, show a one-line notice:
 
 ```
 ▶ Resuming incomplete Phase ${INCOMPLETE_PHASE} (plans without summaries detected)
@@ -147,25 +157,26 @@ fi
   (use --no-resume to skip this check and defer via the prior-phase prompt)
 ```
 
-Then invoke via SlashCommand. Do not continue to subsequent steps.
+Then invoke it via SlashCommand. Do not continue to the next steps.
 
 **If `INCOMPLETE_PHASE` is empty:** continue to `prior_phase_completeness`.
 </step>
 
 <step name="prior_phase_completeness">
-**Prior-phase completeness scan (runs when `--no-resume` was passed and Route 0 was skipped, or when Route 0 found no incomplete-execution phases in the default case). NOT reached under `--force` — that flag jumps directly to `determine_next_action` at `safety_gates`.**
+**Prior-phase completeness scan:** This scan runs if the user passed `--no-resume` and skipped Route 0. It also runs if Route 0 found no incomplete-execution phases in the default case.
 
-**Prior-phase completeness scan:**
-Scan all phases that precede the current phase in ROADMAP.md order for incomplete work. For each prior phase number `N`, use `gsd_run query find-phase <N>` JSON (plans, summaries, incomplete_plans, etc.) to inspect that phase.
+Under `--force`, the workflow does NOT reach this scan. At `safety_gates`, that flag goes directly to `determine_next_action`.
+
+Scan all phases before the current phase in ROADMAP.md order for incomplete work. For each before phase number `N`, use `gsd_run query find-phase <N>` JSON to inspect that phase. The JSON includes plans, summaries, incomplete_plans, and other fields.
 
 Detect three categories of incomplete work:
-1. **Plans without summaries** — a PLAN.md exists in a prior phase directory but no matching SUMMARY.md exists (execution started but not completed).
-2. **Verification failures not overridden** — a prior phase has a VERIFICATION.md with `FAIL` items that have no override annotation.
-3. **CONTEXT.md without plans** — a prior phase directory has a CONTEXT.md but no PLAN.md files (discussion happened, planning never ran).
+1. **Plans without summaries** — a PLAN.md exists in a before phase directory, but no matching SUMMARY.md exists. Execution started but did not complete.
+2. **Verification failures not overridden** — a before phase has a VERIFICATION.md with `FAIL` items without an override annotation.
+3. **CONTEXT.md without plans** — a before phase directory has a CONTEXT.md but no PLAN.md files. Discussion happened, but planning never ran.
 
-If no incomplete prior work is found, continue to `determine_next_action` silently with no interruption.
+If you find no incomplete before work, continue to `determine_next_action` silently without interruption.
 
-If incomplete prior work is found, show a structured completeness report:
+If you find incomplete before work, show a structured completeness report:
 ```
 ⚠ Prior phase has incomplete work
 
@@ -188,7 +199,7 @@ Choice [S]:
 **If the user chooses "Stop" (S or Enter/default):** Exit without routing.
 
 **If the user chooses "Continue and defer" (C):**
-1. For each incomplete item, create a backlog entry in `ROADMAP.md` under `## Backlog` using the existing `999.x` numbering scheme:
+1. For each incomplete item, create a backlog entry in `ROADMAP.md` under `## Backlog`. Use the existing `999.x` numbering scheme:
 ```markdown
 ### Phase 999.{N}: Follow-up — Phase {src} incomplete plans (BACKLOG)
 
@@ -209,7 +220,7 @@ gsd_run query commit "docs: defer incomplete Phase {src} items to backlog" \
 </step>
 
 <step name="spike_sketch_notice">
-Check for pending spike/sketch work and surface a notice (does not change routing):
+Examine pending spike/sketch work and show a notice. This does not change routing:
 
 ```bash
 # Check for pending spikes (verdict: PENDING in any README)
@@ -219,7 +230,7 @@ PENDING_SPIKES=$(grep -rl 'verdict: PENDING' .planning/spikes/*/README.md 2>/dev
 PENDING_SKETCHES=$(grep -rl 'winner: null' .planning/sketches/*/README.md 2>/dev/null | wc -l | tr -d ' ')
 ```
 
-If either count is > 0, display before routing:
+If either count is > 0, show this notice before routing:
 ```
 ⚠ Pending exploratory work:
   {PENDING_SPIKES} spike(s) with unresolved verdicts in .planning/spikes/
@@ -228,11 +239,11 @@ If either count is > 0, display before routing:
   Resume with `/gsd:spike` or `/gsd:sketch`, or continue with phase work below.
 ```
 
-Only show lines for non-zero counts. If both are 0, skip this notice entirely.
+Show lines only for non-zero counts. If both are 0, skip this notice entirely.
 </step>
 
 <step name="determine_next_action">
-Apply routing rules based on state:
+Apply routing rules based on the state:
 
 **Route 1: No phases exist yet → discuss**
 If ROADMAP has phases but no phase directories exist on disk:
@@ -268,7 +279,7 @@ If STATE.md shows paused_at:
 </step>
 
 <step name="show_and_execute">
-Parse the arguments passed to this workflow to detect the plan strategy and build convergence pass-through args:
+Parse the arguments passed to this workflow to detect the plan strategy. Build convergence pass-through args:
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -315,7 +326,7 @@ if [ "$PLAN_STRATEGY" = "converge" ]; then
 fi
 ```
 
-Display the determination:
+Show the determination:
 
 ```
 ## GSD Next
@@ -328,16 +339,18 @@ Display the determination:
 ```
 
 Then immediately invoke the determined command via SlashCommand.
-Do not ask for confirmation — the whole point of `/gsd:progress --next` is zero-friction advancement.
+Do not ask for confirmation. The purpose of `/gsd:progress --next` is advancement without interruption.
 
-**Route 3 convergence override:** When the routing decision is Route 3 (plan) and `PLAN_STRATEGY=converge`, invoke `/gsd:plan-review-convergence <current-phase> ${CONVERGENCE_ARGS}` instead of `/gsd:plan-phase <current-phase>`.
+**Route 3 convergence override:** If the routing decision is Route 3 (plan) and `PLAN_STRATEGY=converge`, invoke `/gsd:plan-review-convergence <current-phase> ${CONVERGENCE_ARGS}` instead of `/gsd:plan-phase <current-phase>`.
 
-**If `--auto` was passed:** after the determined command completes, automatically re-invoke `/gsd:progress --next --auto` (forwarding `--converge`/`--cross-ai` and any reviewer flags if they were originally passed) to continue chaining to the next step. Repeat until one of:
+**If the user passed `--auto`:** after the determined command completes, automatically re-invoke `/gsd:progress --next --auto`. Forward `--converge`/`--cross-ai` and any reviewer flags that the user originally passed.
+
+This continues chaining to the next step. Repeat until one of:
 - A milestone completes (`/gsd:complete-milestone` is reached)
-- A blocking decision is required (safety gate triggers, prior-phase completeness prompt, user input needed)
+- A blocking decision is needed (safety gate triggers, prior-phase completeness prompt, user input needed)
 - An error or paused state is detected
 
-When stopping due to a blocker, display:
+When a blocker stops the chain, show:
 ```
 ⛔ Auto-chain stopped: [reason — e.g. safety gate, blocking decision required]
 
@@ -348,21 +361,21 @@ Resume with: `/gsd:progress --next --auto` once resolved.
 </process>
 
 <success_criteria>
-- [ ] Project state correctly detected
-- [ ] Gates 1-3 (repo/state validity) run first — always, even on the resume path
-- [ ] Route 0 (resume_incomplete_phase) runs AFTER Gates 1-3 and BEFORE the prior-phase defer prompt — no double-decision in the default (no-flag) case
-- [ ] Default (no flag): Route 0 resumes incomplete phase silently, exits — user never sees the prior-phase defer prompt
-- [ ] `--no-resume`: Route 0 skipped, prior_phase_completeness defer prompt runs as before
-- [ ] `--force`: everything skipped (Gates, Route 0, prior_phase_completeness) → straight to `determine_next_action`
-- [ ] Scan uses `gsd_run` (canonical resolver form); errors are surfaced rather than suppressed
-- [ ] A `roadmap.analyze` result whose `scope` is not `complete` is treated as scan-failed (warn + fall through), never as a clean empty scan (#3184/#3165)
-- [ ] Predicate is plans-without-summaries (`plans.length > summaries.length`) — consistent with `determine_next_action` Route 4
-- [ ] Next action correctly determined from routing rules
-- [ ] Command invoked immediately without user confirmation
-- [ ] Clear status shown before invoking
-- [ ] `--converge` routes Route 3 planning through `gsd-plan-review-convergence`
-- [ ] `--cross-ai` is accepted as an alias for `--converge`
-- [ ] `--converge` fails fast with enable instructions when `workflow.plan_review_convergence=false`
-- [ ] `--converge` forwards reviewer selector flags and `--max-cycles N`
-- [ ] Default planning remains `gsd-plan-phase` when convergence is not requested
+- [ ] The workflow correctly detects the project state.
+- [ ] Gates 1-3 (repo/state validity) always run first, even on the resume path.
+- [ ] Route 0 (resume_incomplete_phase) runs AFTER Gates 1-3 and BEFORE the prior-phase defer prompt. The default case (no flag) has no double decision.
+- [ ] Default (no flag): Route 0 silently resumes the incomplete phase and exits. The user never sees the prior-phase defer prompt.
+- [ ] `--no-resume`: The workflow skips Route 0. The prior_phase_completeness defer prompt runs as before.
+- [ ] `--force`: The workflow skips everything (Gates, Route 0, prior_phase_completeness) and goes directly to `determine_next_action`.
+- [ ] The scan uses `gsd_run` (canonical resolver form). The scan shows errors instead of suppressing them.
+- [ ] If a `roadmap.analyze` result has a `scope` other than `complete`, the workflow treats the scan as failed (warn + fall through). It never treats the result as a clean empty scan (#3184/#3165).
+- [ ] The predicate is plans-without-summaries (`plans.length > summaries.length`). It is consistent with `determine_next_action` Route 4.
+- [ ] The workflow correctly determines the next action from routing rules.
+- [ ] The workflow immediately invokes the command without user confirmation.
+- [ ] The workflow shows clear status before it invokes the command.
+- [ ] `--converge` routes Route 3 planning through `gsd-plan-review-convergence`.
+- [ ] The workflow accepts `--cross-ai` as an alias for `--converge`.
+- [ ] If `workflow.plan_review_convergence=false`, `--converge` fails fast with enable instructions.
+- [ ] `--converge` forwards reviewer selector flags and `--max-cycles N`.
+- [ ] If the user does not request convergence, default planning remains `gsd-plan-phase`.
 </success_criteria>

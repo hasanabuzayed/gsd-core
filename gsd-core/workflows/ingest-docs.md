@@ -1,17 +1,17 @@
 # Ingest Docs Workflow
 
-Scan a repo for mixed planning documents (ADR, PRD, SPEC, DOC), synthesize them into a consolidated context, and bootstrap or merge into `.planning/`.
+Scan a repo for mixed planning documents (ADR, PRD, SPEC, DOC). Synthesize them into a consolidated context. Create or merge the context into `.planning/`.
 
 - `[path]` — optional target directory to scan (defaults to repo root)
 - `--mode new|merge` — override auto-detect (defaults: `new` if `.planning/` absent, `merge` if present)
-- `--manifest <file>` — YAML file listing `{path, type, precedence?}` per doc; overrides heuristic classification
-- `--resolve auto|interactive` — conflict resolution (v1: only `auto` is supported; `interactive` is reserved)
+- `--manifest <file>` — YAML file listing `{path, type, precedence?}` per doc. Overrides heuristic classification
+- `--resolve auto|interactive` — conflict resolution (v1: only `auto` is supported. `interactive` is reserved)
 
 ---
 
 <step name="banner">
 
-Display the stage banner:
+Show the stage banner:
 
 ```
 ### GSD ► INGEST DOCS
@@ -26,9 +26,9 @@ Parse `$ARGUMENTS`:
 - First positional token (if not a flag) → `SCAN_PATH` (default: `.`)
 - `--mode new|merge` → `MODE` (default: auto-detect)
 - `--manifest <file>` → `MANIFEST_PATH` (optional)
-- `--resolve auto|interactive` → `RESOLVE_MODE` (default: `auto`; reject `interactive` in v1 with message "interactive resolution is planned for a future release")
+- `--resolve auto|interactive` → `RESOLVE_MODE` (default: `auto`. Reject `interactive` in v1 with message "interactive resolution is planned for a future release")
 
-**Validate paths:**
+**Make sure that the paths are valid:**
 
 ```bash
 case "{SCAN_PATH}" in *..*) echo "SECURITY_ERROR: path contains traversal sequence"; exit 1 ;; esac
@@ -39,9 +39,11 @@ if [ -n "{MANIFEST_PATH}" ]; then
 fi
 ```
 
-**Containment (required):** After resolving `SCAN_PATH` and `MANIFEST_PATH` relative to the repo root, canonicalize each with `realpath` (or platform equivalent) and assert the result is under `realpath("$REPO_ROOT")`. Reject absolute paths outside the repo (e.g. `/tmp`, `C:\Windows`) even when they do not contain `..`.
+**Containment (need):** Resolve `SCAN_PATH` and `MANIFEST_PATH` relative to the repo root. Canonicalize each path with `realpath` or a platform equivalent. Make sure that each result is under `realpath("$REPO_ROOT")`.
 
-If `PATH_NOT_FOUND` or `MANIFEST_NOT_FOUND`: display error and exit.
+Even when absolute paths outside the repo do not contain `..`, reject them. Examples include `/tmp` and `C:\Windows`.
+
+If `PATH_NOT_FOUND` or `MANIFEST_NOT_FOUND` occurs, show the error. Exit.
 
 </step>
 
@@ -59,21 +61,25 @@ SYNTHESIZER_MODEL=$(gsd_run query resolve-model gsd-doc-synthesizer --raw)
 ROADMAPPER_MODEL=$(gsd_run query resolve-model gsd-roadmapper --raw)
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** Show all user-facing output of this workflow in `{response_language}`. This MUST include narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Parse `project_exists`, `planning_exists`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path` from INIT.
 
-**Absolute path fields (#2376):** INIT also carries `requirements_path`, `roadmap_path`, `state_path`, `intel_dir`, and `conflicts_path` — all anchored on `project_root`, not the orchestrator's own cwd. Use these (not bare `.planning/...` literals) whenever building `<required_reading>`/output paths for a spawned subagent, since that subagent's own cwd may differ from the orchestrator's.
+**Absolute path fields (#2376):** INIT also carries `requirements_path`, `roadmap_path`, `state_path`, `intel_dir`, and `conflicts_path`. All use `project_root` as their base, not the orchestrator's own cwd. A spawned subagent's own cwd may differ from the orchestrator's.
+
+When you build `<required_reading>`/output paths for a spawned subagent, use these fields, not bare `.planning/...` literals.
 
 **Auto-detect MODE** if not set:
 - `planning_exists: true` → `MODE=merge`
 - `planning_exists: false` → `MODE=new`
 
-If user passed `--mode new` but `.planning/` already exists: display warning and require explicit confirm via `AskUserQuestion` (approve-revise-abort from `gsd-core/references/gate-prompts.md`) before overwriting.
+If the user passed `--mode new` but `.planning/` already exists, show a warning. Before you overwrite, need explicit confirmation via `AskUserQuestion` (approve-revise-abort from `gsd-core/references/gate-prompts.md`).
 
 Git initialisation (Bug #3491 — never create a nested `.git` inside an existing worktree):
 
-- If `has_git: true` and `in_nested_subdir: true`: do NOT run `git init`. Surface a warning that planning files will be tracked by the outer repo at `git_worktree_root`.
+- If `has_git: true` and `in_nested_subdir: true`: Do NOT run `git init`. Show a warning that the outer repo at `git_worktree_root` will track the planning files.
 - If `has_git: true` and `in_nested_subdir: false`: already at a worktree root, skip `git init`.
 - If `has_git: false` and `MODE=new`: initialize git:
 
@@ -88,7 +94,7 @@ git init
 - `/.trae/` → `RUNTIME=trae`
 - else → `RUNTIME=claude`
 
-Fall back to env vars (`CODEX_HOME`, `ANTIGRAVITY_CONFIG_DIR`, `OPENCODE_CONFIG_DIR`, `TRAE_CONFIG_DIR`) if execution_context is unavailable.
+If execution_context is unavailable, use env vars (`CODEX_HOME`, `ANTIGRAVITY_CONFIG_DIR`, `OPENCODE_CONFIG_DIR`, `TRAE_CONFIG_DIR`).
 
 </step>
 
@@ -109,7 +115,7 @@ docs:
     type: PRD
 ```
 
-Each entry provides `path` (required, relative to repo root) + `type` (required, one of ADR|PRD|SPEC|DOC) + `precedence` (optional integer).
+Each entry provides `path` (need, relative to repo root) + `type` (need, one of ADR|PRD|SPEC|DOC) + `precedence` (optional integer).
 
 **2. Directory conventions** (skipped when manifest is provided):
 
@@ -127,11 +133,11 @@ find {SCAN_PATH} -type f \( -path '*/spec/*' -o -path '*/specs/*' -o -path '*/rf
 find {SCAN_PATH} -type f -path '*/docs/*' -name '*.md' 2>/dev/null
 ```
 
-De-duplicate the union (a file matched by multiple patterns is one doc).
+Remove duplicates from the union. A file that matches multiple patterns is one doc.
 
-**3. Content heuristics** (run during classification, not here) — the classifier handles frontmatter `type:` and H1 inspection for docs that didn't match a convention.
+**3. Content heuristics** (run during classification, not here) — the classifier handles frontmatter `type:` and H1 inspection for docs that did not match a convention.
 
-**Cap:** hard limit of 50 docs per invocation (documented v1 constraint). If the discovered set exceeds 50:
+**Cap:** The hard limit is 50 docs per invocation (documented v1 constraint). If the discovered set exceeds 50:
 
 ```
 GSD > Discovered {N} docs, which exceeds the v1 cap of 50.
@@ -141,7 +147,7 @@ GSD > Discovered {N} docs, which exceeds the v1 cap of 50.
 
 Exit without proceeding.
 
-**Display discovered set** and request approval (see `gsd-core/references/gate-prompts.md` — `yes-no-pick` pattern works; or `approve-revise-abort`):
+**Show the discovered set** and request approval. See `gsd-core/references/gate-prompts.md`. The `yes-no-pick` and `approve-revise-abort` patterns work:
 
 ```
 Discovered {N} documents:
@@ -153,7 +159,7 @@ Discovered {N} documents:
   ...
 ```
 
-**Text mode:** apply the same `--text`/`text_mode` rule as other workflows — replace `AskUserQuestion` with a numbered list.
+**Text mode:** Apply the same `--text`/`text_mode` rule as other workflows. Replace `AskUserQuestion` with a numbered list.
 
 Use `AskUserQuestion` (approve-revise-abort):
 - question: "Proceed with classification of these {N} documents?"
@@ -173,32 +179,38 @@ Create staging directory:
 mkdir -p .planning/intel/classifications/
 ```
 
-For each discovered doc, spawn `gsd-doc-classifier` in parallel. In Claude Code, issue all Task calls in a single message with multiple tool uses so the harness runs them concurrently. For Copilot / sequential runtimes, fall back to sequential dispatch.
+For each discovered doc, spawn `gsd-doc-classifier` in parallel. In Claude Code, issue all Task calls in a single message with multiple tool uses. The harness runs them concurrently.
+
+For Copilot / sequential runtimes, use sequential dispatch.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`CLASSIFIER_MODEL`, `SYNTHESIZER_MODEL`, `ROADMAPPER_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value (`CLASSIFIER_MODEL`, `SYNTHESIZER_MODEL`, `ROADMAPPER_MODEL`) is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes.
+>
+> If you omit the parameter, the subagent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 Per-spawn prompt fields:
 - `FILEPATH` — absolute path to the doc
-- `OUTPUT_DIR` — `{intel_dir}/classifications` (absolute — from `init ingest-docs`; #2376: a spawned classifier's own cwd may differ from the orchestrator's)
+- `OUTPUT_DIR` — `{intel_dir}/classifications` (absolute — from `init ingest-docs`. #2376: a spawned classifier's own cwd may differ from the orchestrator's)
 - `MANIFEST_TYPE` — the type from the manifest if present, else omit
 - `MANIFEST_PRECEDENCE` — the precedence integer from the manifest if present, else omit
 - `<required_reading>` — `agents/gsd-doc-classifier.md` (the agent definition itself)
 
-**Model on every classifier spawn (#3602):** `model="{CLASSIFIER_MODEL}"` is a parameter of each Task/Agent call — not a prompt field, never folded into the prompt text — so `dynamic_routing`/`model_profile` tiers apply instead of the caller's session model. Omit the parameter per the rule above when the value is `"inherit"` or empty.
+**Model on every classifier spawn (#3602):** Use `model="{CLASSIFIER_MODEL}"` as a parameter of each Task/Agent call. Do not put it in a prompt field or in the prompt text. This applies `dynamic_routing`/`model_profile` tiers instead of the caller's session model.
 
-Collect the one-line confirmations from each classifier. If any classifier errors out, surface the error and abort without touching `.planning/` further.
+If the value is `"inherit"` or empty, omit the parameter as the rule above specifies.
+
+Collect the one-line confirmations from each classifier. If any classifier reports an error, show the error. Abort without further changes to `.planning/`.
 
 </step>
 
 <step name="synthesize">
 
-Spawn `gsd-doc-synthesizer` once (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
+Spawn `gsd-doc-synthesizer` once (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze):
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. On a built-in-only runtime (kimi-code — three built-ins only), resolve the role before dispatch via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role returns unchanged. On kimi-code the role maps to `coder`/`explore`/`plan` by role-suffix. In either case, the persona uses `${AGENT_SKILLS_<ROLE>}` (Phase 3). See @gsd-core/references/runtime-aware-dispatch.md.
 
 ```
 Agent({
@@ -220,7 +232,7 @@ Agent({
 })
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read or synthesize any classified documents independently while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately. Do not read or synthesize any classified documents independently while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
 The synthesizer writes:
 - `.planning/intel/decisions.md`, `.planning/intel/requirements.md`, `.planning/intel/constraints.md`, `.planning/intel/context.md`
@@ -231,23 +243,27 @@ The synthesizer writes:
 
 <step name="conflict_gate">
 
-Read `.planning/INGEST-CONFLICTS.md`. Count entries in each bucket (the synthesizer always writes the three-bucket header; parse the `### BLOCKERS ({N})`, `### WARNINGS ({N})`, `### INFO ({N})` lines).
+Read `.planning/INGEST-CONFLICTS.md`. Count entries in each bucket. The synthesizer always writes the three-bucket header.
+
+Parse the `### BLOCKERS ({N})`, `### WARNINGS ({N})`, `### INFO ({N})` lines.
 
 Apply the safety semantics from `gsd-core/references/doc-conflict-engine.md`. Operation noun: `ingest`.
 
 **If BLOCKERS > 0:**
 
-Render the report to the user, then display:
+Show the report to the user. Then show:
 
 ```
 GSD > BLOCKED: {N} blockers must be resolved before ingest can proceed.
 ```
 
-Exit WITHOUT writing PROJECT.md, REQUIREMENTS.md, ROADMAP.md, or STATE.md. The staging intel files remain for inspection. The safety gate holds — no destination files are written when blockers exist.
+Exit WITHOUT writing PROJECT.md, REQUIREMENTS.md, ROADMAP.md, or STATE.md. The staging intel files remain for inspection. The safety gate holds.
+
+When blockers exist, the workflow writes no destination files.
 
 **If WARNINGS > 0 and BLOCKERS = 0:**
 
-Render the report, then ask via AskUserQuestion (approve-revise-abort):
+Show the report. Then ask via AskUserQuestion (approve-revise-abort):
 - question: "Review the competing variants above. Resolve manually and proceed, or abort?"
 - header: "Approve?"
 - options: Approve | Abort
@@ -256,7 +272,9 @@ On Abort: exit cleanly with "Ingest cancelled. Staged intel preserved at `.plann
 
 **If BLOCKERS = 0 and WARNINGS = 0:**
 
-Optionally display `GSD > No conflicts. Auto-resolved: {N}.` Absence of conflicts is not authorization to write: proceed to the routing gate for the active mode — new mode's routing gate (next step) or merge mode's merge-diff approve-revise-abort gate — which decides whether destination files are created.
+You can show `GSD > No conflicts. Auto-resolved: {N}.` The absence of conflicts is not authorization to write. Proceed to the routing gate for the active mode.
+
+For new mode, use the routing gate in the next step. For merge mode, use the merge-diff approve-revise-abort gate. The gate decides whether to create destination files.
 
 </step>
 
@@ -264,9 +282,11 @@ Optionally display `GSD > No conflicts. Auto-resolved: {N}.` Absence of conflict
 
 **Applies only when MODE=new.**
 
-Audit PROJECT.md field requirements that `gsd-roadmapper` expects. For fields derivable from `.planning/intel/SYNTHESIS.md` (project scope, goals/non-goals, constraints, locked decisions), synthesize from the intel. For fields NOT derivable (project name, developer-facing success metric, target runtime), prompt via `AskUserQuestion` one at a time — minimal question set, no interrogation.
+Examine the PROJECT.md field requirements that `gsd-roadmapper` expects. For fields derivable from `.planning/intel/SYNTHESIS.md`, synthesize them from the intel. These fields include project scope, goals/non-goals, constraints, and locked decisions.
 
-**Routing gate (#3827): approval to classify documents is not approval to write the planning scaffold.** Before delegating, display the exact destinations and require an explicit choice:
+For fields NOT derivable, prompt via `AskUserQuestion` one at a time. These fields include project name, developer-facing success metric, and target runtime. Use a minimal question set, not an interrogation.
+
+**Routing gate (#3827): approval to classify documents is not approval to write the planning scaffold.** Before delegation, show the exact destinations. Need an explicit choice:
 
 ```
 Routing — create the planning setup now?
@@ -286,13 +306,15 @@ Use `AskUserQuestion`:
 
 On **Create planning setup**: continue to the `gsd-roadmapper` delegation below.
 
-On **Keep synthesized intel only**: analysis-only ingest. Do NOT invoke `gsd-roadmapper`; write no destination files. The staged intel under `.planning/intel/` is preserved and committed by `finalize` (substitute its actual file set — no PROJECT.md/REQUIREMENTS.md/ROADMAP.md/STATE.md lines). Display the completion banner with mode `new (intel only)`.
+On **Keep synthesized intel only**: use analysis-only ingest. Do NOT invoke `gsd-roadmapper`. Write no destination files.
+
+`finalize` preserves and commits the staged intel under `.planning/intel/`. Substitute its actual file set, with no PROJECT.md/REQUIREMENTS.md/ROADMAP.md/STATE.md lines. Show the completion banner with mode `new (intel only)`.
 
 On **Abort**: exit cleanly with "Ingest cancelled. Staged intel preserved at `.planning/intel/`."
 
-Any other response (freeform/"Other"): re-ask once; if still ambiguous, treat as Abort. Never infer Create from an ambiguous answer.
+For any other response (freeform/"Other"), ask again once. If the response is still ambiguous, treat it as Abort. Never infer Create from an ambiguous answer.
 
-Delegate to `gsd-roadmapper` (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
+Delegate to `gsd-roadmapper` (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze):
 
 ```
 Agent({
@@ -315,24 +337,24 @@ Agent({
 })
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more intel files, write planning artifacts, or create ROADMAP.md independently while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately. While the subagent is active, do not independently read more intel files, write planning artifacts, or create ROADMAP.md. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
 </step>
 
 <step name="route_merge_mode">
 
-**Applies only when MODE=merge.**
+**This step applies only when MODE=merge.**
 
 Load existing `.planning/ROADMAP.md`, `.planning/PROJECT.md`, `.planning/REQUIREMENTS.md`, all `CONTEXT.md` files under `.planning/phases/`.
 
-The synthesizer has already hard-blocked on any LOCKED-in-ingest vs LOCKED-in-existing contradiction; if we reach this step, no such blockers remain.
+The synthesizer already hard-blocked on any LOCKED-in-ingest vs LOCKED-in-existing contradiction. If you reach this step, no such blockers remain.
 
 Plan the merge:
 - **New requirements** from synthesized `.planning/intel/requirements.md` that do not overlap existing REQUIREMENTS.md entries → append to REQUIREMENTS.md
 - **New decisions** from synthesized `.planning/intel/decisions.md` that do not overlap existing CONTEXT.md `<decisions>` blocks → write to a new phase's CONTEXT.md or append to the next milestone's requirements
-- **New scope** → derive phase additions following the `new-milestone.md` pattern; append phases to `.planning/ROADMAP.md`
+- **New scope** → derive phase additions following the `new-milestone.md` pattern. Append phases to `.planning/ROADMAP.md`
 
-Preview the merge diff to the user and gate via approve-revise-abort before writing.
+Show the merge diff to the user. Before you write, use the approve-revise-abort gate.
 
 </step>
 
@@ -351,7 +373,7 @@ gsd_run commit \
   .planning/INGEST-CONFLICTS.md
 ```
 
-(For merge mode, substitute the actual set of modified files.)
+(For merge mode, substitute the actual set of change files.)
 
 Display completion:
 
@@ -364,7 +386,7 @@ Show:
 - Docs ingested (count + type breakdown)
 - Decisions locked, requirements created, constraints captured
 - Conflict report path (`.planning/INGEST-CONFLICTS.md`)
-- Next step: `/gsd:plan-phase 1` (new) or `/gsd:plan-phase N` (merge, pointing at the first newly-added phase); for intel-only runs there is no roadmap yet — point at `/gsd:new-project` (or a later re-run with `--mode merge` once scaffold files exist), never `/gsd:plan-phase`
+- Next step: `/gsd:plan-phase 1` (new) or `/gsd:plan-phase N` (merge, pointing at the first newly-added phase). For intel-only runs there is no roadmap yet — point at `/gsd:new-project` (or a later re-run with `--mode merge` once scaffold files exist), never `/gsd:plan-phase`
 
 </step>
 
@@ -380,4 +402,4 @@ Do NOT:
 - Merge competing PRD acceptance variants into a combined criterion — preserve all variants for user resolution
 - Bypass the discovery approval gate — users must see the classified doc list before classifiers spawn
 - Skip path validation on `SCAN_PATH` or `MANIFEST_PATH`
-- Implement `--resolve interactive` in this v1 — the flag is reserved; reject with a future-release message
+- Implement `--resolve interactive` in this v1 — the flag is reserved. Reject with a future-release message
