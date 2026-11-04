@@ -6,7 +6,9 @@ produces: CONTEXT.md
 consumes:
 -->
 <purpose>
-Extract implementation decisions that downstream agents need. Analyze the phase to identify gray areas, let the user choose what to discuss, then deep-dive each selected area until satisfied.
+Capture implementation decisions that downstream agents need. Analyze the phase to identify gray areas.
+
+Let the user choose what to discuss. Discuss each selected area until the user is satisfied.
 
 You are a thinking partner, not an interviewer. The user is the visionary — you are the builder. Your job is to capture decisions that will guide research and planning, not to figure out implementation yourself.
 </purpose>
@@ -19,7 +21,7 @@ You are a thinking partner, not an interviewer. The user is the visionary — yo
 
 <progressive_disclosure>
 **Per-mode bodies, templates, and the advisor flow are lazy-loaded** to keep
-this file under the discuss-phase byte budget (32000 bytes, #717; mirrors the agent size-budget convention). Read only the files needed for the current invocation:
+this file under the discuss-phase byte budget (32000 bytes, #717. Mirrors the agent size-budget convention). Read only the files needed for the current invocation:
 
 | When | Read |
 |---|---|
@@ -36,7 +38,7 @@ this file under the discuss-phase byte budget (32000 bytes, #717; mirrors the ag
 | in `git_commit` step | `workflows/discuss-phase/templates/discussion-log.md` |
 | writing checkpoints | `workflows/discuss-phase/templates/checkpoint.json` |
 
-Do not Read mode files unless the corresponding flag/condition is set.
+If the corresponding flag/condition is not set, do not Read mode files.
 </progressive_disclosure>
 
 <downstream_awareness>
@@ -46,27 +48,27 @@ Do not Read mode files unless the corresponding flag/condition is set.
 2. **gsd-planner** — Reads CONTEXT.md to know WHAT decisions are locked
 
 **Your job:** Capture decisions clearly enough that downstream agents can act on them without asking the user again.
-**Not your job:** Figure out HOW to implement. That's what research and planning do with the decisions you capture.
+**Not your job:** Figure out HOW to implement. That is what research and planning do with the decisions you capture.
 </downstream_awareness>
 
 <philosophy>
 **User = founder/visionary. Claude = builder.**
 
-The user knows: how they imagine it working, what it should look/feel like, what's essential vs nice-to-have, specific behaviors or references they have in mind.
+The user knows how they imagine it working and what it should look/feel like. They know what is essential vs nice-to-have and the specific behaviors or references they have in mind.
 
-The user doesn't know (and shouldn't be asked): codebase patterns (researcher reads the code), technical risks (researcher identifies these), implementation approach (planner figures this out), success metrics (inferred from the work).
+The user does not know codebase patterns (researcher reads the code) or technical risks (researcher identifies these). The user does not know the implementation approach (planner figures this out) or success metrics (inferred from the work). The user should not be asked about these.
 
 Ask about vision and implementation choices. Capture decisions for downstream agents.
 </philosophy>
 
 <scope_guardrail>
-**CRITICAL: No scope creep.** The phase boundary comes from ROADMAP.md and is FIXED. Discussion clarifies HOW to implement what's scoped, never WHETHER to add new capabilities.
+**CRITICAL: No scope creep.** The phase boundary comes from ROADMAP.md and is FIXED. Discussion clarifies HOW to implement what is scoped, never WHETHER to add new capabilities.
 
 **Allowed (clarifying ambiguity):** "How should posts be displayed?" (layout), "What happens on empty state?" (within the feature).
 
 **Not allowed (scope creep):** "Should we also add comments?" / "What about search/filtering?" / "Maybe include bookmarking?" — those are new capabilities and belong in their own phase.
 
-**Heuristic:** Does this clarify how we implement what's already in the phase, or does it add a new capability that could be its own phase?
+**Heuristic:** Does this clarify how we implement what is already in the phase? Or does it add a new capability that could be its own phase?
 
 **When user suggests scope creep:**
 ```
@@ -76,17 +78,17 @@ Want me to note it for the roadmap backlog?
 For now, let's focus on [phase domain]."
 ```
 
-Capture the idea in a "Deferred Ideas" section. Don't lose it, don't act on it.
+Capture the idea in a "Deferred Ideas" section. Do not lose it. Do not act on it.
 </scope_guardrail>
 
 <gray_area_identification>
-Gray areas are **implementation decisions the user cares about** — things that could go multiple ways and would change the result.
+Gray areas are **implementation decisions the user cares about**. Different choices could change the result.
 
 1. Read the phase goal from ROADMAP.md
 2. Understand the domain — something users SEE / CALL / RUN / READ / something being ORGANIZED — and let that drive what kinds of decisions matter
 3. Generate phase-specific gray areas (not generic categories)
 
-**Don't use generic category labels** (UI, UX, Behavior). Generate specific gray areas. Examples:
+**Do not use generic category labels** (UI, UX, Behavior). Generate specific gray areas. Examples:
 
 ```
 Phase: "User authentication"     → Session handling, Error responses, Multi-device policy, Recovery flow
@@ -95,14 +97,14 @@ Phase: "CLI for database backups"→ Output format, Flag design, Progress report
 Phase: "API documentation"       → Structure/navigation, Code examples depth, Versioning approach, Interactive elements
 ```
 
-**Claude handles these (don't ask):** technical implementation details, architecture patterns, performance optimization, scope (roadmap defines this).
+**Claude handles these (do not ask):** technical implementation details, architecture patterns, performance optimization, scope (roadmap defines this).
 </gray_area_identification>
 
 <answer_validation>
 **IMPORTANT: Answer validation** — After every AskUserQuestion call, if the response is empty/whitespace-only:
 
 - **"Other" with empty text** (the user wants to type freeform): output `"What would you like to discuss?"`, STOP generating, wait for the user's next message, then reflect it back and continue. Do NOT retry AskUserQuestion or call any tools.
-- **Any other empty response:** retry once with the same parameters; if still empty, present options as a plain-text numbered list. Never proceed with empty input.
+- **Any other empty response:** retry once with the same parameters. If still empty, present options as a plain-text numbered list. Never proceed with empty input.
 
 **Text mode** (`--text` or `workflow.text_mode: true`): follow `workflows/discuss-phase/modes/text.md` — do not use AskUserQuestion at all.
 </answer_validation>
@@ -112,7 +114,7 @@ Phase: "API documentation"       → Structure/navigation, Code examples depth, 
 **Express path available:** If you already have a PRD or acceptance criteria document, use `/gsd:plan-phase {phase} --prd path/to/prd.md` to skip this discussion and go straight to planning.
 
 <step name="initialize" priority="first">
-Phase number from argument (required).
+Phase number from argument (need).
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -127,7 +129,7 @@ AGENT_SKILLS_ADVISOR=$(gsd_run query agent-skills gsd-advisor-researcher ${GSD_W
 
 Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `has_verification`, `plan_count`, `roadmap_exists`, `planning_exists`, `has_spec`, `spec_path`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be presented in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
 
 **If `phase_found` is false:**
 ```
@@ -172,7 +174,7 @@ ls ${phase_dir}/.continue-here.md 2>/dev/null || true
 
 If `.continue-here.md` exists, parse its "Critical Anti-Patterns" table for rows with `severity` = `blocking`.
 
-**If one or more `blocking` anti-patterns are found:** the agent must demonstrate understanding of each by answering all three questions for each one:
+**If one or more `blocking` anti-patterns are found:** the agent must show understanding of each by answering all three questions for each one:
 1. **What is this anti-pattern?** — Describe it in your own words.
 2. **How did it manifest?** — Explain the specific failure that caused it to be recorded.
 3. **What structural mechanism (not acknowledgment) prevents it?** — Name the concrete step or enforcement mechanism that stops recurrence.
@@ -208,9 +210,9 @@ ls ${phase_dir}/*-CONTEXT.md 2>/dev/null || true
 
 **If `--auto`:** Auto-select "Update it" — load existing context and continue to `analyze_phase`. Log: `[auto] Context exists — updating with auto-selected decisions.`
 
-**Otherwise:** AskUserQuestion (header: "Context"; question: "Phase [X] already has context. What do you want to do?"; options: "Update it" / "View it" / "Skip"). Branch accordingly.
+**Otherwise:** AskUserQuestion (header: "Context". Question: "Phase [X] already has context. What do you want to do?". Options: "Update it" / "View it" / "Skip"). Branch accordingly.
 
-**If doesn't exist:**
+**If does not exist:**
 
 Check for an interrupted discussion checkpoint:
 ```bash
@@ -221,19 +223,19 @@ If a checkpoint file exists:
 
 **If `--auto`:** Auto-select "Resume" — load checkpoint and continue from last completed area.
 
-**Otherwise:** AskUserQuestion (header: "Resume"; question: "Found interrupted discussion checkpoint ({N} areas completed out of {M}). Resume from where you left off?"; options: "Resume" / "Start fresh"). On "Resume", parse the checkpoint JSON, load `decisions` into the internal accumulator, set `areas_completed` to skip those areas, continue to `present_gray_areas` with only the remaining areas. On "Start fresh", delete the checkpoint and continue.
+**Otherwise:** AskUserQuestion (header: "Resume". Question: "Found interrupted discussion checkpoint ({N} areas completed out of {M}). Resume from where you left off?". Options: "Resume" / "Start fresh"). On "Resume", parse the checkpoint JSON, load `decisions` into the internal accumulator, set `areas_completed` to skip those areas, continue to `present_gray_areas` with only the remaining areas. On "Start fresh", delete the checkpoint and continue.
 
 Check `has_plans` and `plan_count` from init. **If `has_plans` is true:**
 
 **If `--auto`:** Auto-select "Continue and replan after". Log: `[auto] Plans exist — continuing with context capture, will replan after.`
 
-**Otherwise:** AskUserQuestion (header: "Plans exist"; question: "Phase [X] already has {plan_count} plan(s) created without user context. Your decisions here won't affect existing plans unless you replan."; options: "Continue and replan after" / "View existing plans" / "Cancel"). Branch accordingly.
+**Otherwise:** AskUserQuestion (header: "Plans exist". Question: "Phase [X] already has {plan_count} plan(s) created without user context. Your decisions here will not affect existing plans unless you replan.". Options: "Continue and replan after" / "View existing plans" / "Cancel"). Branch accordingly.
 
 **If `has_plans` is false:** Continue to `load_prior_context`.
 </step>
 
 <step name="load_prior_context">
-Read project-level and prior phase context to avoid re-asking decided questions.
+Read project-level context and context from earlier phases. Do not ask decided questions again.
 
 ```bash
 cat .planning/PROJECT.md 2>/dev/null || true
@@ -241,7 +243,7 @@ cat .planning/REQUIREMENTS.md 2>/dev/null || true
 cat .planning/STATE.md 2>/dev/null || true
 ```
 
-Read at most **3** prior CONTEXT.md files (most recent 3 phases before current). If `.planning/DECISIONS-INDEX.md` exists, read that instead — it is a bounded rolling summary that supersedes per-phase reads.
+Read at most **3** before CONTEXT.md files (most recent 3 phases before current). If `.planning/DECISIONS-INDEX.md` exists, read that instead — it is a bounded rolling summary that supersedes per-phase reads.
 
 ```bash
 (find .planning/phases -name "*-CONTEXT.md" 2>/dev/null || true) | sort -r
@@ -257,15 +259,15 @@ RAW_SPIKES=$(ls .planning/spikes/MANIFEST.md 2>/dev/null)
 RAW_SKETCHES=$(ls .planning/sketches/MANIFEST.md 2>/dev/null)
 ```
 
-If findings skills exist, read SKILL.md and reference files; extract validated patterns, landmines, constraints, design decisions. Add them to `<prior_decisions>`.
+If findings skills exist, read SKILL.md and reference files. Extract validated patterns, landmines, constraints, design decisions. Add them to `<prior_decisions>`.
 
 If raw spikes/sketches exist but no findings skill, note: `⚠ Unpackaged spikes/sketches detected — run /gsd:spike --wrap-up or /gsd:sketch --wrap-up to make findings available.`
 
-Build internal `<prior_decisions>` with sections for Project-Level (from PROJECT.md / REQUIREMENTS.md), From Prior Phases (per-phase decisions), and From Spike/Sketch Findings (validated patterns, landmines, design decisions).
+Build internal `<prior_decisions>` with sections for Project-Level (from PROJECT.md / REQUIREMENTS.md), From Before Phases (per-phase decisions), and From Spike/Sketch Findings (validated patterns, landmines, design decisions).
 
-**Usage downstream:** `analyze_phase` skips already-decided gray areas; `present_gray_areas` annotates options ("You chose X in Phase 5"); `discuss_areas` pre-fills or flags conflicts.
+**Usage downstream:** `analyze_phase` skips already-decided gray areas. `present_gray_areas` annotates options ("You chose X in Phase 5"). `discuss_areas` pre-fills or flags conflicts.
 
-**If no prior context exists:** Continue without — expected for early phases.
+**If no before context exists:** Continue without — expected for early phases.
 </step>
 
 <step name="cross_reference_todos">
@@ -289,7 +291,7 @@ Lightweight scan of existing code to inform gray area identification (~10% conte
 
 Read `@~/.claude/gsd-core/references/scout-codebase.md` — it contains the phase-type→map selection table, single-read rule, no-maps fallback, and `<codebase_context>` output schema. Then execute:
 1. `ls .planning/codebase/*.md` to find existing maps
-2. Select 2–3 maps via the reference's table; or grep fallback if none exist
+2. Select 2–3 maps via the reference's table. Or grep fallback if none exist
 3. Build internal `<codebase_context>` per the reference's output schema
 </step>
 
@@ -312,7 +314,7 @@ Analyze the phase to identify gray areas. Use both `prior_decisions` and `codeba
 
    This list is MANDATORY in CONTEXT.md. Every ref must have a full relative path. If no external docs exist, note that explicitly.
 
-2. **Check prior decisions** — Scan `<prior_decisions>` for already-decided gray areas; mark them pre-answered.
+2. **Check before decisions** — Scan `<prior_decisions>` for already-decided gray areas. Mark them pre-answered.
 
 2b. **SPEC.md awareness** — If `spec_loaded = true`: `<locked_requirements>` are pre-answered (Goal, Boundaries, Constraints, Acceptance Criteria). Do NOT generate gray areas about WHAT to build or WHY. Only generate gray areas about HOW to implement. When presenting, include: "Requirements are locked by SPEC.md — discussing implementation decisions only."
 
@@ -324,7 +326,7 @@ Analyze the phase to identify gray areas. Use both `prior_decisions` and `codeba
 </step>
 
 <step name="present_gray_areas">
-Present the domain boundary, prior decisions, and gray areas to the user.
+Present the domain boundary, before decisions, and gray areas to the user.
 
 ```
 Phase [X]: [Name]
@@ -360,7 +362,7 @@ Continue to `discuss_areas` with selected areas (or to `advisor_research` per `m
 Discussion behavior is defined by the active mode file(s):
 
 - **Advisor mode (ADVISOR_MODE = true):** follow `workflows/discuss-phase/modes/advisor.md` — research-backed comparison tables, table-first selection.
-- **--auto:** follow `workflows/discuss-phase/modes/auto.md` — Claude picks recommended option for every question; no AskUserQuestion. Single-pass cap enforced.
+- **--auto:** follow `workflows/discuss-phase/modes/auto.md` — Claude picks recommended option for every question. No AskUserQuestion. Single-pass cap enforced.
 - **Default (no flags):** follow `workflows/discuss-phase/modes/default.md` — 4 single-question turns per area, then check whether to continue.
 
 Overlays (combine with the active mode):
@@ -368,13 +370,13 @@ Overlays (combine with the active mode):
 - `--batch` → `workflows/discuss-phase/modes/batch.md` (group 2–5 questions per turn)
 - `--analyze` → `workflows/discuss-phase/modes/analyze.md` (trade-off table before each question)
 
-**Overlay stacking:** overlays combine and apply outer→inner in fixed order `--analyze` → `--batch` → `--text` (e.g., `--batch --analyze` = trade-off table per question group; add `--text` for plain-text rendering). Mode-specific precedence (e.g., `--auto --power`) is documented in each overlay file's "Combination rules" section.
+**Overlay stacking:** overlays combine and apply outer→inner in fixed order `--analyze` → `--batch` → `--text` (e.g., `--batch --analyze` = trade-off table per question group. Add `--text` for plain-text rendering). Mode-specific precedence (e.g., `--auto --power`) is documented in each overlay file's "Combination rules" section.
 
 All modes preserve the universal rules below.
 
 **Universal rules (apply to every mode):**
 
-- **Canonical ref accumulation** — when the user references a doc/spec/ADR during any answer, immediately Read it (or confirm it exists) and add it to the canonical refs accumulator with full relative path. Use what you learned to inform subsequent questions. These docs are often MORE important than ROADMAP.md refs because the user specifically wants downstream agents to follow them.
+- **Canonical ref accumulation** — when the user references a doc/spec/ADR during any answer, immediately Read it (or confirm it exists). Add it to the canonical refs accumulator with full relative path. Use what you learned to inform next questions. These docs are often MORE important than ROADMAP.md refs because the user specifically wants downstream agents to follow them.
 - **Scope creep** — if user mentions something outside the phase domain, capture as deferred idea and redirect.
 - **Incremental checkpoint** — after each area completes, write `${phase_dir}/${padded_phase}-DISCUSS-CHECKPOINT.json`. Read `workflows/discuss-phase/templates/checkpoint.json` for the schema. The checkpoint is structured state, not the canonical CONTEXT.md (`write_context` produces the canonical output). On session resume, the parent's `check_existing` step detects the checkpoint and offers to resume.
 - **Discussion log accumulation** — for each question asked, accumulate area name, options presented, user's selection, follow-up notes. Used by `git_commit` to write DISCUSSION-LOG.md.
@@ -491,15 +493,15 @@ Auto-advance behavior is defined in `workflows/discuss-phase/modes/chain.md`.
 
 If `--auto`, `--chain`, or `workflow.auto_advance` is enabled, Read that file now and execute its `auto_advance` step (flag-syncing, banner, plan-phase dispatch, return-status branching).
 
-Otherwise, end here — `confirm_creation` already ran; do not route back to it.
+Otherwise, end here — `confirm_creation` already ran. Do not route back to it.
 </step>
 
 </process>
 
 <success_criteria>
 - Phase validated against roadmap
-- Prior context loaded (PROJECT.md, REQUIREMENTS.md, STATE.md, prior CONTEXT.md files)
-- Already-decided questions not re-asked (carried forward from prior phases)
+- Before context loaded (PROJECT.md, REQUIREMENTS.md, STATE.md, before CONTEXT.md files)
+- Already-decided questions not re-asked (carried forward from before phases)
 - Codebase scouted for reusable assets, patterns, and integration points
 - Gray areas identified with code and prior-decision annotations
 - User selected which areas to discuss (or `--all`/`--auto` auto-selected)

@@ -1,9 +1,7 @@
 <purpose>
-Extract implementation decisions that downstream agents need — using codebase-first analysis
-and assumption surfacing instead of interview-style questioning.
+Extract implementation decisions that downstream agents need. Analyze the codebase first and show assumptions instead of asking interview-style questions.
 
-You are a thinking partner, not an interviewer. Analyze the codebase deeply, surface what you
-believe based on evidence, and ask the user only to correct what's wrong.
+Act as a thinking partner, not an interviewer. Analyze the codebase in depth. Show your beliefs based on evidence. Ask the user only to correct what is wrong.
 </purpose>
 
 <available_agent_types>
@@ -17,49 +15,46 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 1. **gsd-phase-researcher** — Reads CONTEXT.md to know WHAT to research
 2. **gsd-planner** — Reads CONTEXT.md to know WHAT decisions are locked
 
-**Your job:** Capture decisions clearly enough that downstream agents can act on them
-without asking the user again. Output is identical to discuss mode — same CONTEXT.md format.
+**Your job:** Record decisions clearly enough for downstream agents to act without asking the user again. The output matches discuss mode and uses the same CONTEXT.md format.
 </downstream_awareness>
 
 <philosophy>
 **Assumptions mode philosophy:**
 
-The user is a visionary, not a codebase archaeologist. They need enough context to evaluate
-whether your assumptions match their intent — not to answer questions you could figure out
-by reading the code.
+The user has a vision and does not need to examine the codebase. They need enough context to compare your assumptions with their intent. They do not need to answer questions that you could answer from the code.
 
-- Read the codebase FIRST, form opinions SECOND, ask ONLY about what's genuinely unclear
+- Read the codebase FIRST, form opinions SECOND, and ask ONLY about what is genuinely unclear
 - Every assumption must cite evidence (file paths, patterns found)
-- Every assumption must state consequences if wrong
+- Every assumption must state the consequences if it is wrong
 - Minimize user interactions: ~2-4 corrections vs ~15-20 questions
 </philosophy>
 
 <scope_guardrail>
 **CRITICAL: No scope creep.**
 
-The phase boundary comes from ROADMAP.md and is FIXED. Discussion clarifies HOW to implement
-what's scoped, never WHETHER to add new capabilities.
+The phase boundary comes from ROADMAP.md and is FIXED. Discussion clarifies HOW to implement the scoped work, never WHETHER to add new capabilities.
 
 When user suggests scope creep:
-"[Feature X] would be a new capability — that's its own phase.
-Want me to note it for the roadmap backlog? For now, let's focus on [phase domain]."
+"[Feature X] would be a new capability — that is its own phase.
+Want me to note it for the roadmap backlog? For now, let us focus on [phase domain]."
 
-Capture the idea in "Deferred Ideas". Don't lose it, don't act on it.
+Record the idea in "Deferred Ideas". Do not lose it. Do not act on it.
 </scope_guardrail>
 
 <answer_validation>
-**IMPORTANT: Answer validation** — After every AskUserQuestion call, if the response is empty/whitespace-only:
+**IMPORTANT: Answer validation** — After every AskUserQuestion call, examine the response. If it is empty/whitespace-only:
 
-- **"Other" with empty text** (the user wants to type freeform): output `"What would you like to discuss?"`, STOP generating, wait for the user's next message, then reflect it back and continue. Do NOT retry AskUserQuestion or call any tools.
-- **Any other empty response:** retry once with the same parameters; if still empty, present options as a plain-text numbered list. Never proceed with empty input.
+- **"Other" with empty text** (the user wants to type freeform): output `"What would you like to discuss?"`. STOP generating. Wait for the user's next message. Reflect it back and continue. Do NOT retry AskUserQuestion or call any tools.
 
-**Text mode** (`--text` or `workflow.text_mode: true`): follow `workflows/discuss-phase/modes/text.md` — do not use AskUserQuestion at all.
+- **Any other empty response:** Retry once with the same parameters. If the response is still empty, show options as a plain-text numbered list. Never proceed with empty input.
+
+**Text mode** (`--text` or `workflow.text_mode: true`): Follow `workflows/discuss-phase/modes/text.md`. Do not use AskUserQuestion at all.
 </answer_validation>
 
 <process>
 
 <step name="initialize" priority="first">
-Phase number from argument (required).
+Phase number from argument (need).
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -78,7 +73,7 @@ AGENT_SKILLS_ANALYZER=$(gsd_run query agent-skills gsd-assumptions-analyzer ${GS
 ANALYZER_MODEL=$(gsd_run query resolve-model gsd-assumptions-analyzer --raw)
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 Parse JSON for: `commit_docs`, `phase_found`, `phase_dir`, `phase_number`, `phase_name`,
 `phase_slug`, `padded_phase`, `has_research`, `has_context`, `has_plans`, `has_verification`,
@@ -103,7 +98,7 @@ Exit workflow.
 </step>
 
 <step name="check_spec">
-Check whether the phase has a SPEC.md (from the spec-phase workflow). SPEC.md locks requirements before implementation decisions. Init already resolved it: use `has_spec` and `spec_path`, which come from one shared definition of "the phase SPEC" (a plain `*-SPEC.md`, never `*-AI-SPEC.md` or `*-UI-SPEC.md`). Do not glob for it.
+Find out whether the phase has a SPEC.md from the spec-phase workflow. SPEC.md locks requirements before implementation decisions. Init already resolved it. Use `has_spec` and `spec_path`. Both use one shared definition of "the phase SPEC": a plain `*-SPEC.md`, never `*-AI-SPEC.md` or `*-UI-SPEC.md`. Do not glob for it.
 
 **If `has_spec` is true:**
 1. Read the SPEC.md file at `spec_path`.
@@ -133,14 +128,14 @@ ls ${phase_dir}/*-CONTEXT.md 2>/dev/null || true
 - question: "Phase [X] already has context. What do you want to do?"
 - options:
   - "Update it" — Re-analyze codebase and refresh assumptions
-  - "View it" — Show me what's there
+  - "View it" — Show me what is there
   - "Skip" — Use existing context as-is
 
 If "Update": Load existing, continue to load_prior_context
 If "View": Display CONTEXT.md, then offer update/skip
 If "Skip": Exit workflow
 
-**If doesn't exist:**
+**If does not exist:**
 
 Check `has_plans` and `plan_count` from init. **If `has_plans` is true:**
 
@@ -148,7 +143,7 @@ Check `has_plans` and `plan_count` from init. **If `has_plans` is true:**
 
 **Otherwise:** Use AskUserQuestion:
 - header: "Plans exist"
-- question: "Phase [X] already has {plan_count} plan(s) created without user context. Your decisions here won't affect existing plans unless you replan."
+- question: "Phase [X] already has {plan_count} plan(s) created without user context. Your decisions here will not affect existing plans unless you replan."
 - options:
   - "Continue and replan after"
   - "View existing plans"
@@ -162,7 +157,7 @@ If "Cancel": Exit workflow.
 </step>
 
 <step name="load_prior_context">
-Read project-level and prior phase context to avoid re-asking decided questions.
+Read project-level context and context from earlier phases. Do not ask decided questions again.
 
 **Step 1: Read project-level files**
 ```bash
@@ -176,7 +171,7 @@ Extract from these:
 - **REQUIREMENTS.md** — Acceptance criteria, constraints
 - **STATE.md** — Current progress, any flags
 
-**Step 2: Read all prior CONTEXT.md files**
+**Step 2: Read all earlier CONTEXT.md files**
 ```bash
 (find .planning/phases -name "*-CONTEXT.md" 2>/dev/null || true) | sort
 ```
@@ -190,11 +185,11 @@ For each CONTEXT.md where phase number < current phase:
 
 Structure the extracted information for use in assumption generation.
 
-**If no prior context exists:** Continue without — expected for early phases.
+**If no earlier context exists:** Continue without it. This is expected for early phases.
 </step>
 
 <step name="cross_reference_todos">
-Check if any pending todos are relevant to this phase's scope.
+Find out if any pending todos are relevant to this phase's scope.
 
 ```bash
 TODO_MATCHES=$(gsd_run query todo.match-phase "${PHASE_NUMBER}")
@@ -213,8 +208,7 @@ Parse JSON for: `todo_count`, `matches[]`.
 </step>
 
 <step name="load_methodology">
-Read the project-level methodology file if it exists. This must happen before assumption analysis
-so that active lenses shape how assumptions are generated and evaluated.
+If the project-level methodology file exists, read it. This must happen before assumption analysis. Active lenses then shape how agents generate and evaluate assumptions.
 
 ```bash
 cat .planning/METHODOLOGY.md 2>/dev/null || true
@@ -231,7 +225,7 @@ cat .planning/METHODOLOGY.md 2>/dev/null || true
 </step>
 
 <step name="scout_codebase">
-Lightweight scan of existing code to inform assumption generation.
+Scan existing code briefly to inform assumption generation.
 
 **Step 1: Check for existing codebase maps**
 ```bash
@@ -242,7 +236,7 @@ ls .planning/codebase/*.md 2>/dev/null || true
 
 **Step 2: If no codebase maps, do targeted grep**
 
-Extract key terms from phase goal, search for related files.
+Extract key terms from the phase goal. Search for related files.
 
 ```bash
 grep -rl "{term1}\|{term2}" src/ app/ --include="*.ts" --include="*.tsx" 2>/dev/null | head -10
@@ -256,8 +250,7 @@ Identify reusable assets, established patterns, integration points, and creative
 </step>
 
 <step name="deep_codebase_analysis">
-Spawn a `gsd-assumptions-analyzer` agent to deeply analyze the codebase for this phase. This
-keeps raw file contents out of the main context window, protecting token budget.
+Spawn a `gsd-assumptions-analyzer` agent to analyze the codebase for this phase in depth. This keeps raw file contents out of the main context window. It protects the token budget.
 
 **Resolve calibration tier (if USER-PROFILE.md exists):**
 
@@ -277,15 +270,15 @@ Map to calibration tier:
 
 If no USER-PROFILE.md: calibration_tier = "standard"
 
-**Spawn Explore subagent** (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)**:**
+**Spawn Explore subagent** (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze)**:**
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`ANALYZER_MODEL`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If `ANALYZER_MODEL` is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes. If you omit the parameter, the subagent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 ```
 Agent(subagent_type="gsd-assumptions-analyzer", model="{ANALYZER_MODEL}", prompt="""
@@ -334,7 +327,7 @@ ${AGENT_SKILLS_ANALYZER}
 
 Parse the subagent's response. Extract:
 - `assumptions[]` — each with area, statement, evidence, consequence, confidence
-- `needs_research[]` — topics requiring external research (may be empty)
+- `needs_research[]` — topics need external research (may be empty)
 
 **Initialize canonical refs accumulator:**
 - Source 1: Copy `Canonical refs:` from ROADMAP.md for this phase, expand to full paths
@@ -345,7 +338,7 @@ Parse the subagent's response. Extract:
 <step name="external_research">
 **Skip if:** `needs_research` from deep_codebase_analysis is empty.
 
-If research topics were flagged, spawn a general-purpose research agent (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze):
+If research topics were flagged, spawn a general-purpose research agent (runs in a subagent — no output until it returns, ~1–5 min. Expected, not a freeze):
 
 ```
 Agent(subagent_type="general-purpose", prompt="""
@@ -375,7 +368,7 @@ Merge findings back into assumptions:
 </step>
 
 <step name="present_assumptions">
-Display all assumptions grouped by area with confidence badges.
+Show all assumptions by area with confidence badges.
 
 **Format for display:**
 
@@ -416,10 +409,9 @@ Based on codebase analysis, here's what I'd go with:
 </step>
 
 <step name="correct_assumptions">
-The assumptions are already displayed above from present_assumptions.
+The assumptions from present_assumptions appear above.
 
-Present a multiSelect where each option's label is the assumption statement and description
-is the "If wrong" consequence:
+Show a multiSelect. Use the assumption statement as each option's label and the "If wrong" consequence as its description:
 
 Use AskUserQuestion (multiSelect):
 - header: "Corrections"
@@ -438,13 +430,13 @@ Record each correction:
 - User's chosen alternative
 - Reason (if provided via "Other" free text)
 
-After all corrections processed, continue to write_context with updated assumptions.
+After you process all corrections, continue to write_context with updated assumptions.
 
 **Auto mode:** Should not reach this step (--auto skips from present_assumptions).
 </step>
 
 <step name="write_context">
-Create phase directory if needed. Write CONTEXT.md using the standard 6-section format.
+If needed, create the phase directory. Write CONTEXT.md using the standard 6-section format.
 
 **File:** `${phase_dir}/${padded_phase}-CONTEXT.md`
 
@@ -454,7 +446,7 @@ Map assumptions to CONTEXT.md sections:
 - Areas where all assumptions were Confident → marked as locked decisions
 - Areas with corrections → include user's chosen alternative as the decision
 - Folded todos → included in `<decisions>` under "### Folded Todos"
-- When `spec_loaded = true`: add `<spec_lock>` immediately after `<domain>`, add the SPEC.md file to `<canonical_refs>` with the note "Locked requirements — MUST read before planning", and do NOT copy SPEC.md requirements into `<decisions>` (agents read SPEC.md directly); `<decisions>` holds only the HOW decisions from this discussion
+- When `spec_loaded = true`: add `<spec_lock>` immediately after `<domain>`. Add the SPEC.md file to `<canonical_refs>` with the note "Locked requirements — MUST read before planning". Do NOT copy SPEC.md requirements into `<decisions>`. Agents read SPEC.md directly. `<decisions>` holds only the HOW decisions from this discussion.
 
 ```markdown
 # Phase {PHASE}: {phase_name} - Context
@@ -692,18 +684,18 @@ gsd_run query config-set workflow._auto_chain_active true
 ```
 
 <!-- gsd:section id="auto-advance-dispatch" when="state:auto-advance-active" -->
-If `section_manifest` is `null` or `"auto-advance-dispatch"` is in its `included` list: read and execute `gsd-core/workflows/discuss-phase-assumptions/steps/auto-advance-dispatch.md`. Otherwise skip — do not read the file.
+If `section_manifest` is `null` or its `included` list contains `"auto-advance-dispatch"`: read and execute `gsd-core/workflows/discuss-phase-assumptions/steps/auto-advance-dispatch.md`. Otherwise, skip this step. Do not read the file.
 <!-- /gsd:section -->
 
 **If neither `--auto` nor config enabled:**
-End here — `confirm_creation` already ran; do not route back to it.
+End here — `confirm_creation` already ran. Do not route back to it.
 </step>
 
 </process>
 
 <success_criteria>
 - Phase validated against roadmap
-- Prior context loaded (no re-asking decided questions)
+- Before context loaded (no re-asking decided questions)
 - Codebase deeply analyzed via Explore subagent (5-15 files read)
 - Assumptions surfaced with evidence and confidence levels
 - User confirmed or corrected assumptions (~2-4 interactions max)
