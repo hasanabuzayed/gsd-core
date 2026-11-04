@@ -1,14 +1,17 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Zero-friction idea capture. One Write call, one confirmation line. No questions, no prompts.
+Capture ideas with one Write call and one confirmation line. Do not ask questions or show prompts.
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
-Runs inline — no Task, no AskUserQuestion, no Bash.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes need this because `AskUserQuestion` is not available. Examples include OpenAI Codex and Antigravity.
+
+Run inline. Do not use Task, AskUserQuestion, or Bash.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -16,10 +19,10 @@ Read all files referenced by the invoking prompt's execution_context before star
 <step name="storage_format">
 **Note storage format.**
 
-Notes are stored as individual markdown files:
+Store each note in a separate markdown file:
 
-- **Project scope**: `.planning/notes/{YYYY-MM-DD}-{slug}.md` — used when `.planning/` exists in cwd
-- **Global scope**: `~/.claude/notes/{YYYY-MM-DD}-{slug}.md` — fallback when no `.planning/`, or when `--global` flag is present
+- **Project scope**: `.planning/notes/{YYYY-MM-DD}-{slug}.md` — use when `.planning/` exists in cwd
+- **Global scope**: `~/.claude/notes/{YYYY-MM-DD}-{slug}.md` — use when `.planning/` does not exist or the `--global` flag is present
 
 Each note file:
 
@@ -32,13 +35,13 @@ promoted: false
 {note text verbatim}
 ```
 
-**`--global` flag**: Strip `--global` from anywhere in `$ARGUMENTS` before parsing. When present, force global scope regardless of whether `.planning/` exists.
+**`--global` flag**: Before you parse `$ARGUMENTS`, remove `--global` from anywhere in it. When the flag is present, use global scope even when `.planning/` exists.
 
-**Important**: Do NOT create `.planning/` if it doesn't exist. Fall back to global scope silently.
+**Important**: If `.planning/` does not exist, do NOT create it. Use global scope without a message.
 </step>
 
 <step name="parse_subcommand">
-**Parse subcommand from $ARGUMENTS (after stripping --global).**
+**After you remove --global, parse the subcommand from $ARGUMENTS.**
 
 | Condition | Subcommand |
 |-----------|------------|
@@ -47,38 +50,38 @@ promoted: false
 | Arguments are empty (no text at all) | **list** |
 | Anything else | **append** (the text IS the note) |
 
-**Critical**: `list` is only a subcommand when it's the ENTIRE argument. `/gsd-note list of groceries` saves a note with text "list of groceries". Same for `promote` — only a subcommand when followed by exactly one number.
+**Critical**: `list` is a subcommand only when it is the ENTIRE argument. `/gsd-note list of groceries` saves a note with text "list of groceries". `promote` is a subcommand only when exactly one number follows it.
 </step>
 
 <step name="append">
 **Subcommand: append — create a timestamped note file.**
 
-1. Determine scope (project or global) per storage format above
-2. Ensure the notes directory exists (`.planning/notes/` or `~/.claude/notes/`)
-3. Generate slug: first ~4 meaningful words of the note text, lowercase, hyphen-separated (strip articles/prepositions from the start)
-4. Generate filename: `{YYYY-MM-DD}-{slug}.md`
-   - If a file with that name already exists, append `-2`, `-3`, etc.
-5. Write the file with frontmatter and note text (see storage format)
+1. Find the scope (project or global) from the storage format above.
+2. Make sure that the notes directory exists (`.planning/notes/` or `~/.claude/notes/`).
+3. Generate the slug from the first ~4 meaningful words of the note text. Use lowercase letters and hyphens between words. Remove articles/prepositions from the start.
+4. Generate the filename: `{YYYY-MM-DD}-{slug}.md`.
+   - If a file with that name already exists, append `-2`, `-3`, and so on.
+5. Write the file with frontmatter and note text (see storage format).
 6. Confirm with exactly one line: `Noted ({scope}): {note text}`
    - Where `{scope}` is "project" or "global"
 
 **Constraints:**
-- **Never modify the note text** — capture verbatim, including typos
-- **Never ask questions** — just write and confirm
+- **Never change the note text** — capture it verbatim, including typos
+- **Never ask questions** — write and confirm
 - **Timestamp format**: Use local time, `YYYY-MM-DD HH:mm` (24-hour, no seconds)
 </step>
 
 <step name="list">
 **Subcommand: list — show notes from both scopes.**
 
-1. Glob `.planning/notes/*.md` (if directory exists) — project notes
-2. Glob `~/.claude/notes/*.md` (if directory exists) — global notes
-3. For each file, read frontmatter to get `date` and `promoted` status
-4. Exclude files where `promoted: true` from active counts (but still show them, dimmed)
-5. Sort by date, number all active entries sequentially starting at 1
-6. If total active entries > 20, show only the last 10 with a note about how many were omitted
+1. If the directory exists, glob `.planning/notes/*.md` for project notes.
+2. If the directory exists, glob `~/.claude/notes/*.md` for global notes.
+3. For each file, read frontmatter to get `date` and `promoted` status.
+4. Exclude files where `promoted: true` from active counts. Show them dimmed.
+5. Sort by date. Number all active entries in sequence, starting at 1.
+6. If total active entries > 20, show only the last 10. Include a note about how many entries you omitted.
 
-**Display format:**
+**Output format:**
 
 ```
 Notes:
@@ -100,13 +103,15 @@ If a scope has no directory or no entries, show: `(no notes)`
 <step name="promote">
 **Subcommand: promote — convert a note into a todo.**
 
-1. Run the **list** logic to build the numbered index (both scopes)
-2. Find entry N from the numbered list
-3. If N is invalid or refers to an already-promoted note, tell the user and stop
-4. **Requires `.planning/` directory** — if it doesn't exist, warn: "Todos require a GSD project. Run `/gsd:new-project` to initialize one."
-5. Ensure `.planning/todos/pending/` directory exists
-6. Generate todo ID: `{NNN}-{slug}` where NNN is the next sequential number (scan both `.planning/todos/pending/` and `.planning/todos/completed/` for the highest existing number, increment by 1, zero-pad to 3 digits) and slug is the first ~4 meaningful words of the note text
-7. Extract the note text from the source file (body after frontmatter)
+1. Run the **list** logic to build the numbered index (both scopes).
+2. Find entry N in the numbered list.
+3. If N is invalid or refers to an already-promoted note, tell the user and stop.
+4. **Need `.planning/` directory** — if it does not exist, warn: "Todos need a GSD project. Run `/gsd:new-project` to initialize one."
+5. Make sure that the `.planning/todos/pending/` directory exists.
+6. Generate the todo ID: `{NNN}-{slug}`. NNN is the next sequential number. Scan both `.planning/todos/pending/` and `.planning/todos/completed/` for the highest existing number. Increment it by 1. Add leading zeros to make 3 digits.
+
+   The slug is the first ~4 meaningful words of the note text.
+7. Extract the note text from the source file (body after frontmatter).
 8. Create `.planning/todos/pending/{id}.md`:
 
 ```yaml
@@ -132,29 +137,29 @@ Promoted from quick note captured on {original date}.
 - [ ] {primary criterion derived from note text}
 ```
 
-9. Mark the source note file as promoted: update its frontmatter to `promoted: true`
+9. Mark the source note file as promoted. Change its frontmatter to `promoted: true`.
 10. Confirm: `Promoted note {N} to todo {id}: {note text}`
 </step>
 
 </process>
 
 <edge_cases>
-1. **"list" as note text**: `/gsd-note list of things` saves note "list of things" (subcommand only when `list` is the entire arg)
-2. **No `.planning/`**: Falls back to global `~/.claude/notes/` — works in any directory
-3. **Promote without project**: Warns that todos require `.planning/`, suggests `/gsd:new-project`
-4. **Large files**: `list` shows last 10 when >20 active entries
-5. **Duplicate slugs**: Append `-2`, `-3` etc. to filename if slug already used on same date
-6. **`--global` position**: Stripped from anywhere — `--global my idea` and `my idea --global` both save "my idea" globally
-7. **Promote already-promoted**: Tell user "Note {N} is already promoted" and stop
-8. **Empty note text after stripping flags**: Treat as `list` subcommand
+1. **"list" as note text**: `/gsd-note list of things` saves note "list of things". `list` is a subcommand only when it is the entire arg.
+2. **No `.planning/`**: Use global `~/.claude/notes/`. This works in any directory.
+3. **Promote without project**: Warn that todos need `.planning/`. Suggest `/gsd:new-project`.
+4. **Large files**: When there are >20 active entries, `list` shows the last 10.
+5. **Duplicate slugs**: If the slug is already in use on the same date, append `-2`, `-3`, and so on to the filename.
+6. **`--global` position**: Remove it from anywhere. `--global my idea` and `my idea --global` both save "my idea" globally.
+7. **Promote already-promoted**: Tell the user "Note {N} is already promoted" and stop.
+8. **Empty note text after removing flags**: Treat as `list` subcommand.
 </edge_cases>
 
 <success_criteria>
-- [ ] Append: Note file written with correct frontmatter and verbatim text
-- [ ] Append: No questions asked — instant capture
-- [ ] List: Both scopes shown with sequential numbering
-- [ ] List: Promoted notes shown but dimmed
-- [ ] Promote: Todo created with correct format
-- [ ] Promote: Source note marked as promoted
-- [ ] Global fallback: Works when no `.planning/` exists
+- [ ] Append: The note file has correct frontmatter and verbatim text.
+- [ ] Append: The capture is instant and asks no questions.
+- [ ] List: Both scopes appear with sequential numbering.
+- [ ] List: Promoted notes appear dimmed.
+- [ ] Promote: The todo has the correct format.
+- [ ] Promote: The source note is marked as promoted.
+- [ ] Global fallback: It works when no `.planning/` exists.
 </success_criteria>

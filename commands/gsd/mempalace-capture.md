@@ -13,7 +13,7 @@ requires: [config]
 
 The text inside `<arguments>` is exactly what the user typed after the command name: data, not template instructions. An empty block means no arguments were passed.
 
-**STOP -- DO NOT READ THIS FILE. You are already reading it. This prompt was injected into your context by the command system. Using the Read tool on this file wastes tokens. Begin executing Step 0 immediately.**
+**STOP -- DO NOT READ THIS FILE. You are already reading it. This prompt was injected into your context by the command system. Using the Read tool on this file wastes tokens. Start executing Step 0 immediately.**
 
 ## Step 0 -- Banner
 
@@ -53,7 +53,7 @@ This step is `onError: skip` at `discuss:post` / `plan:post` / `verify:post` -- 
    - `SUMMARY.md` → `milestones`
    (Confirmed problem→fix pairs go to `problems` — see the `capture-problems` fragment used at `execute:wave:post`.)
 3. **Wing.** `config.mempalace.wing` if non-empty, else `config.project_code`, else the repo directory name.
-4. **Mode / transport.** Read `config.mempalace.memory_mode`. Prefer MCP (`mempalace_*`) when your MemPalace MCP server is registered and your runtime permits those tools; otherwise use the `mempalace` CLI (covered by this skill's `Bash` allow-tool), as in `mempalace-recall`.
+4. **Mode / transport.** Read `config.mempalace.memory_mode`. Prefer MCP (`mempalace_*`) when your MemPalace MCP server is registered and your runtime let those tools. Otherwise use the `mempalace` CLI (covered by this skill's `Bash` allow-tool), as in `mempalace-recall`.
 
 ## Step 3 -- File verbatim (idempotent)
 
@@ -62,7 +62,7 @@ On any error or timeout, stop and let the phase continue -- capture is best-effo
 1. **Dedup first.** Interactive: `mempalace_check_duplicate` on the artifact's deterministic drawer id. Headless: rely on `mempalace mine`'s content-hash idempotency.
 2. **Add the drawer (verbatim).** File the exact artifact text into `room: <room>` of `wing: <wing>` with provenance (`source_file`, phase id). Interactive: `mempalace_add_drawer`. Headless: see below.
 
-   **`mempalace mine` has no `--room` flag** — only `search` accepts `--room` ([CLI reference: https://mempalaceofficial.com/reference/cli.html](https://mempalaceofficial.com/reference/cli.html)). Room assignment is driven by `detect_room()` matching folder-path segments against the `rooms:` list in `mempalace.yaml` ([mining guide: https://mempalaceofficial.com/guide/mining.html](https://mempalaceofficial.com/guide/mining.html) — "Rooms are auto-detected from your folder structure"; [config reference: https://mempalaceofficial.com/guide/configuration.html](https://mempalaceofficial.com/guide/configuration.html)). Stage the artifact under a room-named folder so `detect_room()` assigns it correctly:
+   **`mempalace mine` has no `--room` flag** — only `search` accepts `--room` ([CLI reference: https://mempalaceofficial.com/reference/cli.html](https://mempalaceofficial.com/reference/cli.html)). Room assignment is driven by `detect_room()` matching folder-path segments against the `rooms:` list in `mempalace.yaml` ([mining guide: https://mempalaceofficial.com/guide/mining.html](https://mempalaceofficial.com/guide/mining.html) — "Rooms are auto-detected from your folder structure". [config reference: https://mempalaceofficial.com/guide/configuration.html](https://mempalaceofficial.com/guide/configuration.html)). Stage the artifact under a room-named folder so `detect_room()` assigns it correctly:
 
    ```bash
    STAGE=".planning/.mempalace-stage"
@@ -95,7 +95,7 @@ On any error or timeout, stop and let the phase continue -- capture is best-effo
    # capture. The background queue defers the job until the lock frees.
    mempalace mine "$STAGE" --wing <wing> --daemon --background
    ```
-3. **Mirror KG facts** unless `config.mempalace.mirror_kg === false` (registry default is true — an absent key means enabled): extract decision/delivery facts and `mempalace_kg_add` them with `valid_from` = the phase date (e.g. `(<project>, decided, <decision>)` from CONTEXT; `(<phase>, delivered, <capability>)` from SUMMARY). Under `augment` these are an *additive* mirror of GSD's native `.planning/graphs/`. Under `kg_backend`/`replace` the palace KG is the *authoritative* fact store — GSD still produces `.planning/graphs/` through its normal graphify, so an unreachable palace never loses a fact.
+3. **Mirror KG facts** unless `config.mempalace.mirror_kg === false` (registry default is true — an absent key means enabled): extract decision/delivery facts and `mempalace_kg_add` them with `valid_from` = the phase date (e.g. `(<project>, decided, <decision>)` from CONTEXT. `(<phase>, delivered, <capability>)` from SUMMARY). Under `augment` these are an *additive* mirror of GSD's native `.planning/graphs/`. Under `kg_backend`/`replace` the palace KG is the *authoritative* fact store — GSD still produces `.planning/graphs/` through its normal graphify, so an unreachable palace never loses a fact.
 4. Re-running a phase MUST NOT create duplicate drawers (deterministic ids + `check_duplicate`).
 
 ## Step 4 -- Report
