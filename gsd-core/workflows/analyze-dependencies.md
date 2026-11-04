@@ -1,24 +1,24 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Analyze ROADMAP.md phases for dependency relationships before execution. Detect file overlap between phases, semantic API/data-flow dependencies, and suggest `Depends on` entries to prevent merge conflicts during parallel execution by `/gsd:manager`.
+Before execution, examine ROADMAP.md phases for dependency relationships. Find file overlap between phases and semantic API/data-flow dependencies. Suggest `Depends on` entries to prevent merge conflicts during parallel execution by `/gsd:manager`.
 </purpose>
 
 <process>
 
 ## 1. Load ROADMAP.md
 
-Read `.planning/ROADMAP.md`. If it does not exist, error: "No ROADMAP.md found — run `/gsd:new-project` first."
+Read `.planning/ROADMAP.md`. If it does not exist, show the error: "No ROADMAP.md found — run `/gsd:new-project` first."
 
-Extract all phases. For each phase capture:
+Extract all phases. For each phase, record:
 - Phase number and name
 - Scope/Goal description
-- Files listed in `Files` or `files_modified` fields (if present)
+- Files in `Files` or `files_modified` fields, if present
 - Existing `Depends on` field value
 
-## 2. Infer Likely File Modifications
+## 2. Infer Likely File Changes
 
-For each phase without explicit `files_modified`, analyze the scope/goal description to infer which files will likely be modified. Use these heuristics:
+For each phase without explicit `files_modified`, examine the scope/goal description. Infer which files will likely change. Use these heuristics:
 
 - **Database/schema phases** → migration files, schema definitions, model files
 - **API/backend phases** → route files, controller files, service files, handler files
@@ -32,17 +32,17 @@ Group phases by their inferred file domain (database, API, frontend, auth, confi
 
 ## 3. Detect Dependency Relationships
 
-For each pair of phases (A, B), check for dependency signals:
+For each pair of phases (A, B), examine these dependency signals:
 
 ### File Overlap Detection
-If phases A and B will both modify files in the same domain or the same specific files, one must run before the other. The phase that *provides* the foundation runs first.
+If phases A and B will both change files in the same domain or the same specific files, one must run first. When a phase *provides* the foundation, it runs before the other phase.
 
 ### Semantic Dependency Detection
 Read each phase's scope/goal for these patterns:
-- Phase B mentions consuming, using, or calling something that Phase A creates/implements
+- Phase B mentions that it consumes, uses, or calls something that Phase A creates/implements
 - Phase B references an "API", "schema", "model", "endpoint", or "interface" that Phase A builds
 - Phase B says "after X is complete", "once X is built", "using the X from Phase N"
-- Phase B extends or modifies code that Phase A establishes
+- Phase B extends or changes code that Phase A establishes
 
 ### Data Flow Detection
 - Phase A creates data structures, schemas, or types → Phase B consumes or transforms them
@@ -51,7 +51,7 @@ Read each phase's scope/goal for these patterns:
 
 ## 4. Build Dependency Table
 
-Output a dependency suggestion table:
+Show a dependency suggestion table:
 
 ```
 Phase Dependency Analysis
@@ -71,7 +71,7 @@ For phase pairs with no detected dependency, state: "No dependency detected betw
 
 ## 5. Summarize Suggested Changes
 
-Show a consolidated diff of proposed ROADMAP.md `Depends on` changes:
+Show a consolidated diff of the proposed ROADMAP.md `Depends on` changes:
 
 ```
 Suggested ROADMAP.md updates:
@@ -86,13 +86,13 @@ Ask the user: "Apply these `Depends on` suggestions to ROADMAP.md? (yes / no / e
 
 - **yes** — Write all suggested `Depends on` entries to ROADMAP.md. Confirm each write.
 - **no** — Print the suggestions as text only. User updates manually.
-- **edit** — Present each suggestion individually with yes/no/skip per suggestion.
+- **edit** — Show each suggestion individually with yes/no/skip per suggestion.
 
-When writing to ROADMAP.md:
-- Locate the phase entry and add or update the `Depends on:` field
-- Preserve all other phase content unchanged
+When you write to ROADMAP.md:
+- Find the phase entry and add or update the `Depends on:` field
+- Keep all other phase content unchanged
 - Do not reorder phases
 
-After applying: "ROADMAP.md updated. Run `/gsd:manager` to execute phases in the correct order."
+After you apply the changes, say: "ROADMAP.md updated. Run `/gsd:manager` to execute phases in the correct order."
 
 </process>

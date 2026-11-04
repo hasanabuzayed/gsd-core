@@ -1,7 +1,7 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Generate a post-session summary document capturing work performed, outcomes achieved, and estimated resource usage. Writes SESSION_REPORT.md to .planning/reports/ for human review and stakeholder sharing.
+Generate a post-session summary document capturing work do, outcomes achieved, and estimated resource usage. Writes SESSION_REPORT.md to .planning/reports/ for human review and stakeholder sharing.
 </purpose>
 
 <required_reading>
@@ -45,7 +45,7 @@ if [ -e "${_REPORTS[0]}" ]; then ls -la "${_REPORTS[@]}"; else echo "No previous
 Estimate token usage from observable signals:
 
 - Count of tool calls is not directly available, so estimate from git activity and file operations
-- Note: This is an **estimate** — exact token counts require API-level instrumentation not available to hooks
+- Note: This is an **estimate** — exact token counts need API-level instrumentation not available to hooks
 
 Estimation heuristics:
 - Each commit ≈ 1 plan cycle (research + plan + execute + verify)

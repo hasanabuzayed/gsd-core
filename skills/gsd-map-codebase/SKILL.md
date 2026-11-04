@@ -30,7 +30,7 @@ Output: .planning/codebase/ folder with 7 structured documents about the codebas
 
 <flags>
 - **--fast**: Lightweight scan mode — spawns one mapper agent instead of four. Accepts an optional `--focus` value: `tech`, `arch`, `quality`, `concerns`, or `tech+arch` (default). Faster and lower-context than the full map.
-- **--query**: Codebase intelligence query mode. Sub-commands: `query <term>`, `status`, `diff`, `refresh`. Requires intel to be enabled in config (`intel.enabled: true`). Runs inline for query/status/diff; spawns an agent for refresh.
+- **--query**: Codebase intelligence query mode. Sub-commands: `query <term>`, `status`, `diff`, `refresh`. Need intel to be enabled in config (`intel.enabled: true`). Runs inline for query/status/diff. Spawns an agent for refresh.
 - **(no flag)**: Full parallel map — spawns 4 mapper agents to produce all 7 codebase documents.
 </flags>
 
