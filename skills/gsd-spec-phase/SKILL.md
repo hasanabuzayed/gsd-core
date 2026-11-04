@@ -42,11 +42,11 @@ Clarify phase requirements through structured Socratic questioning with quantita
 </runtime_note>
 
 <context>
-Phase number: the `<arguments>` block (required)
+Phase number: the `<arguments>` block (need)
 
 **Flags:**
-- `--auto` — Skip interactive questions; Claude selects recommended defaults and writes SPEC.md
-- `--text` — Use plain-text numbered lists instead of TUI menus (required for `/rc` remote sessions)
+- `--auto` — Skip interactive questions. Claude selects recommended defaults and writes SPEC.md
+- `--text` — Use plain-text numbered lists instead of TUI menus (need for `/rc` remote sessions)
 
 Context files are resolved in-workflow using `init phase-op`.
 </context>
@@ -58,7 +58,7 @@ Execute end-to-end.
 </process>
 
 <success_criteria>
-- Codebase scouted for current state before questioning begins
+- Codebase scouted for current state before questioning start
 - All 4 ambiguity dimensions scored after each interview round
 - Gate passed: ambiguity ≤ 0.20 AND all dimension minimums met
 - SPEC.md written with falsifiable requirements, explicit boundaries, and acceptance criteria
