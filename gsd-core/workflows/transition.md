@@ -4,9 +4,9 @@
 
 **This is an INTERNAL workflow — NOT a user-facing command.**
 
-There is no `/gsd-transition` command. This workflow is invoked automatically by
-`execute-phase` during auto-advance, or inline by the orchestrator after phase
-verification. Users should never be told to run `/gsd-transition`.
+There is no `/gsd-transition` command. `execute-phase` automatically calls this workflow during auto-advance.
+
+The orchestrator also calls it inline after phase verification. Users should never be told to run `/gsd-transition`.
 
 **Valid user commands for phase progression:**
 - `/gsd:discuss-phase {N}` — discuss a phase before planning
@@ -30,7 +30,9 @@ verification. Users should never be told to run `/gsd-transition`.
 
 <purpose>
 
-Mark current phase complete and advance to next. This is the natural point where progress tracking and PROJECT.md evolution happen.
+Mark the current phase complete. Advance to the next phase.
+
+Track progress and update PROJECT.md at this point.
 
 "Planning next phase" = "current phase is done"
 
@@ -40,27 +42,17 @@ Mark current phase complete and advance to next. This is the natural point where
 
 <step name="post_completion_mode" priority="first">
 
-**Invocation mode — read this FIRST.** This workflow runs two ways:
+**Invocation mode — read this FIRST.** This workflow has two modes:
 
-1. **Standalone transition** (normal path): the phase is being marked complete AND
-   transitioned by this workflow. Run EVERY step below in order — `verify_completion`,
-   `update_roadmap_and_state` (which calls `gsd_run query phase.complete`), then the
-   post-processing.
+1. **Standalone transition** (normal path): This workflow marks the phase complete and transitions it. Run EVERY step below in order. Run `verify_completion`, then `update_roadmap_and_state`, then the post-processing. `update_roadmap_and_state` calls `gsd_run query phase.complete`.
 
-2. **Post-completion delegation** (invoked by `execute-phase` after its auto-chain
-   completion — #1526): `phase.complete` was already called by execute-phase's
-   `update_roadmap` step and verification already passed in execute-phase's
-   `verify_phase_goal`. SKIP `verify_completion` and `update_roadmap_and_state`
-   (re-running `phase.complete` would double-write STATE.md/ROADMAP.md). Run
-   `cleanup_handoff` (stale `.continue-here` handoffs are still cleared post-completion),
-   then BEGIN at `evolve_project` and run every step from there through
-   `offer_next_phase` (this is the post-processing parity set: graduation scan,
-   session-continuity, project-reference, accumulated-context, current-position/progress).
+2. **Post-completion delegation** (`execute-phase` calls this after its auto-chain completion — #1526): execute-phase's `update_roadmap` step already called `phase.complete`. Verification already passed in execute-phase's `verify_phase_goal`. SKIP `verify_completion` and `update_roadmap_and_state`. A second call to `phase.complete` would write STATE.md/ROADMAP.md again.
+
+   Run `cleanup_handoff` to clear stale `.continue-here` handoffs after completion. Then start at `evolve_project`. Run every step from there through `offer_next_phase`. This is the post-processing parity set: graduation scan, session-continuity, project-reference, accumulated-context, current-position/progress.
+
    `archive_prompts` is a documented no-op in either mode.
 
-Detect post-completion mode when the caller states that phase completion and
-verification have already run. When in doubt, run standalone (mode 1) — it is
-idempotent enough to be safe, just slower.
+If the caller states that phase completion and verification already ran, use post-completion mode. If in doubt, run standalone (mode 1). It is idempotent enough to be safe, but slower.
 </step>
 
 <step name="load_project_state" priority="first">
@@ -72,14 +64,14 @@ cat .planning/STATE.md 2>/dev/null || true
 cat .planning/PROJECT.md 2>/dev/null || true
 ```
 
-Parse current position to verify we're transitioning the right phase.
-Note accumulated context that may need updating after transition.
+Parse the current position to make sure that you transition the correct phase.
+Note accumulated context that may need an update after transition.
 
 </step>
 
 <step name="verify_completion">
 
-Check current phase has all plan summaries:
+Make sure that the current phase has all plan summaries:
 
 ```bash
 (ls .planning/phases/XX-current/*-PLAN.md 2>/dev/null || true) | sort
@@ -91,7 +83,7 @@ Check current phase has all plan summaries:
 - Count PLAN files
 - Count SUMMARY files
 - If counts match: all plans complete
-- If counts don't match: incomplete
+- If counts do not match: incomplete
 
 <config-check>
 
@@ -122,10 +114,9 @@ Verification incomplete: ${VERIFY_STATUS}
 Resolve before transition. Review: `/gsd:audit-uat`
 ```
 
-This preliminary check blocks obviously unresolved verification early, ahead
-of the authoritative gate below. `gsd_run query phase.complete` (in
-`update_roadmap_and_state`) remains the authoritative stale-aware gate and
-fail-closes unless canonical verification status is `passed`.
+This preliminary check blocks obviously unresolved verification before the authoritative gate below.
+
+`gsd_run query phase.complete` in `update_roadmap_and_state` remains the authoritative stale-aware gate. It fail-closes unless canonical verification status is `passed`.
 
 **If all plans complete:**
 
@@ -138,7 +129,7 @@ Phase [X] complete — all [Y] plans finished.
 Proceeding to mark done and advance...
 ```
 
-Proceed directly to cleanup_handoff step.
+Go directly to the cleanup_handoff step.
 
 </if>
 
@@ -146,15 +137,15 @@ Proceed directly to cleanup_handoff step.
 
 Ask: "Phase [X] complete — all [Y] plans finished. Ready to mark done and move to Phase [X+1]?"
 
-Wait for confirmation before proceeding.
+Wait for confirmation before you continue.
 
 </if>
 
 **If plans incomplete:**
 
-**SAFETY RAIL.** Skipping incomplete plans is destructive — ALWAYS prompt regardless of mode.
+**SAFETY RAIL.** Skipping incomplete plans is destructive. ALWAYS prompt in every mode.
 
-Present:
+Show:
 
 ```
 Phase [X] has incomplete plans:
@@ -176,13 +167,13 @@ Wait for user decision.
 
 <step name="cleanup_handoff">
 
-Check for lingering handoffs:
+Look for remaining handoffs:
 
 ```bash
 ls .planning/phases/XX-current/.continue-here*.md 2>/dev/null || true
 ```
 
-If found, delete them — phase is complete, handoffs are stale.
+If you find handoffs, delete them. The phase is complete and the handoffs are stale.
 
 </step>
 
@@ -194,12 +185,12 @@ If found, delete them — phase is complete, handoffs are stale.
 TRANSITION=$(gsd_run query phase.complete "${current_phase}")
 ```
 
-The CLI handles:
-- Marking the phase checkbox as `[x]` complete with today's date
-- Updating plan count to final (e.g., "3/3 plans complete")
-- Updating the Progress table (Status → Complete, adding date)
-- Advancing STATE.md to next phase (Current Phase, Status → Ready to plan, Current Plan → Not started)
-- Detecting if this is the last phase in the milestone
+The CLI does these actions:
+- Marks the phase checkbox as `[x]` complete with today's date
+- Updates the plan count to the final count (for example, "3/3 plans complete")
+- Updates the Progress table (Status → Complete, adds date)
+- Advances STATE.md to the next phase (Current Phase, Status → Ready to plan, Current Plan → Not started)
+- Detects whether this is the last phase in the milestone
 
 Extract from result: `completed_phase`, `plans_executed`, `next_phase`, `next_phase_name`, `is_last_phase`.
 
@@ -214,7 +205,7 @@ The `completed/` subfolder pattern from create-meta-prompts handles archival.
 
 <step name="evolve_project">
 
-Evolve PROJECT.md to reflect learnings from completed phase.
+Update PROJECT.md with the learnings from the completed phase.
 
 **Read phase summaries:**
 
@@ -226,24 +217,25 @@ if [ -e "${_SUMMARIES[0]}" ]; then cat "${_SUMMARIES[@]}"; fi
 **Assess requirement changes:**
 
 1. **Requirements validated?**
-   - Any Active requirements shipped in this phase?
-   - Move to Validated with phase reference: `- ✓ [Requirement] — Phase X`
+   - Did this phase ship any Active requirements?
+   - Move them to Validated with a phase reference: `- ✓ [Requirement] — Phase X`
 
 2. **Requirements invalidated?**
-   - Any Active requirements discovered to be unnecessary or wrong?
-   - Move to Out of Scope with reason: `- [Requirement] — [why invalidated]`
+   - Did the phase find any Active requirements unnecessary or wrong?
+   - Move them to Out of Scope with a reason: `- [Requirement] — [why invalidated]`
 
 3. **Requirements emerged?**
-   - Any new requirements discovered during building?
-   - Add to Active: `- [ ] [New requirement]`
+   - Did building reveal any new requirements?
+   - Add them to Active: `- [ ] [New requirement]`
 
 4. **Decisions to log?**
-   - Extract decisions from SUMMARY.md files
-   - Add to Key Decisions table with outcome if known
+   - Extract decisions from SUMMARY.md files.
+   - Add them to the Key Decisions table.
+   - If you know the outcome, add it to the table.
 
 5. **"What This Is" still accurate?**
-   - If the product has meaningfully changed, update the description
-   - Keep it current and accurate
+   - If the product changed meaningfully, update the description.
+   - Keep it current and accurate.
 
 **Update PROJECT.md:**
 
@@ -302,7 +294,7 @@ After (Phase 2 shipped JWT auth, discovered rate limiting needed):
 
 <step name="graduation_scan">
 
-Scan LEARNINGS.md files from recent phases for recurring patterns and surface promotion candidates to the developer.
+Scan LEARNINGS.md files from recent phases for recurring patterns. Show promotion candidates to the developer.
 
 **Invoke the graduation helper:**
 
@@ -310,9 +302,13 @@ Scan LEARNINGS.md files from recent phases for recurring patterns and surface pr
 @~/.claude/gsd-core/workflows/graduation.md
 ```
 
-This step is fully delegated to `graduation.md`. It handles guard checks (feature flag, window size, threshold), clustering, backlog filtering, HITL prompting, promotion writes, and STATE.md updates.
+`graduation.md` handles this entire step. It handles guard checks, clustering, backlog filtering, HITL prompting, promotion writes, and STATE.md updates.
 
-**This step is always non-blocking:** graduation candidates are surfaced for the developer's decision; no action is required to continue the transition. If the graduation scan produces no qualifying clusters, it prints a single `[graduation: no qualifying clusters]` line and returns.
+The guard checks cover the feature flag, window size, and threshold.
+
+**This step is always non-blocking:** The developer sees graduation candidates and decides what to do. No action needs to occur for the transition to continue.
+
+If the graduation scan produces no qualifying clusters, it prints a single `[graduation: no qualifying clusters]` line and returns.
 
 **Step complete when:**
 
@@ -324,9 +320,9 @@ This step is fully delegated to `graduation.md`. It handles guard checks (featur
 
 <step name="update_current_position_after_transition">
 
-**Note:** Basic position updates (Current Phase, Status, Current Plan, Last Activity) were already handled by `gsd_run query phase.complete` in the update_roadmap_and_state step.
+**Note:** `gsd_run query phase.complete` already made the basic position updates in the update_roadmap_and_state step. These updates include Current Phase, Status, Current Plan, and Last Activity.
 
-Verify the updates are correct by reading STATE.md. If the progress bar needs updating, use:
+Read STATE.md to make sure that the updates are correct. If the progress bar needs an update, use:
 
 ```bash
 PROGRESS=$(gsd_run query progress.bar --raw)
@@ -420,30 +416,32 @@ Resume file: None
 
 - [ ] Last session timestamp updated to current date and time
 - [ ] Stopped at describes phase completion and next phase
-- [ ] Resume file confirmed as None (transitions don't use resume files)
+- [ ] Resume file confirmed as None (transitions do not use resume files)
 
 </step>
 
 <step name="offer_next_phase">
 
-**MANDATORY: Verify milestone status before presenting next steps.**
+**MANDATORY: Make sure of the milestone status before you show the next steps.**
 
 **Use the transition result from `gsd_run query phase.complete`:**
 
-The `is_last_phase` field from the phase complete result tells you directly:
+The `is_last_phase` field from the phase complete result shows:
 - `is_last_phase: false` → More phases remain → Go to **Route A**
 - `is_last_phase: true` → Last phase done → **Check for workstream collisions first**
 
 The `next_phase` and `next_phase_name` fields give you the next phase details.
 
-If you need additional context, use:
+If you need more context, use:
 ```bash
 ROADMAP=$(gsd_run query roadmap.analyze)
 ```
 
-This returns all phases with goals, disk status, and completion info.
+This returns all phases with goals, disk status, and completion information.
 
-**Section-manifest gate (#2994):** `gsd_run` is already established above (`verify_completion` step) — fetch the dedicated `init.transition` bundle for the workstream-collision-check gate below:
+**Section-manifest gate (#2994):** The `verify_completion` step above already establishes `gsd_run`.
+
+Get the dedicated `init.transition` bundle for the workstream-collision-check gate below:
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -460,7 +458,9 @@ Extract from `INIT_TRANSITION`: `other_active_workstreams`, `section_manifest`.
 ---
 
 <!-- gsd:section id="workstream-collision-check" when="state:workstream-active" -->
-If `section_manifest` (from `INIT_TRANSITION`) is `null` or `"workstream-collision-check"` is in its `included` list: read and execute `gsd-core/workflows/transition/steps/workstream-collision-check.md`. Otherwise (flat mode) skip — do not read the file; go directly to **Route B**.
+If `section_manifest` from `INIT_TRANSITION` is `null`, read and execute `gsd-core/workflows/transition/steps/workstream-collision-check.md`.
+
+If `"workstream-collision-check"` is in its `included` list, read and execute that file. Otherwise (flat mode), skip it. Do not read the file. Go directly to **Route B**.
 <!-- /gsd:section -->
 
 ---
@@ -469,7 +469,7 @@ If `section_manifest` (from `INIT_TRANSITION`) is `null` or `"workstream-collisi
 
 Read ROADMAP.md to get the next phase's name and goal.
 
-**Check if next phase has CONTEXT.md:**
+**Look for CONTEXT.md in the next phase:**
 
 ```bash
 ls .planning/phases/*[X+1]*/*-CONTEXT.md 2>/dev/null || true
@@ -562,11 +562,11 @@ Exit skill and invoke SlashCommand("/gsd:discuss-phase [X+1] --auto ${GSD_WS}")
 
 **Route B1: Workstream done, other workstreams still active**
 
-This route is reached when `is_last_phase: true` AND the collision check found
-other active workstreams. Do NOT suggest completing the milestone or advancing
-to the next milestone — other workstreams are still working.
+Use this route when `is_last_phase: true` AND the collision check found other active workstreams.
 
-**Clear auto-advance chain flag** — workstream boundary is the natural stopping point:
+Do NOT suggest completing the milestone or advancing to the next milestone. Other workstreams are still active.
+
+**Clear auto-advance chain flag** — the workstream boundary is the stopping point:
 
 ```bash
 gsd_run query config-set workflow._auto_chain_active false
@@ -575,11 +575,11 @@ gsd_run query config-set workflow._auto_chain_active false
 <if mode="yolo">
 
 Override auto-advance: do NOT auto-continue to milestone completion.
-Present the blocking information and stop.
+Show the blocking information and stop.
 
 </if>
 
-Present (all modes):
+Show (all modes):
 
 ```
 ## ✓ Phase {X}: {Phase Name} Complete
@@ -617,10 +617,10 @@ Do NOT auto-invoke any further slash commands.
 
 **Route B: All phases complete (milestone ready to close)**
 
-**This route is only reached when:**
+**Use this route only when:**
 - `is_last_phase: true` AND no other active workstreams exist (or flat mode)
 
-**Clear auto-advance chain flag** — milestone boundary is the natural stopping point:
+**Clear auto-advance chain flag** — the milestone boundary is the stopping point:
 
 ```bash
 gsd_run query config-set workflow._auto_chain_active false
@@ -672,12 +672,14 @@ Exit skill and invoke SlashCommand("/gsd:complete-milestone {version} ${GSD_WS}"
 </process>
 
 <implicit_tracking>
-Progress tracking is IMPLICIT: planning phase N implies phases 1-(N-1) complete. No separate progress step—forward motion IS progress.
+Progress tracking is IMPLICIT: planning phase N implies that phases 1-(N-1) are complete.
+
+There is no separate progress step. Forward motion IS progress.
 </implicit_tracking>
 
 <partial_completion>
 
-If user wants to move on but phase isn't fully complete:
+If user wants to move on but phase is not fully complete:
 
 ```
 Phase [X] has incomplete plans:
@@ -690,7 +692,7 @@ Options:
 3. Stay and finish current phase
 ```
 
-Respect user judgment — they know if work matters.
+Respect the user's judgment. The user knows whether the work matters.
 
 **If marking complete with incomplete plans:**
 
