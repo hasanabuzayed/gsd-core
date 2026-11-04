@@ -1,12 +1,16 @@
 <purpose>
 
-Interactive command center for managing a milestone from a single terminal. Shows a dashboard of all phases with visual status, dispatches discuss inline and runs plan/execute inline (backgrounded when dispatch-should-flatten returns false), and loops back to the dashboard after each action. Enables parallel phase work from one terminal.
+This interactive command center manages a milestone from a single terminal. It shows a dashboard with the status of all phases.
+
+It dispatches discuss inline and runs plan/execute inline. When dispatch-should-flatten returns false, it runs plan/execute in the background. It returns to the dashboard after each action.
+
+It supports parallel phase work from one terminal.
 
 </purpose>
 
 <required_reading>
 
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 
 </required_reading>
 
@@ -16,7 +20,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 
 ## 1. Initialize
 
-Bootstrap via manager init:
+Start with manager init:
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -29,20 +33,24 @@ INIT=$(gsd_run query init.manager ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse JSON for: `milestone_version`, `milestone_name`, `phase_count`, `completed_count`, `in_progress_count`, `phases`, `recommended_actions`, `all_complete`, `waiting_signal`, `manager_flags`, `response_language`, and the optional trio `queued_milestone_version`, `queued_milestone_name`, `queued_phases` (added in SDK fix `2495-2496-2497` — may be absent on older SDK versions, treat missing as empty).
+Parse the JSON for `milestone_version`, `milestone_name`, `phase_count`, `completed_count`, `in_progress_count`, `phases`, `recommended_actions`, `all_complete`, `waiting_signal`, `manager_flags`, and `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated. Subagent dispatches (discuss/plan/execute) stay in English at the prompt level; include `response_language` in their spawn args per the workflow being dispatched.
+Also parse the optional fields `queued_milestone_version`, `queued_milestone_name`, and `queued_phases`. SDK fix `2495-2496-2497` added these fields. They may be absent on older SDK versions. If a field is missing, treat it as empty.
 
-`manager_flags` contains per-step passthrough flags from config:
-- `manager_flags.discuss` — appended to `/gsd:discuss-phase` args (e.g. `"--auto --analyze"`)
-- `manager_flags.plan` — appended to plan agent init command
-- `manager_flags.execute` — appended to execute agent init command
+**If `response_language` is set:** Present all user-facing output of this workflow in `{response_language}`. This MUST include narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
 
-These are empty strings by default. Set via: `gsd_run query config-set manager.flags.discuss "--auto --analyze"`
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output. Keep subagent dispatch prompts (discuss/plan/execute) in English. Include `response_language` in their spawn args as specified by the dispatched workflow.
 
-**If error:** Display the error message and exit.
+`manager_flags` contains passthrough flags from config for each step:
+- `manager_flags.discuss` — append to `/gsd:discuss-phase` args, for example `"--auto --analyze"`
+- `manager_flags.plan` — append to the plan agent init command
+- `manager_flags.execute` — append to the execute agent init command
 
-Display startup banner:
+These are empty strings by default. Set them with: `gsd_run query config-set manager.flags.discuss "--auto --analyze"`
+
+**If there is an error:** Show the error message and exit.
+
+Show the startup banner:
 
 ```
 ### GSD ► MANAGER
@@ -56,7 +64,7 @@ Display startup banner:
 ---
 ```
 
-Proceed to dashboard step.
+Go to the dashboard step.
 
 </step>
 
@@ -64,7 +72,7 @@ Proceed to dashboard step.
 
 ## 2. Dashboard (Refresh Point)
 
-**Every time this step is reached**, re-read state from disk to pick up changes from background agents:
+**Each time you reach this step**, read the state from disk again. This gets changes from background agents:
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -76,9 +84,7 @@ INIT=$(gsd_run query init.manager ${GSD_WS:+--ws=${GSD_WS##* }})
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Parse the full JSON. Build the dashboard display.
-
-Build dashboard from JSON. Symbols: `✓` done, `◆` active, `○` pending, `·` queued. Progress bar: 20-char `█░`.
+Parse the full JSON. Build the dashboard from the JSON. Symbols: `✓` done, `◆` active, `○` pending, `·` queued. Progress bar: 20-char `█░`.
 
 **Status mapping** (disk_status → D P E Status):
 
@@ -90,13 +96,13 @@ Build dashboard from JSON. Symbols: `✓` done, `◆` active, `○` pending, `·
 - `researched` → `◆ · ·` `○ Ready to plan`
 - `empty`/`no_directory` + `is_next_to_discuss` → `○ · ·` `○ Ready to discuss`
 - `empty`/`no_directory` otherwise → `· · ·` `· Up next`
-- If `is_active`, replace status icon with `◆` and append `(active)`
+- If `is_active`, replace the status icon with `◆` and append `(active)`
 
-If any `is_active` phases, show: `◆ Background: {action} Phase {N}, ...` above grid.
+If any phases have `is_active`, show `◆ Background: {action} Phase {N}, ...` above the grid.
 
-Use `display_name` (not `name`) for the Phase column — it's pre-truncated to 20 chars with `…` if clipped. Pad all phase names to the same width for alignment.
+Use `display_name` (not `name`) for the Phase column. If clipped, it is pre-truncated to 20 chars with `…`. Pad all phase names to the same width for alignment.
 
-Use `deps_display` from init JSON for the Deps column — shows which phases this phase depends on (e.g. `1,3`) or `—` for none.
+Use `deps_display` from the init JSON for the Deps column. It shows the phases that this phase depends on, for example `1,3`. If there are none, it shows `—`.
 
 Example output:
 
@@ -116,9 +122,13 @@ Example output:
 
 **Queued section (next milestone preview):**
 
-If `queued_phases` is present and non-empty, render a compact preview of the next milestone's phases directly below the main table. This surfaces upcoming work without cluttering the active-milestone grid. Skip this section entirely when `queued_phases` is empty or missing (e.g. the active milestone is the last one in the roadmap).
+If `queued_phases` is present and non-empty, show a compact preview of the next milestone's phases directly below the main table. This shows future work without adding it to the active-milestone grid.
 
-Use `queued_milestone_version` and `queued_milestone_name` for the header. Phases render without D/P/E columns since they aren't discussed yet — just number, name (pre-truncated `display_name`), dependencies (`deps_display`), and a fixed `· Queued` status. Phase-name padding should match the active-table column width for visual alignment.
+If `queued_phases` is empty or missing, skip this section entirely. For example, this occurs when the active milestone is the last one in the roadmap.
+
+Use `queued_milestone_version` and `queued_milestone_name` for the header. The phases are not discussed yet. Show them without D/P/E columns.
+
+Show only the number, name (pre-truncated `display_name`), dependencies (`deps_display`), and fixed `· Queued` status. Phase-name padding should match the active-table column width for visual alignment.
 
 Example:
 
@@ -132,7 +142,7 @@ Example:
  | 34| Business Day Audit   | 31   | · Queued     |
 ```
 
-Queued phases are NOT eligible for the Continue action menu — they live in a future milestone and must wait for the current milestone to ship. The preview exists purely for situational awareness.
+Queued phases are NOT eligible for the Continue action menu. They are in a future milestone and must wait for the current milestone to ship. The preview is only for awareness of future work.
 
 **Recommendations section:**
 
@@ -146,8 +156,11 @@ All {phase_count} phases verified complete. Ready for final steps:
   → /gsd:complete-milestone — archive and wrap up
 ```
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
-Ask user via AskUserQuestion:
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `$ARGUMENTS` contains `--text` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+
+When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. Non-Claude runtimes need this when `AskUserQuestion` is not available. Examples include OpenAI Codex and Antigravity.
+
+Ask the user via AskUserQuestion:
 - **question:** "All phases complete. What next?"
 - **options:** "Verify work" / "Complete milestone" / "Exit manager"
 
@@ -158,19 +171,19 @@ Handle responses:
 
 **If NOT all_complete**, build compound options from `recommended_actions`:
 
-**Compound option logic:** Group background actions (plan/execute) together, and pair them with the single inline action (discuss) when one exists. The goal is to present the fewest options possible — one option can dispatch multiple background agents plus one inline action.
+**Compound option logic:** Group background actions (plan/execute) together. When a single inline action (discuss) exists, pair it with them. Show the fewest options possible. One option can dispatch multiple background agents plus one inline action.
 
 **Building options:**
 
-1. Collect all background actions (execute and plan recommendations) — there can be multiple of each.
-2. Collect verification actions (`verify`) for implementation-complete phases whose canonical verification has not passed.
-3. Collect the inline action (discuss recommendation, if any — there will be at most one since discuss is sequential).
+1. Collect all background actions (execute and plan recommendations). There can be multiple of each.
+2. Collect verification actions (`verify`) for implementation-complete phases without a passing canonical verification.
+3. If an inline action exists, collect it (the discuss recommendation). There will be at most one because discuss is sequential.
 4. Build compound options:
 
    **If there are ANY recommended actions (background, inline, or both):**
    Create ONE primary "Continue" option that dispatches ALL of them together:
    - Label: `"Continue"` — always this exact word
-   - Below the label, list every action that will happen. Enumerate ALL recommended actions — do not cap or truncate:
+   - Below the label, list every action that will occur. List ALL recommended actions. Do not limit or truncate the list:
      ```
      Continue:
        → Execute Phase 32 (background)
@@ -178,16 +191,16 @@ Handle responses:
        → Verify Phase 33
        → Discuss Phase 35 (inline)
      ```
-   - This dispatches all background agents first, runs verification actions inline, then runs the inline discuss (if any).
-   - If there is no inline discuss, the dashboard refreshes after spawning background agents and inline verification.
+   - This dispatches all background agents first. It then runs verification actions inline. If an inline discuss exists, it runs that next.
+   - If there is no inline discuss, the dashboard refreshes after it spawns background agents and runs inline verification.
 
-   **Important:** The Continue option must include EVERY action from `recommended_actions` — not just 2. If there are 3 actions, list 3. If there are 5, list 5.
+   **Important:** The Continue option must include EVERY action from `recommended_actions`, not just 2. If there are 3 actions, list 3. If there are 5, list 5.
 
 4. Always add:
    - `"Refresh dashboard"`
    - `"Exit manager"`
 
-Display recommendations compactly:
+Show the recommendations in a compact format:
 
 ```
 ### ▶ Next Steps
@@ -198,15 +211,17 @@ Continue:
   → Discuss Phase 35 (inline)
 ```
 
-**Auto-refresh:** If background agents are running (`is_active` is true for any phase), set a 60-second auto-refresh cycle. After presenting the action menu, if no user input is received within 60 seconds, automatically refresh the dashboard. This interval is configurable via `manager_refresh_interval` in GSD config (default: 60 seconds, set to 0 to disable).
+**Auto-refresh:** If background agents are active (`is_active` is true for any phase), set a 60-second auto-refresh cycle. After you show the action menu, wait for user input. If no input arrives within 60 seconds, automatically refresh the dashboard.
+
+You can configure this interval with `manager_refresh_interval` in GSD config. The default is 60 seconds. Set it to 0 to disable auto-refresh.
 
 Present via AskUserQuestion:
 - **question:** "What would you like to do?"
 - **options:** (compound options as built above + refresh + exit, AskUserQuestion auto-adds "Other")
 
-**On "Other" (free text):** Parse intent — if it mentions a phase number and action, dispatch accordingly. If unclear, display available actions and loop to action_menu.
+**On "Other" (free text):** Parse the intent. If it mentions a phase number and action, dispatch that action. If the intent is unclear, show the available actions and return to action_menu.
 
-Proceed to handle_action step with the selected action.
+Go to the handle_action step with the selected action.
 
 </step>
 
@@ -224,10 +239,10 @@ Go to exit step.
 
 ### Compound Action (background + inline)
 
-When the user selects a compound option, behavior depends on whether the runtime supports background dispatch of nesting-capable orchestrators — the Plan Phase N / Execute Phase N handlers below resolve it via `gsd_run query dispatch-should-flatten` (#1708):
+When the user selects a compound option, behavior depends on runtime support for background dispatch of nesting-capable orchestrators. The Plan Phase N / Execute Phase N handlers below resolve this with `gsd_run query dispatch-should-flatten` (#1708):
 
-- **If `FLATTEN` is `false` (the host can background a nesting-capable orchestrator — e.g. codex, cursor):** **Spawn all background agents first** (plan/execute) — dispatch them in parallel using the Plan Phase N / Execute Phase N handlers below — then run verification actions, then run the inline discuss; the background agents continue while you verify/discuss.
-- **Otherwise (`FLATTEN` is `true` — run inline):** run the chosen plan/execute step(s) **inline** via their handlers below (in order), then run verification actions, then run the inline discuss. There is no overlap.
+- **If `FLATTEN` is `false`:** The host can run a nesting-capable orchestrator in the background, for example codex or cursor. **Spawn all background agents first** (plan/execute). Dispatch them in parallel with the Plan Phase N / Execute Phase N handlers below. Then run verification actions. Then run the inline discuss. The background agents continue while you verify/discuss.
+- **Otherwise (`FLATTEN` is `true` — run inline):** Run the chosen plan/execute step(s) **inline** via their handlers below, in order. Then run verification actions. Then run the inline discuss. There is no overlap.
 
 Inline verification:
 
@@ -246,7 +261,7 @@ After discuss completes, loop back to dashboard step.
 
 ### Discuss Phase N
 
-Discussion is interactive — needs user input. Run inline with any configured flags:
+Discussion is interactive and needs user input. Run it inline with any configured flags:
 
 ```
 Skill(skill="gsd-discuss-phase", args="{PHASE_NUM} {manager_flags.discuss}")
@@ -256,7 +271,9 @@ After discuss completes, loop back to dashboard step.
 
 ### Plan Phase N
 
-Planning runs autonomously. **First resolve whether background dispatch is safe.** Background dispatch is only safe on a runtime where a backgrounded agent can still nest the pipeline's subagents (plan-checker / worktree executors / verifier). This is determined from the documentation-sourced dispatch capability in the registry (#1708); Claude Code's backgrounded agents have no `Agent`/`Task` tool, and every other runtime either prohibits nested subagents or disables them by default. So run **inline** everywhere except where `dispatch-should-flatten` returns `false`.
+Planning runs autonomously. **First determine whether background dispatch is safe.** Background dispatch is only safe when a background agent can nest the pipeline's subagents on the runtime. These subagents include plan-checker / worktree executors / verifier.
+
+The documentation-sourced dispatch capability in the registry determines this (#1708). Claude Code's background agents have no `Agent`/`Task` tool. Every other runtime prohibits nested subagents or disables them by default. Run **inline** everywhere except where `dispatch-should-flatten` returns `false`.
 
 ```bash
 FLATTEN=$(gsd_run query dispatch-should-flatten --raw 2>/dev/null || echo "true")
@@ -284,7 +301,9 @@ Important: You are running in the background. Do NOT use AskUserQuestion — mak
 )
 ```
 
-> **ORCHESTRATOR RULE — BACKGROUND DISPATCH**: After calling Agent() above with `run_in_background=true`, do NOT do any planning work for this phase independently. Return to the dashboard immediately and wait for the background agent to report back. Only resume planning-related work when the subagent result is available. Never call `ScheduleWakeup` or any host wake/sleep-scheduling tool while waiting (#4079) — a partial-args wake call surfaces a red validation error; the dashboard loop is the wait.
+> **ORCHESTRATOR RULE — BACKGROUND DISPATCH**: After you call Agent() above with `run_in_background=true`, do NOT do planning work for this phase independently. Return to the dashboard immediately. Wait for the background agent to report its result.
+
+> When the subagent result is available, and only then, resume planning-related work. Never call `ScheduleWakeup` or any host wake/sleep-scheduling tool while you wait (#4079). A partial-args wake call shows a red validation error. The dashboard loop is the wait.
 
 Display:
 
@@ -294,7 +313,7 @@ Display:
 
 Loop back to dashboard step.
 
-**Otherwise (`FLATTEN` is `true` — run inline):** Run plan inline so the plan-checker and quality gates actually run — do NOT wrap it in `Agent(run_in_background=true, …)`:
+**Otherwise (`FLATTEN` is `true` — run inline):** Run plan inline so the plan-checker and quality gates run. Do NOT wrap it in `Agent(run_in_background=true, …)`:
 
 ```
 Skill(skill="gsd-plan-phase", args="{N} --auto {manager_flags.plan}")
@@ -310,7 +329,9 @@ Then loop back to dashboard step.
 
 ### Execute Phase N
 
-Execution runs autonomously. **First resolve whether background dispatch is safe.** Background dispatch is only safe on a runtime where a backgrounded agent can still nest the pipeline's subagents (plan-checker / worktree executors / verifier). This is determined from the documentation-sourced dispatch capability in the registry (#1708); Claude Code's backgrounded agents have no `Agent`/`Task` tool, and every other runtime either prohibits nested subagents or disables them by default. So run **inline** everywhere except where `dispatch-should-flatten` returns `false`.
+Execution runs autonomously. **First determine whether background dispatch is safe.** Background dispatch is only safe when a background agent can nest the pipeline's subagents on the runtime. These subagents include plan-checker / worktree executors / verifier.
+
+The documentation-sourced dispatch capability in the registry determines this (#1708). Claude Code's background agents have no `Agent`/`Task` tool. Every other runtime prohibits nested subagents or disables them by default. Run **inline** everywhere except where `dispatch-should-flatten` returns `false`.
 
 ```bash
 FLATTEN=$(gsd_run query dispatch-should-flatten --raw 2>/dev/null || echo "true")
@@ -338,7 +359,9 @@ Important: You are running in the background. Do NOT use AskUserQuestion — mak
 )
 ```
 
-> **ORCHESTRATOR RULE — BACKGROUND DISPATCH**: After calling Agent() above with `run_in_background=true`, do NOT do any execution work for this phase independently. Return to the dashboard immediately and wait for the background agent to report back. Only resume execution-related work when the subagent result is available. Never call `ScheduleWakeup` or any host wake/sleep-scheduling tool while waiting (#4079) — a partial-args wake call surfaces a red validation error; the dashboard loop is the wait.
+> **ORCHESTRATOR RULE — BACKGROUND DISPATCH**: After you call Agent() above with `run_in_background=true`, do NOT do execution work for this phase independently. Return to the dashboard immediately. Wait for the background agent to report its result.
+
+> When the subagent result is available, and only then, resume execution-related work. Never call `ScheduleWakeup` or any host wake/sleep-scheduling tool while you wait (#4079). A partial-args wake call shows a red validation error. The dashboard loop is the wait.
 
 Display:
 
@@ -348,7 +371,7 @@ Display:
 
 Loop back to dashboard step.
 
-**Otherwise (`FLATTEN` is `true` — run inline):** Run execute inline so worktree isolation and the verifier actually run — do NOT wrap it in `Agent(run_in_background=true, …)`:
+**Otherwise (`FLATTEN` is `true` — run inline):** Run execute inline so worktree isolation and the verifier run. Do NOT wrap it in `Agent(run_in_background=true, …)`:
 
 ```
 Skill(skill="gsd-execute-phase", args="{N} {manager_flags.execute}")
@@ -368,10 +391,10 @@ Then loop back to dashboard step.
 
 ## 5. Background Agent Completion
 
-When notified that a background agent completed:
+When you receive notice that a background agent completed:
 
 1. Read the result message from the agent.
-2. Display a brief notification:
+2. Show a brief notification:
 
 ```
 ✓ {description}
@@ -384,23 +407,23 @@ When notified that a background agent completed:
 
 Classify the error:
 
-**Permission / tool access error** (e.g. tool not allowed, permission denied, sandbox restriction):
-- Parse the error to identify which tool or command was blocked.
-- Display the error clearly, then offer to fix it:
-  - **question:** "Phase {N} failed — permission denied for `{tool_or_command}`. Want me to add it to settings.local.json so it's allowed?"
+**Permission / tool access error** (for example, tool not allowed, permission denied, sandbox restriction):
+- Parse the error to find which tool or command the runtime blocked.
+- Show the error clearly. Then offer to fix it:
+  - **question:** "Phase {N} failed — permission denied for `{tool_or_command}`. Want me to add it to settings.local.json so it is allowed?"
   - **options:** "Add permission and retry" / "Run this phase inline instead" / "Skip and continue"
   - "Add permission and retry": Use `Skill(skill="update-config")` to add the permission to `settings.local.json`, then re-spawn the background agent. Loop to dashboard.
-  - "Run this phase inline instead": Dispatch the same action inline via the appropriate Skill — use `Skill(skill="gsd-plan-phase", args="{N}")` if the failed action was planning, or `Skill(skill="gsd-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
+  - "Run this phase inline instead": Dispatch the same action inline via the appropriate Skill. If planning failed, use `Skill(skill="gsd-plan-phase", args="{N}")`. If execution failed, use `Skill(skill="gsd-execute-phase", args="{N}")`. Then return to the dashboard.
   - "Skip and continue": Loop to dashboard (phase stays in current state).
 
-**Other errors** (git lock, file conflict, logic error, etc.):
-- Display the error, then offer options via AskUserQuestion:
+**Other errors** (for example, git lock, file conflict, logic error):
+- Show the error. Then offer options via AskUserQuestion:
   - **question:** "Background agent for Phase {N} encountered an issue: {error}. What next?"
   - **options:** "Retry" / "Run inline instead" / "Skip and continue" / "View details"
   - "Retry": Re-spawn the same background agent. Loop to dashboard.
-  - "Run inline instead": Dispatch the action inline via the appropriate Skill — use `Skill(skill="gsd-plan-phase", args="{N}")` if the failed action was planning, or `Skill(skill="gsd-execute-phase", args="{N}")` if the failed action was execution. Loop to dashboard after.
+  - "Run inline instead": Dispatch the action inline via the appropriate Skill. If planning failed, use `Skill(skill="gsd-plan-phase", args="{N}")`. If execution failed, use `Skill(skill="gsd-execute-phase", args="{N}")`. Then return to the dashboard.
   - "Skip and continue": Loop to dashboard (phase stays in current state).
-  - "View details": Read STATE.md blockers section, display, then re-present options.
+  - "View details": Read the STATE.md blockers section. Show it. Then show the options again.
 
 </step>
 
@@ -421,26 +444,26 @@ Display final status with progress bar:
 ---
 ```
 
-**Note:** Any background agents still running will continue to completion. Their results will be visible on next `/gsd:manager` or `/gsd:progress` invocation.
+**Note:** Any background agents still active will continue to completion. Their results will be visible on the next `/gsd:manager` or `/gsd:progress` invocation.
 
 </step>
 
 </process>
 
 <success_criteria>
-- [ ] Dashboard displays all phases with correct status indicators (D/P/E/V columns)
-- [ ] Progress bar shows accurate completion percentage
+- [ ] The dashboard shows all phases with correct status indicators (D/P/E/V columns)
+- [ ] The progress bar shows the correct completion percentage
 - [ ] Dependency resolution: blocked phases show which deps are missing
-- [ ] Recommendations prioritize: execute > plan > discuss
+- [ ] Recommendations use this priority: execute > plan > discuss
 - [ ] Discuss phases run inline via Skill() — interactive questions work
-- [ ] Plan phases run inline (or as background Task agents on Codex) — dashboard resumes when complete
-- [ ] Execute phases run inline (or as background Task agents on Codex) — dashboard resumes when complete
-- [ ] Dashboard refreshes pick up changes from background agents via disk state
-- [ ] Background agent completion triggers notification and dashboard refresh
-- [ ] Background agent errors present retry/skip options
-- [ ] All-complete state offers verify-work and complete-milestone
+- [ ] Plan phases run inline (or as background Task agents on Codex) — the dashboard resumes when complete
+- [ ] Execute phases run inline (or as background Task agents on Codex) — the dashboard resumes when complete
+- [ ] Dashboard refreshes get changes from background agents via disk state
+- [ ] Background agent completion triggers a notification and dashboard refresh
+- [ ] Background agent errors show retry/skip options
+- [ ] The all-complete state offers verify-work and complete-milestone
 - [ ] Exit shows final status with resume instructions
-- [ ] "Other" free-text input parsed for phase number and action
-- [ ] Manager loop continues until user exits or milestone completes
-- [ ] Queued section renders when `queued_phases` is non-empty; skipped when absent or empty
+- [ ] "Other" free-text input is parsed for phase number and action
+- [ ] The manager loop continues until the user exits or the milestone completes
+- [ ] The queued section shows when `queued_phases` is non-empty. It is skipped when absent or empty
 </success_criteria>

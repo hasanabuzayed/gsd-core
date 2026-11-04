@@ -1,9 +1,11 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Orchestrate parallel codebase mapper agents to analyze codebase and produce structured documents in .planning/codebase/
+Direct parallel codebase mapper agents to analyze the codebase. Produce structured documents in .planning/codebase/.
 
-Each agent has fresh context, explores a specific focus area, and **writes documents directly**. The orchestrator only receives confirmation + line counts, then writes a summary.
+Each agent has fresh context. Each agent examines a specific focus area and **writes documents directly**.
+
+The orchestrator receives only confirmation and line counts. Then it writes a summary.
 
 Output: .planning/codebase/ folder with 7 structured documents about the codebase state.
 </purpose>
@@ -21,35 +23,28 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 - Faster execution (agents run simultaneously)
 
 **Document quality over length:**
-Include enough detail to be useful as reference. Prioritize practical examples (especially code patterns) over arbitrary brevity.
+Include enough detail for use as a reference. Give practical examples, especially code patterns, priority over arbitrary brevity.
 
 **Always include file paths:**
-Documents are reference material for Claude when planning/executing. Always include actual file paths formatted with backticks: `src/services/user.ts`.
+Claude uses the documents as reference material for planning/executing. Always include actual file paths formatted with backticks: `src/services/user.ts`.
 </philosophy>
 
 <process>
 
 <step name="parse_paths_flag" priority="first">
-Parse an optional `--paths <p1,p2,...>` argument. When supplied (by the
-post-execute codebase-drift gate in `/gsd:execute-phase` or by a user running
-`/gsd:map-codebase --paths apps/accounting,packages/ui`), the workflow
-operates in **incremental-remap mode**:
+Parse an optional `--paths <p1,p2,...>` argument.
 
-- Pass `--paths <p1>,<p2>,...` through to each spawned `gsd-codebase-mapper`
-  agent's prompt. Agents scope their Glob/Grep/Bash exploration to the listed
-  repo-relative prefixes only — no whole-repo scan.
+If the post-execute codebase-drift gate in `/gsd:execute-phase` supplies it, the workflow uses **incremental-remap mode**. The workflow also uses this mode if a user runs `/gsd:map-codebase --paths apps/accounting,packages/ui`:
+
+- Pass `--paths <p1>,<p2>,...` to each spawned `gsd-codebase-mapper` agent's prompt. Agents restrict their Glob/Grep/Bash exploration to the listed repo-relative prefixes only. They do not scan the whole repo.
 - Reject path values that contain `..`, start with `/`, or include shell
   metacharacters (`;`, `` ` ``, `$`, `&`, `|`, `<`, `>`). If all provided
   paths are invalid, fall back to a normal whole-repo run.
-- The `last_mapped_commit` baseline is NOT the mapper's job. It is stamped
-  deterministically by the `stamp_codebase_map` step below, on every run,
-  incremental or full. See that step for why.
+- The mapper does NOT stamp the `last_mapped_commit` baseline. The `stamp_codebase_map` step below stamps it deterministically on every run, incremental or full. See that step for the reason.
 
-**Explicit contract — propagate `--paths` through a single normalized
-variable.** Downstream steps (`spawn_agents`, `sequential_mapping`, and any
-Agent-mode prompt construction) MUST use `${PATH_SCOPE_HINT}` to ensure every
-mapper receives the same deterministic scope. Without this contract
-incremental-remap can silently regress to a whole-repo scan.
+**Explicit contract — pass `--paths` through a single normalized variable.** Downstream steps (`spawn_agents`, `sequential_mapping`, and any Agent-mode prompt construction) MUST use `${PATH_SCOPE_HINT}`.
+
+This makes sure that every mapper receives the same deterministic scope. Without this contract, incremental-remap can silently return to a whole-repo scan.
 
 ```bash
 # Validated, comma-separated paths (empty if --paths absent or all rejected):
@@ -61,11 +56,9 @@ else
 fi
 ```
 
-All mapper prompts built later in this workflow MUST include
-`${PATH_SCOPE_HINT}` (expanded to empty when full-repo mode is in effect).
+All mapper prompts built later in this workflow MUST include `${PATH_SCOPE_HINT}`. In full-repo mode, expand it to empty.
 
-When `--paths` is absent, behave exactly as before: full-repo scan, all 7
-documents refreshed.
+When `--paths` is absent, behave exactly as before. Scan the full repo and refresh all 7 documents.
 </step>
 
 <step name="init_context" priority="first">
@@ -87,7 +80,7 @@ Extract from init JSON: `mapper_model`, `commit_docs`, `codebase_dir`, `existing
 </step>
 
 <step name="check_existing">
-Check if .planning/codebase/ already exists using `has_maps` from init context.
+Use `has_maps` from init context to find out if .planning/codebase/ already exists.
 
 If `codebase_dir_exists` is true:
 ```bash
@@ -108,9 +101,8 @@ What's next?
 
 Wait for user response.
 
-If "Refresh": Delete .planning/codebase/, continue to create_structure
-If "Update": Ask which documents to update, then record the selection for the
-stamp step below and continue to spawn_agents (filtered):
+If "Refresh": Delete .planning/codebase/. Continue to create_structure.
+If "Update": Ask which documents to update. Record the selection for the stamp step below. Continue to spawn_agents (filtered):
 
 ```bash
 # Comma-separated filenames the user selected, e.g. "STACK.md,CONCERNS.md":
@@ -119,12 +111,11 @@ UPDATED_DOCS="<selected documents>"
 
 If "Skip": Exit workflow
 
-`UPDATED_DOCS` narrows `stamp_codebase_map`. Leave it empty on every other
-path (Refresh, first run, `--paths`), which regenerate all seven documents.
-An Update run does not touch the documents the user did not select, so
-stamping those at HEAD would claim a freshness they do not have.
+`UPDATED_DOCS` narrows `stamp_codebase_map`. Leave it empty on every other path (Refresh, first run, `--paths`). These paths regenerate all seven documents.
 
-**If doesn't exist:**
+An Update run does not touch the documents the user did not select. If the workflow stamps those documents at HEAD, it claims freshness that they do not have.
+
+**If does not exist:**
 Continue to create_structure.
 </step>
 
@@ -148,13 +139,13 @@ Continue to spawn_agents.
 </step>
 
 <step name="detect_runtime_capabilities">
-Before spawning agents, detect whether the current runtime supports the `Agent` tool for subagent delegation.
+Before you spawn agents, find out whether the current runtime supports the `Agent` tool for subagent delegation.
 
-**How to detect:** Check if you have access to an `Agent` tool (may be capitalized as `Agent` or lowercase as `agent` depending on runtime). If you do NOT have an `Agent`/`agent` tool (or only have tools like `browser_subagent` which is for web browsing, NOT code analysis):
+**How to detect:** Find out if you have access to an `Agent` tool. The name may be `Agent` or `agent`, depending on the runtime.
 
-→ **Skip `spawn_agents` and `collect_confirmations`** — go directly to `sequential_mapping` instead.
+If you do NOT have an `Agent`/`agent` tool, skip `spawn_agents` and `collect_confirmations`. Also skip them if you only have tools like `browser_subagent`, which is for web browsing, NOT code analysis. Go directly to `sequential_mapping` instead.
 
-**CRITICAL:** Never use `browser_subagent` or `Explore` as a substitute for `Agent`. The `browser_subagent` tool is exclusively for web page interaction and will fail for codebase analysis. If `Agent` is unavailable, perform the mapping sequentially in-context.
+**CRITICAL:** Never use `browser_subagent` or `Explore` as a substitute for `Agent`. The `browser_subagent` tool is only for web page interaction. It will fail for codebase analysis. If `Agent` is unavailable, do the mapping sequentially in-context.
 </step>
 
 <step name="spawn_agents" condition="Agent tool is available">
@@ -162,17 +153,17 @@ Spawn 4 parallel gsd-codebase-mapper agents.
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatch on a built-in-only runtime (kimi-code — three built-ins only), resolve the role with `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the command returns the role unchanged. On kimi-code the command maps the role to `coder`/`explore`/`plan` by role-suffix. In both cases, `${AGENT_SKILLS_<ROLE>}` carries the persona (Phase 3). See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
-> **Model omission (#2517).** Omit the `model` parameter entirely when the value it would carry (`mapper_model`) is `"inherit"` or empty. An empty value 404s on runtimes without native tier aliases — the default on non-Claude runtimes. Omitting it inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
+> **Model omission (#2517).** If the value for `model` (`mapper_model`) is `"inherit"` or empty, omit the `model` parameter entirely. An empty value causes a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes. If you omit `model`, the agent inherits the orchestrator's model. See @gsd-core/references/model-profile-resolution.md.
 
 Use Agent tool with `subagent_type="gsd-codebase-mapper"`, `model="{mapper_model}"`, and `run_in_background=true` for parallel execution.
 
 **CRITICAL:** Use the dedicated `gsd-codebase-mapper` agent, NOT `Explore` or `browser_subagent`. The mapper agent writes documents directly.
 
-Print: "Spawning 4 parallel codebase mapper agents (each runs in a subagent — no output until they return, ~1–5 min; expected, not a freeze)"
+Print: "Spawning 4 parallel codebase mapper agents (each runs in a subagent — no output until they return, ~1–5 min. Expected, not a freeze)"
 
 **Agent 1: Tech Focus**
 
@@ -277,23 +268,23 @@ ${AGENT_SKILLS_MAPPER}"
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling all 4 Agent() calls above with `run_in_background=true`, do NOT read any source files, analyze the codebase, or write any mapping documents independently while the subagents are active. Wait for all 4 agents to complete before proceeding to collect_confirmations. This prevents duplicate work and wasted context.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After all 4 Agent() calls above with `run_in_background=true`, do NOT read source files while the subagents are active. Do NOT analyze the codebase or independently write mapping documents while the subagents are active. Wait for all 4 agents to complete before you continue to collect_confirmations. This prevents duplicate work and wasted context.
 
 Continue to collect_confirmations.
 </step>
 
 <step name="collect_confirmations">
-Wait for all 4 background agents to finish, then read each agent's output file to collect confirmations.
+Wait for all 4 background agents to finish. Then read each agent's output file to collect confirmations.
 
-Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result that carries an `outputFile` path (and `canReadOutputFile: true`). The 4 agents run concurrently and each one's completion arrives as a message in this conversation when it finishes — do NOT issue a separate blocking call to wait for them.
+Each `Agent(...)` call above with `run_in_background=true` returns an `async_launched` result. The result carries an `outputFile` path (and `canReadOutputFile: true`). The 4 agents run at the same time. When each agent finishes, a completion message arrives in this conversation. Do NOT issue a separate blocking call to wait for them.
 
-**Once all 4 agents have reported completion, read each agent's output file (single message with 4 Read calls):**
+**After all 4 agents report completion, read each agent's output file (single message with 4 Read calls):**
 ```
 Read tool:
   file_path: "{outputFile from that agent's async_launched result}"
 ```
 
-> Allow up to `workflow.subagent_timeout` for the slowest agent to finish before treating it as failed. The timeout is configurable via `workflow.subagent_timeout` in `.planning/config.json` (milliseconds). Default: 300000 (5 minutes). Increase for large codebases or slower models.
+> Allow up to `workflow.subagent_timeout` for the slowest agent to finish before you treat it as failed. You can configure the timeout with `workflow.subagent_timeout` in `.planning/config.json` (milliseconds). Default: 300000 (5 minutes). Increase it for large codebases or slower models.
 
 Each output file contains that agent's completion confirmation. Parse the confirmation marker (see below) from the file contents.
 
@@ -309,7 +300,7 @@ Each output file contains that agent's completion confirmation. Parse the confir
 Ready for orchestrator summary.
 ```
 
-**What you receive:** Just file paths and line counts. NOT document contents.
+**What you receive:** Only file paths and line counts. NOT document contents.
 
 If any agent failed, note the failure and continue with successful documents.
 
@@ -317,15 +308,15 @@ Continue to verify_output.
 </step>
 
 <step name="sequential_mapping" condition="Agent tool is NOT available (e.g. Antigravity, Codex)">
-When the `Agent` tool is unavailable, perform codebase mapping sequentially in the current context. This replaces `spawn_agents` and `collect_confirmations`.
+When the `Agent` tool is unavailable, do codebase mapping sequentially in the current context. This replaces `spawn_agents` and `collect_confirmations`.
 
 **IMPORTANT:** Do NOT use `browser_subagent`, `Explore`, or any browser-based tool. Use only file system tools (Read, Bash, Write, Grep, Glob, list_dir, view_file, grep_search, or equivalent tools available in your runtime).
 
-**IMPORTANT:** Set all date stamps (`**Analysis Date:**`, footer, `<!-- refreshed -->`) to `{date}` from init context, overwriting any existing date — Update runs seed from files with concrete prior dates, so merely replacing `[YYYY-MM-DD]` placeholders is not sufficient. NEVER guess the date.
+**IMPORTANT:** Set all date stamps (`**Analysis Date:**`, footer, `<!-- refreshed -->`) to `{date}` from init context. Overwrite any existing date. Update runs seed from files with concrete before dates. Replacing only `[YYYY-MM-DD]` placeholders is not enough. NEVER guess the date.
 
-**SCOPE:** When `${PATH_SCOPE_HINT}` is non-empty (i.e. `--paths` was supplied), restrict every pass below to the validated path prefixes in `${SCOPED_PATHS}`. Do NOT scan files outside those prefixes. When `${PATH_SCOPE_HINT}` is empty, perform a full-repo scan.
+**SCOPE:** When `${PATH_SCOPE_HINT}` is non-empty (`--paths` was supplied), restrict every pass below to the validated path prefixes in `${SCOPED_PATHS}`. Do NOT scan files outside those prefixes. When `${PATH_SCOPE_HINT}` is empty, do a full-repo scan.
 
-Perform all 4 mapping passes sequentially:
+Do all 4 mapping passes sequentially:
 
 **Pass 1: Tech Focus**
 - Explore package.json/Cargo.toml/go.mod/requirements.txt, config files, dependency trees
@@ -352,7 +343,7 @@ Continue to verify_output.
 </step>
 
 <step name="verify_output">
-Verify all documents created successfully:
+Make sure that all documents were created successfully:
 
 ```bash
 ls -la .planning/codebase/
@@ -363,47 +354,35 @@ wc -l .planning/codebase/*.md
 - All 7 documents exist
 - No empty documents (each should have >20 lines)
 
-If any documents missing or empty, note which agents may have failed.
+If any documents are missing or empty, note which agents possibly failed.
 
 Continue to stamp_codebase_map.
 </step>
 
 <step name="stamp_codebase_map">
-Stamp the drift baseline into every document that was just written:
+Stamp the drift baseline into every document that the mapper just wrote:
 
 ```bash
 gsd_run stamp-codebase-map ${UPDATED_DOCS:+--files "$UPDATED_DOCS"}
 ```
 
-This writes `last_mapped_commit: <HEAD sha>` and `last_mapped_at: <date>` into
-the YAML frontmatter of each `.planning/codebase/*.md` that exists. It runs on
-every mapping run, incremental (`--paths`) and full alike. `--files` narrows it
-to the documents an Update run actually refreshed; `--paths` needs no narrowing
-because all seven are regenerated, just scoped in content.
+This writes `last_mapped_commit: <HEAD sha>` and `last_mapped_at: <date>` into the YAML frontmatter of each existing `.planning/codebase/*.md`. It runs on every mapping run, incremental (`--paths`) and full. `--files` narrows it to the documents that an Update run refreshed. `--paths` needs no narrowing because the workflow regenerates all seven documents with scoped content.
 
-**Why this is a shell step and not an instruction to the mapper.** The stamp is
-the only machine-readable freshness marker: the `verify codebase-drift` gate
-reads it to decide what to diff HEAD against. The human-readable markers the
-mapper writes (`**Analysis Date:**`, `<!-- refreshed: ... -->`) are restamped
-unconditionally on an Update run, so a mapper that decides its work is already
-done and rewrites only the dates still looks fresh to a human. Leaving the
-machine-readable stamp to the same agent reproduces exactly the failure the
-stamp exists to detect. A shell step cannot be skipped by a confident agent.
+**Why this is a shell step and not an instruction to the mapper.** The stamp is the only machine-readable freshness marker. The `verify codebase-drift` gate reads it to decide what to diff HEAD against.
 
-The command is non-blocking: it emits `skipped` with a `reason` outside a git
-repo or when no documents exist. Report `stamped` and `commit` in the summary
-if any entry in `failed` is non-empty; otherwise continue silently.
+On an Update run, the mapper restamps human-readable markers (`**Analysis Date:**`, `<!-- refreshed: ... -->`) without conditions. A mapper can decide its work is already done and rewrite only the dates. The document then still looks fresh to a human.
 
-Run in this position, before `commit_codebase_map`, the stamp lands on
-documents the mapper just wrote, so its markdown whitespace normalization is
-folded into the same commit. Running `stamp-codebase-map` by hand against an
-already-committed map reflows that map's whitespace as a side effect.
+If the same agent writes the machine-readable stamp, it reproduces exactly the failure that the stamp exists to detect. A confident agent cannot skip a shell step.
+
+The command is non-blocking. If it runs outside a git repo or no documents exist, it emits `skipped` with a `reason`. If any entry in `failed` is non-empty, report `stamped` and `commit` in the summary. Otherwise continue silently.
+
+Run the step in this position, before `commit_codebase_map`. The stamp then lands on documents the mapper just wrote. The same commit includes its markdown whitespace normalization. If you run `stamp-codebase-map` by hand against an already-committed map, it also reflows that map's whitespace.
 
 Continue to scan_for_secrets.
 </step>
 
 <step name="scan_for_secrets">
-**CRITICAL SECURITY CHECK:** Scan output files for accidentally leaked secrets before committing.
+**CRITICAL SECURITY CHECK:** Before you commit, scan output files for accidentally leaked secrets.
 
 Run secret pattern detection:
 
@@ -430,7 +409,7 @@ This would expose credentials if committed.
 Pausing before commit. Reply "safe to proceed" if the flagged content is not actually sensitive, or edit the files first.
 ```
 
-Wait for user confirmation before continuing to commit_codebase_map.
+Wait for user confirmation before you continue to commit_codebase_map.
 
 **If SECRETS_FOUND=false:**
 
@@ -448,7 +427,7 @@ Continue to offer_next.
 </step>
 
 <step name="offer_next">
-Present completion summary and next steps.
+Show the completion summary and next steps.
 
 **Get line counts:**
 ```bash
@@ -497,7 +476,7 @@ End workflow.
 <success_criteria>
 - .planning/codebase/ directory created
 - If Agent tool available: 4 parallel gsd-codebase-mapper agents spawned with run_in_background=true
-- If Agent tool NOT available: 4 sequential mapping passes performed inline (never using browser_subagent)
+- If Agent tool NOT available: 4 sequential mapping passes done inline (never using browser_subagent)
 - All 7 codebase documents exist
 - No empty documents (each should have >20 lines)
 - Clear completion summary with line counts

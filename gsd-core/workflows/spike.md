@@ -1,15 +1,15 @@
 <purpose>
-Spike an idea through experiential exploration — build focused experiments to feel the pieces
-of a future app, validate feasibility, and produce verified knowledge for the real build.
-Saves artifacts to `.planning/spikes/`. Companion to `/gsd:spike --wrap-up`.
+Explore an idea through focused experiments. Build experiments to experience parts of a future app and test feasibility. Produce verified knowledge for the real build.
 
-Supports two modes:
-- **Idea mode** (default) — user describes an idea to spike
-- **Frontier mode** — no argument or "frontier" / "what should I spike?" — analyzes existing spike landscape and proposes integration and frontier spikes
+Save artifacts to `.planning/spikes/`. This workflow is a companion to `/gsd:spike --wrap-up`.
+
+The workflow supports two modes:
+- **Idea mode** (default) — the user describes an idea to spike.
+- **Frontier mode** — no argument or "frontier" / "what should I spike?" — the workflow analyzes existing spikes and proposes integration and frontier spikes.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -18,7 +18,9 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST present all user-facing output of this workflow in `{response_language}`. This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 <step name="banner">
 ```
@@ -46,16 +48,15 @@ Parse `$ARGUMENTS` for:
 
 ### Load the Spike Landscape
 
-If no `.planning/spikes/` directory exists, tell the user there's nothing to analyze and offer to start fresh with an idea instead.
+If no `.planning/spikes/` directory exists, tell the user that there is nothing to analyze. Offer to start with an idea instead.
 
-Otherwise, load in this order:
+Otherwise, load the following in this order:
 
-**a. MANIFEST.md** — every idea section under `## Ideas` (each idea's paragraph and its own
-scoped Requirements) and the `## Spikes` table with verdicts (each row tagged by idea).
+**a. MANIFEST.md** — read every idea section under `## Ideas`. Include each idea's paragraph and its own scoped Requirements. Read the `## Spikes` table with verdicts. Each row has an idea tag.
 
-**b. Findings skills** — glob `./.claude/skills/spike-findings-*/SKILL.md` and read any that exist, plus their `references/*.md`. These contain curated knowledge from prior wrap-ups.
+**b. Findings skills** — glob `./.claude/skills/spike-findings-*/SKILL.md`. Read each file that exists and its `references/*.md` files. These contain selected knowledge from before wrap-ups.
 
-**c. CONVENTIONS.md** — read `.planning/spikes/CONVENTIONS.md` if it exists. Established stack and patterns.
+**c. CONVENTIONS.md** — if `.planning/spikes/CONVENTIONS.md` exists, read it for the established stack and patterns.
 
 **d. All spike READMEs** — read `.planning/spikes/*/README.md` for verdicts, results, investigation trails, and tags.
 
@@ -63,62 +64,63 @@ scoped Requirements) and the `## Spikes` table with verdicts (each row tagged by
 
 Review every pair and cluster of VALIDATED spikes. Look for:
 
-- **Shared resources:** Two spikes that both touch the same API, database, state, or data format but were tested independently.
+- **Shared resources:** Two spikes use the same API, database, state, or data format. Tests examined them independently.
 - **Data handoffs:** Spike A produces output that Spike B consumes. The formats were assumed compatible but never proven.
-- **Timing/ordering:** Spikes that work in isolation but have sequencing dependencies in the real flow.
-- **Resource contention:** Spikes that individually work but may compete for connections, memory, rate limits, or tokens when combined.
+- **Timing/ordering:** Spikes work in isolation but have sequence dependencies in the real flow.
+- **Resource contention:** Spikes work individually but may compete for connections, memory, rate limits, or tokens when combined.
 
-If integration risks exist, present them as concrete proposed spikes with names and Given/When/Then validation questions. If no meaningful integration risks exist, say so and skip this category.
+If integration risks exist, present concrete spike proposals with names and Given/When/Then validation questions. If no meaningful integration risks exist, say so and skip this category.
 
 ### Analyze for Frontier Spikes
 
-Think laterally about every idea section from MANIFEST.md and what's been proven so far for
-each. Consider:
+Think about different possibilities for each idea section in MANIFEST.md. Consider what was proven so far for each idea. Consider:
 
-- **Gaps in the vision:** Capabilities assumed but unproven.
+- **Gaps in the vision:** Assumed but unproven capabilities.
 - **Discovered dependencies:** Findings that reveal new questions.
-- **Alternative approaches:** Different angles for PARTIAL or INVALIDATED spikes.
-- **Adjacent capabilities:** Things that would meaningfully improve the idea if feasible.
+- **Alternative approaches:** Different approaches for PARTIAL or INVALIDATED spikes.
+- **Adjacent capabilities:** Capabilities that would improve the idea if feasible.
 - **Comparison opportunities:** Approaches that worked but felt heavy.
 
-Present frontier spikes as concrete proposals numbered from the highest existing spike number with Given/When/Then and risk ordering.
+Present concrete frontier spike proposals with Given/When/Then. Number them from the highest existing spike number. Order them by risk.
 
 ### Get Alignment and Execute
 
-Present all integration and frontier candidates, then ask which to run. When the user picks spikes, write definitions into `.planning/spikes/MANIFEST.md` (appending to the existing table, with each row's Idea column set to the idea key(s) it extends or validates) and proceed directly to building them starting at `research`.
+Present all integration and frontier candidates. Ask the user which spikes to run.
+
+When the user picks spikes, append their definitions to the existing table in `.planning/spikes/MANIFEST.md`. Set each row's Idea column to the idea key(s) that the spike extends or validates. Proceed directly to build them, starting at `research`.
 </step>
 
 <step name="setup_directory">
-Create `.planning/spikes/` if it doesn't exist:
+If `.planning/spikes/` does not exist, create it:
 
 ```bash
 mkdir -p .planning/spikes
 ```
 
-Check for existing spikes to determine numbering:
+Find existing spikes to determine numbering:
 ```bash
 ls -d .planning/spikes/[0-9][0-9][0-9]-* 2>/dev/null | sort | tail -1
 ```
 
-Check `commit_docs` config:
+Read the `commit_docs` config:
 ```bash
 COMMIT_DOCS=$(gsd_run query config-get commit_docs --raw 2>/dev/null || echo "true")
 ```
 </step>
 
 <step name="detect_stack">
-Check for the project's tech stack to inform spike technology choices.
+Examine the project's tech stack to guide spike technology choices.
 
-**Check conventions first.** If `.planning/spikes/CONVENTIONS.md` exists, follow its stack and patterns — these represent validated choices the user expects to see continued.
+**Examine conventions first.** If `.planning/spikes/CONVENTIONS.md` exists, follow its stack and patterns. These are validated choices that the user expects to continue.
 
-**Then check the project stack:**
+**Then examine the project stack:**
 ```bash
 ls package.json pyproject.toml Cargo.toml go.mod 2>/dev/null
 ```
 
-Use the project's language/framework by default. For greenfield projects with no conventions and no existing stack, pick whatever gets to a runnable result fastest.
+Use the project's language/framework by default. For greenfield projects with no conventions and no existing stack, pick the fastest path to a runnable result.
 
-Avoid unless the spike specifically requires it:
+Unless the spike specifically needs them, avoid:
 - Complex package management beyond `npm install` or `pip install`
 - Build tools, bundlers, or transpilers
 - Docker, containers, or infrastructure
@@ -128,20 +130,20 @@ Avoid unless the spike specifically requires it:
 <step name="load_prior_context">
 If `.planning/spikes/` has existing content, load context in this priority order:
 
-**a. Conventions:** Read `.planning/spikes/CONVENTIONS.md` if it exists.
+**a. Conventions:** If `.planning/spikes/CONVENTIONS.md` exists, read it.
 
-**b. Findings skills:** Glob for `./.claude/skills/spike-findings-*/SKILL.md` and read any that exist, plus their `references/*.md` files.
+**b. Findings skills:** Glob for `./.claude/skills/spike-findings-*/SKILL.md`. Read each file that exists and its `references/*.md` files.
 
 **c. Manifest:** Read `.planning/spikes/MANIFEST.md` for the index of all spikes.
 
-**d. Related READMEs:** Based on the new idea, identify which prior spikes are related by matching tags, names, technologies, or domain overlap. Read only those `.planning/spikes/*/README.md` files. Skip unrelated ones.
+**d. Related READMEs:** Use the new idea to find related earlier spikes. Match tags, names, technologies, or domain overlap. Read only those `.planning/spikes/*/README.md` files. Skip unrelated files.
 
-Cross-reference against this full body of prior work:
-- **Skip already-validated questions.** Note the prior spike number and move on.
-- **Build on prior findings.** Don't repeat failed approaches. Use their Research and Results sections.
-- **Reuse prior research.** Carry findings forward rather than re-researching.
+Compare against all this earlier work:
+- **Skip already-validated questions.** Note the earlier spike number and continue.
+- **Use earlier findings.** Do not repeat failed approaches. Use their Research and Results sections.
+- **Reuse earlier research.** Use findings from that research instead of repeating it.
 - **Follow established conventions.** Mention any deviation.
-- **Call out relevant prior art** when presenting the decomposition.
+- **When you present the decomposition, mention relevant earlier work.**
 
 If no `.planning/spikes/` exists, skip this step.
 </step>
@@ -149,7 +151,7 @@ If no `.planning/spikes/` exists, skip this step.
 <step name="decompose">
 **If `QUICK_MODE` is true:** Skip decomposition and alignment. Take the user's idea as a single spike question. Assign it the next available number. Jump to `research`.
 
-Break the idea into 2-5 independent questions. Frame each as Given/When/Then. Present as a table:
+Break the idea into 2-5 independent questions. Frame each as Given/When/Then. Present them as a table:
 
 ```
 | # | Spike | Type | Validates (Given/When/Then) | Risk |
@@ -163,16 +165,16 @@ Break the idea into 2-5 independent questions. Frame each as Given/When/Then. Pr
 - **standard** — one approach answering one question
 - **comparison** — same question, different approaches. Shared number with letter suffix.
 
-Good spikes: specific feasibility questions with observable output.
-Bad spikes: too broad, no observable output, or just reading/planning.
+Good spikes ask specific feasibility questions with observable output.
+Bad spikes are too broad, have no observable output, or consist only of reading/planning.
 
-Order by risk — most likely to kill the idea runs first.
+Order the spikes by risk. Run the spike most likely to stop the idea first.
 </step>
 
 <step name="align">
 **If `QUICK_MODE` is true:** Skip.
 
-### CHECKPOINT: Decision Required
+### CHECKPOINT: Decision Need
 
 {spike table from decompose step}
 
@@ -191,7 +193,7 @@ This step runs **before each individual spike**, not once at the start.
 > **Spike NNN: Descriptive Name**
 > [2-3 sentences: what this spike is, why it matters, key risk or unknown.]
 
-**b. Research the current state of the art.** Use context7 (resolve-library-id → query-docs) for libraries/frameworks. Use web search for APIs/services without a context7 entry. Read actual documentation.
+**b. Research the current state of the art.** Use context7 (resolve-library-id → query-docs) for libraries/frameworks. For APIs/services without a context7 entry, use web search. Read the documentation.
 
 **c. Surface competing approaches** as a table:
 
@@ -205,20 +207,17 @@ If 2+ credible approaches exist, plan to build quick variants within the spike a
 
 **d. Capture research findings** in a `## Research` section in the README.
 
-**Skip when unnecessary** for pure logic with no external dependencies.
+**For pure logic with no external dependencies, skip this step when unnecessary.**
 </step>
 
 <step name="create_manifest">
 Create or update `.planning/spikes/MANIFEST.md`.
 
-**Assign an idea key.** Derive a short, stable, kebab-case slug (2-4 words) summarizing the
-idea being spiked right now, e.g. `realtime-llm-streaming`. Reuse the exact same idea key for
-every spike in this session and any later session that continues the same idea. Only mint a
-new idea key when the current idea is not a continuation of one already indexed in
-MANIFEST.md — never reuse an existing idea key for an unrelated idea, and never merge two
-different ideas under one key.
+**Assign an idea key.** Derive a short, stable, kebab-case slug (2-4 words) that summarizes the current idea. For example, a slug is `realtime-llm-streaming`.
 
-If `.planning/spikes/MANIFEST.md` doesn't exist, create it:
+Reuse the exact same idea key for every spike in this session and any later session that continues the same idea. Only create a new idea key when the current idea does not continue one already indexed in MANIFEST.md. Never reuse an existing idea key for an unrelated idea. Never merge two different ideas under one key.
+
+If `.planning/spikes/MANIFEST.md` does not exist, create it:
 
 ```markdown
 # Spike Manifest
@@ -244,42 +243,40 @@ from a different idea key into this list.]
 
 If `.planning/spikes/MANIFEST.md` already exists:
 
-- **Same idea key already has a `### {idea-key}` section under `## Ideas`:** append to that
-  section's Requirements list as new requirements emerge. Never overwrite or rewrite its
-  `## Idea` paragraph.
-- **New idea key, not yet present:** append a new `### {idea-key}` subsection under `## Ideas`,
-  after any existing idea sections. Never touch, merge into, or delete another idea's section.
+- **Same idea key already has a `### {idea-key}` section under `## Ideas`:** As new requirements emerge, append them to that section's Requirements list. Never overwrite or rewrite its `## Idea` paragraph.
+- **New idea key, not yet present:** Append a new `### {idea-key}` subsection under `## Ideas`, after any existing idea sections. Never change, merge into, or delete another idea's section.
 - **A pre-#1700 MANIFEST.md with the old flat shape** (a single top-level `## Idea` / `##
   Requirements` pair, no `## Ideas` heading): treat its existing content as one implicit idea.
   Derive an idea key from its `## Idea` paragraph, migrate it in place to `## Ideas` >
-  `### {idea-key}` — preserving the paragraph and every existing Requirements bullet and
-  Spikes row verbatim — then continue as above. Do this migration once; do not repeat it once
-  `## Ideas` exists.
+  `### {idea-key}`. Preserve the paragraph and every existing Requirements bullet and
+  Spikes row verbatim. Then continue as above. Do this migration once. After
+  `## Ideas` exists, do not repeat it.
 
 Every row appended to `## Spikes` carries an **Idea** column set to the idea key it belongs to.
 
-**Track requirements as they emerge.** When the user expresses a preference during spiking, add
-it to the current idea's Requirements list immediately — never to a different idea's list.
+**Track requirements as they emerge.** When the user expresses a preference during spiking, add it immediately to the current idea's Requirements list. Never add it to a different idea's list.
 </step>
 
 <step name="reground">
 ## Re-Ground Before Each Spike
 
-Before starting each spike (not just the first), re-read `.planning/spikes/MANIFEST.md` and `.planning/spikes/CONVENTIONS.md` to prevent drift within long sessions. Check the current idea's `### {idea-key}` Requirements list — make sure the spike doesn't contradict any established requirement for this idea. Do not apply another idea's requirements.
+Before each spike, not only the first, re-read `.planning/spikes/MANIFEST.md` and `.planning/spikes/CONVENTIONS.md`. This prevents drift during long sessions.
+
+Examine the current idea's `### {idea-key}` Requirements list. Make sure that the spike does not contradict any established requirement for this idea. Do not apply another idea's requirements.
 </step>
 
 <step name="build_spikes">
 ## Build Each Spike Sequentially
 
-**Depth over speed.** The goal is genuine understanding, not a quick verdict. Never declare VALIDATED after a single happy-path test. Follow surprising findings. Test edge cases. Document the investigation trail, not just the conclusion.
+**Depth over speed.** The goal is to understand, not to reach a quick verdict. Never declare VALIDATED after a single happy-path test. Investigate surprising findings. Test edge cases. Document the investigation trail, not only the conclusion.
 
-**Comparison spikes** use shared number with letter suffix: `NNN-a-name` / `NNN-b-name`. Build back-to-back, then head-to-head comparison.
+**Comparison spikes** use a shared number with a letter suffix: `NNN-a-name` / `NNN-b-name`. Build them back-to-back. Then compare them head-to-head.
 
 ### For Each Spike:
 
 **a.** Create `.planning/spikes/NNN-descriptive-name/`
 
-**b.** Default to giving the user something they can experience. The bias should be toward building a simple UI or interactive demo, not toward stdout that only Claude reads. The user wants to *feel* the spike working, not just be told it works.
+**b.** By default, give the user something they can experience. The bias should favor a simple UI or interactive demo, not stdout that only Claude reads. The user wants to *feel* the spike work, not only hear that it works.
 
 **The default is: build something the user can interact with.** This could be:
 - A simple HTML page that shows the result visually
@@ -287,12 +284,12 @@ Before starting each spike (not just the first), re-read `.planning/spikes/MANIF
 - A page that displays data flowing through a pipeline
 - A minimal interface where the user can try different inputs and see outputs
 
-**Only fall back to stdout/CLI verification when the spike is genuinely about a fact, not a feeling:**
+**Only use stdout/CLI verification when the spike is about a fact, not a feeling:**
 - Pure data transformation where the answer is "yes it parses correctly"
 - Binary yes/no questions (does this API authenticate? does this library exist?)
 - Benchmark numbers (how fast is X? how much memory does Y use?)
 
-When in doubt, build the UI. It takes a few extra minutes but produces a spike the user can actually demo and feel confident about.
+When in doubt, build the UI. It takes a few extra minutes but produces a spike the user can demo and feel confident about.
 
 **If the spike needs runtime observability,** build a forensic log layer:
 1. Event log array with ISO timestamps and category tags
@@ -300,14 +297,14 @@ When in doubt, build the UI. It takes a few extra minutes but produces a spike t
 3. Log summary (event counts, duration, errors, metadata)
 4. Analysis helpers if volume warrants it
 
-**c.** Build the code. Start with simplest version, then deepen.
+**c.** Build the code. Start with the simplest version. Then deepen it.
 
-**d.** Iterate when findings warrant it:
+**d.** When findings warrant it, iterate:
 - **Surprising surface?** Write a follow-up test that isolates and explores it.
-- **Answer feels shallow?** Probe edge cases — large inputs, concurrent requests, malformed data, network failures.
+- **Answer feels shallow?** Test edge cases — large inputs, concurrent requests, malformed data, network failures.
 - **Assumption wrong?** Adjust. Note the pivot in the README.
 
-Multiple files per spike are expected for complex questions (e.g., `test-basic.js`, `test-edge-cases.js`, `benchmark.js`).
+Complex questions are expected to need multiple files per spike. For example: `test-basic.js`, `test-edge-cases.js`, `benchmark.js`.
 
 **e.** Write `README.md` with YAML frontmatter:
 
@@ -350,10 +347,10 @@ tags: [tag1, tag2]
 **f.** Auto-link related spikes silently.
 
 **g.** Run and verify:
-- Self-verifiable: run, iterate if findings warrant deeper investigation, update verdict
-- Needs human judgment: present checkpoint box:
+- Self-verifiable: run the spike. If findings warrant deeper investigation, iterate. Update the verdict.
+- Needs human judgment: present the checkpoint box:
 
-### CHECKPOINT: Verification Required
+### CHECKPOINT: Verification Need
 
 **Spike {NNN}: {name}**
 **How to run:** {command}
@@ -363,8 +360,7 @@ tags: [tag1, tag2]
 
 **→ Does this match what you expected? Describe what you see.**
 
-**h.** Update `.planning/spikes/MANIFEST.md` with the spike's row, setting the Idea column to
-this spike's idea key.
+**h.** Update `.planning/spikes/MANIFEST.md` with the spike's row. Set the Idea column to this spike's idea key.
 
 **i.** Commit (if `COMMIT_DOCS` is true):
 ```bash
@@ -379,11 +375,11 @@ gsd_run query commit "docs(spike-NNN): [VERDICT] — [key finding]" --files .pla
   Impact: {effect on remaining spikes}
 ```
 
-Do not rush to a verdict. A spike that says "VALIDATED — it works" with no nuance is almost always incomplete.
+Do not rush to a verdict. A spike that says "VALIDATED — it works" without detail is almost always incomplete.
 
 **k.** If core assumption invalidated:
 
-### CHECKPOINT: Decision Required
+### CHECKPOINT: Decision Need
 
 Core assumption invalidated by Spike {NNN}.
 {what was invalidated and why}
@@ -396,7 +392,7 @@ Core assumption invalidated by Spike {NNN}.
 <step name="update_conventions">
 ## Update Conventions
 
-After all spikes in this session are built, update `.planning/spikes/CONVENTIONS.md` with patterns that emerged or solidified.
+After you build all spikes in this session, update `.planning/spikes/CONVENTIONS.md` with patterns that emerged or became established.
 
 ```markdown
 # Spike Conventions
@@ -416,7 +412,7 @@ Patterns and stack choices established across spike sessions. New spikes follow 
 [Preferred packages with versions that worked, and any to avoid]
 ```
 
-Only include patterns that repeated across 2+ spikes or were explicitly chosen by the user. If `CONVENTIONS.md` already exists, update sections with new patterns from this session.
+Only include patterns that repeated across 2+ spikes or that the user explicitly chose. If `CONVENTIONS.md` already exists, update its sections with new patterns from this session.
 
 Commit (if `COMMIT_DOCS` is true):
 ```bash
@@ -449,7 +445,7 @@ gsd_run query commit "docs(spikes): update conventions" --files .planning/spikes
 
 ## ▶ Next Up
 
-**Package findings** — wrap spike knowledge into an implementation blueprint
+**Package findings** — put spike knowledge into an implementation blueprint
 
 `/gsd:spike --wrap-up`
 
@@ -466,17 +462,17 @@ gsd_run query commit "docs(spikes): update conventions" --files .planning/spikes
 </process>
 
 <success_criteria>
-- [ ] `.planning/spikes/` created (auto-creates if needed, no project init required)
-- [ ] Prior spikes and findings skills consulted before building
-- [ ] Conventions followed (or deviation documented)
-- [ ] Research grounded each spike in current docs before coding
-- [ ] Depth over speed — edge cases tested, surprising findings followed, investigation trail documented
-- [ ] Comparison spikes built back-to-back with head-to-head verdict
-- [ ] Spikes needing human interaction have forensic log layer
-- [ ] Requirements tracked in MANIFEST.md, scoped to the idea key that produced them, as they emerge from user choices
-- [ ] CONVENTIONS.md created or updated with patterns that emerged
+- [ ] `.planning/spikes/` exists (auto-creates if needed, no project init need)
+- [ ] Earlier spikes and findings skills informed the work before building
+- [ ] Work follows conventions (or documents deviation)
+- [ ] Research used current docs for each spike before coding
+- [ ] Depth over speed — tests cover edge cases, investigation follows surprising findings, and the investigation trail is documented
+- [ ] Comparison spikes were built back-to-back with a head-to-head verdict
+- [ ] Spikes that need human interaction have a forensic log layer
+- [ ] MANIFEST.md tracks requirements from user choices as they emerge, scoped to the idea key that produced them
+- [ ] CONVENTIONS.md exists or includes updates for patterns that emerged
 - [ ] Each spike README has complete frontmatter (including its idea key), Investigation Trail, and Results
 - [ ] MANIFEST.md is current (with Idea and Type columns, and each idea's own scoped Requirements section)
 - [ ] Commits use `docs(spike-NNN): [VERDICT]` format
-- [ ] Consolidated report presented with next-step routing
+- [ ] The consolidated report includes next-step routing
 </success_criteria>
