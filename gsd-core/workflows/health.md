@@ -1,9 +1,9 @@
 <purpose>
-Validate `.planning/` directory integrity and report actionable issues. Checks for missing files, invalid configurations, inconsistent state, and orphaned plans. Optionally repairs auto-fixable issues.
+Examine the integrity of the `.planning/` directory and report problems that need action. The examination finds missing files, invalid configurations, inconsistent state, and orphaned plans. It can also repair problems that support automatic repair.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before starting, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -12,12 +12,14 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 RESPONSE_LANGUAGE=$(gsd_run query config-get response_language --raw --default "" 2>/dev/null || echo "")
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST use `{response_language}` for all user-facing output of this workflow. This output includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 <step name="parse_args">
 **Parse arguments:**
 
-Check if `--repair`, `--backfill`, or `--context` flags are present in the command arguments.
+Find if the command arguments contain the `--repair`, `--backfill`, or `--context` flags.
 
 ```
 REPAIR_FLAG=""
@@ -34,25 +36,19 @@ if arguments contain "--context"; then
 fi
 ```
 
-If `CONTEXT_MODE` is set, jump to the `context_check` step and skip the
-integrity validation steps. The two modes are orthogonal — context utilization
-has nothing to do with `.planning/` directory health.
+If `CONTEXT_MODE` is set, go to the `context_check` step and skip the integrity validation steps. The two modes are independent. Context use does not relate to the health of the `.planning/` directory.
 </step>
 
 <step name="context_check">
 **Run only when `--context` is set.**
 
-The model running this workflow self-reports the current session's
-approximate `tokensUsed` and the active model's `contextWindow`. Use the values
-visible in your runtime (Claude Code's `/context` slash command output, or the
-model's own session telemetry). If the runtime exposes neither, prompt the user
-once via AskUserQuestion for both numbers.
+The model that runs this workflow reports the current session's approximate `tokensUsed` and the active model's `contextWindow`. Use the values that your runtime shows.
 
-**TEXT_MODE fallback:** when `text_mode` is true (config or `--text` flag) the
-runtime is non-Claude (Codex, Antigravity, etc.) and `AskUserQuestion` is not
-available — replace the prompt with a plain-text two-question sequence
-("Approximate tokens used? Context window size?") and read the answers as
-plain text from the user's response.
+These values come from Claude Code's `/context` slash command output or the model's own session telemetry. If the runtime shows neither value, use AskUserQuestion to ask the user once for both numbers.
+
+**TEXT_MODE fallback:** When `text_mode` is true (config or `--text` flag), the runtime is non-Claude. `AskUserQuestion` is not available. Examples of non-Claude runtimes include Codex and Antigravity.
+
+Replace the prompt with a plain-text two-question sequence ("Approximate tokens used? Context window size?"). Read the answers as plain text from the user's response.
 
 ```bash
 gsd_run query validate.context \
@@ -60,10 +56,9 @@ gsd_run query validate.context \
   --context-window "$CONTEXT_WINDOW"
 ```
 
-The query prints a one-line status (`Context utilization: NN% (state)`) plus
-a recommendation line for the warning and critical states. Print the SDK
-output verbatim and end the workflow — do **not** mix in `.planning/`
-health output, the two modes are independent diagnostics.
+The query prints a one-line status (`Context utilization: NN% (state)`). For the warning and critical states, it also prints a recommendation line.
+
+Print the SDK output verbatim and end the workflow. Do **not** include `.planning/` health output. The two modes are independent diagnostics.
 </step>
 
 <step name="run_health_check">
@@ -81,27 +76,33 @@ Parse JSON output:
 - `repairable_count`: Number of auto-fixable issues
 - `repairs_performed[]`: Actions taken if --repair was used
 
-**Isolation/worktrees compatibility check (#2486):** the SDK is runtime-neutral, so this check runs here, using the same negotiation the execution-workflow guards use. It catches a config that carries an explicit `workflow.use_worktrees: true` on a runtime whose declared `dispatch.isolation` is `none` (e.g. inherited from a worktree-capable install sharing the repo) — a value `/gsd:execute-phase` and `/gsd:quick` fail closed on. The gate is the **declared capability, not the runtime name** (#2584), and the resolver fail-closes unknown/undeclared/`undocumented` values to `none`. Use `inspect-dispatch-isolation`, the **sentinel-free** inspection verb — never `dispatch-isolation`, whose #3045 contract records the resolved decision to the executor-dispatch sentinel as an unconditional side effect; a read-only diagnostic must not be able to stamp a sentinel the isolation guards then enforce against real dispatches. "Sentinel-free" is the precise claim and the only one this check depends on: like every `gsd-tools` invocation, inspection still runs the shared CLI bootstrap, which may self-heal a stale `.planning/active-workstream` pointer or rebuild compiled modules. Those are pre-existing, verb-independent, and cannot block a dispatch; writing the sentinel can:
+**Isolation/worktrees compatibility check (#2486):** The SDK is runtime-neutral. This check runs here and uses the same negotiation as the execution-workflow guards.
 
-The worktrees read deliberately carries no `--default`/fallback, exactly as `settings.md` does
-it: W025's claim is that the config **sets** the key to a non-false value, so an absent key
-(empty output) must stay distinguishable from an explicit `true`. A `|| echo "true"` fallback
-collapses that distinction and makes the check fire on a config that never set the key —
-correct only on an emit where `_stampNonClaudeRuntimeDefaults` happened to rewrite the line to
-`--default false`, and wrong on the un-stamped source/Claude emit. The `[ -n … ]` guard below
-removes that dependency on stamping entirely (#2486 review, Major 1).
+It finds a config with an explicit `workflow.use_worktrees: true` on a runtime that declares `dispatch.isolation` as `none`. For example, a worktree-capable install that shares the repo can supply this config. `/gsd:execute-phase` and `/gsd:quick` fail closed on that value.
 
-A failed query is **not** a capability verdict. `|| echo "none"` would collapse "this runtime
-declares no primitive" and "the query did not answer" into the same value, and W025's text asserts
-the former — telling a Claude Code user their runtime declares no executor-isolation primitive,
-which is false. Track the two apart and report which one happened.
+The gate uses the **declared capability, not the runtime name** (#2584). The resolver fail-closes unknown/undeclared/`undocumented` values to `none`.
 
-Know the limit of that signal (#2486 review): the verb itself fail-closes an unknown, undeclared or
-out-of-vocabulary runtime — and any internal resolution error — to `none` and exits 0, so `INSPECTED_RESOLVED=true` means "the query
-answered", not "the runtime published a declaration". W025's resolved-case wording below is
-therefore written to be true of every path that reaches it — a declared `none` and an
-internally-fail-closed `none` alike. Distinguishing those two would need the verb to report
-provenance, which is out of scope here.
+Use `inspect-dispatch-isolation`, the **sentinel-free** inspection verb. Never use `dispatch-isolation`. Its #3045 contract records the resolved decision to the executor-dispatch sentinel as an unconditional side effect.
+
+A read-only diagnostic must not be able to stamp a sentinel that the isolation guards then enforce against real dispatches. "Sentinel-free" is the precise claim and the only one this check depends on.
+
+Like every `gsd-tools` invocation, inspection still runs the shared CLI bootstrap. The bootstrap may self-heal a stale `.planning/active-workstream` pointer or rebuild compiled modules. These actions already exist, do not depend on the verb, and cannot block a dispatch. Writing the sentinel can block a dispatch.
+
+The worktrees read deliberately has no `--default`/fallback, as in `settings.md`. W025 claims that the config **sets** the key to a non-false value. An absent key (empty output) must remain distinguishable from an explicit `true`.
+
+A `|| echo "true"` fallback removes that distinction. It makes the check fire on a config that never set the key. This is correct only on an emit where `_stampNonClaudeRuntimeDefaults` rewrote the line to `--default false`.
+
+It is wrong on the un-stamped source/Claude emit. The `[ -n … ]` guard below removes the dependency on stamping (#2486 review, Major 1).
+
+A failed query is **not** a capability verdict. `|| echo "none"` would give the same value for "this runtime declares no primitive" and "the query did not answer". W025's text asserts the former.
+
+This tells a Claude Code user that their runtime declares no executor-isolation primitive, which is false. Track the two cases separately and report which one occurred.
+
+Note the limit of that signal (#2486 review). The verb itself fail-closes an unknown, undeclared, or out-of-vocabulary runtime to `none` and exits 0. It does the same for any internal resolution error.
+
+So `INSPECTED_RESOLVED=true` means "the query answered", not "the runtime published a declaration". W025's resolved-case wording below is true for every path that reaches it. This includes a declared `none` and an internally fail-closed `none`.
+
+Distinguishing those two cases would need provenance from the verb. That is out of scope here.
 
 ```bash
 _INSPECTED_RAW=$(gsd_run query inspect-dispatch-isolation --raw 2>/dev/null)
@@ -128,11 +129,13 @@ if [ "$INSPECTED_ISOLATION" = "none" ] && [ -n "$USE_WORKTREES" ] && [ "$USE_WOR
 fi
 ```
 
-If the check prints, append it to the Warnings section of the report as `[W025]` with the printed fix, include it in the displayed warning count, and report `Status: DEGRADED` if `validate.health` returned `healthy` (a config the execution workflows fail closed on is not a healthy planning state). It is not auto-repairable: an explicit `true` may be intentional for a worktree-capable install sharing the same `.planning/config.json`, so the remedy is the user's call (#2486).
+If the check prints, append it to the Warnings section of the report as `[W025]` with the printed fix. Include it in the warning count that the report shows. If `validate.health` returned `healthy`, report `Status: DEGRADED`.
+
+A config that makes the execution workflows fail closed is not a healthy planning state. The problem does not support automatic repair. An explicit `true` may be intentional for a worktree-capable install that shares the same `.planning/config.json`. The user decides on the remedy (#2486).
 </step>
 
 <step name="format_output">
-**Format and display results:**
+**Format and show results:**
 
 ```
 ### GSD Health Check
@@ -141,7 +144,7 @@ Status: HEALTHY | DEGRADED | BROKEN
 Errors: N | Warnings: N | Info: N
 ```
 
-**If repairs were performed:**
+**If repairs were done:**
 ```
 ## Repairs Performed
 
@@ -189,19 +192,19 @@ N issues can be auto-repaired. Run: /gsd:health --repair
 <step name="offer_repair">
 **If repairable issues exist and --repair was NOT used:**
 
-Ask user if they want to run repairs:
+Ask the user if they want to run repairs:
 
 ```
 Would you like to run /gsd:health --repair to fix N issues automatically?
 ```
 
-If yes, re-run with --repair flag and display results.
+If the user says yes, re-run with the --repair flag and show the results.
 </step>
 
 <step name="verify_repairs">
-**If repairs were performed:**
+**If repairs were done:**
 
-Re-run health check without --repair to confirm issues are resolved:
+Re-run the health check without --repair to make sure that the problems are resolved:
 
 ```bash
 gsd_run query validate.health
@@ -221,7 +224,7 @@ Report final status.
 | E004 | error | STATE.md not found | No |
 | E005 | error | config.json parse error | No |
 | E010 | error | CWD resolves to the user's home directory — health check would target the wrong .planning/ | No |
-| W001 | warning | PROJECT.md missing required section | No |
+| W001 | warning | PROJECT.md missing need section | No |
 | W002 | warning | STATE.md references invalid phase | No |
 | W003 | warning | config.json not found | Yes |
 | W004 | warning | config.json invalid field value | No |
@@ -246,14 +249,24 @@ Report final status.
 | W023 | warning | Phase directories collide on normalized key | No |
 | W024 | warning | STATE.md was written many commits ago — treat its contents as approximate | No |
 | W026 | warning | STATE says milestone complete but ROADMAP lists an unstarted phase for that milestone | No |
-| W027 | warning | Stale git worktree (not modified in a long time) | No |
+| W027 | warning | Stale git worktree (not changed in a long time) | No |
 | W028 | warning | A GSD-owned install scope shadows another on this machine | No |
 | W029 | warning | .planning/ matches a gitignore rule but is still tracked by git (gitignore has no effect on already-tracked files) | No |
 | W030 | warning | Phase verification report status is outside the closed set | Yes (known legacy statuses only) |
 | I001 | info | Plan without SUMMARY (may be in progress) | No |
 | I010 | info | Resolved CWD reported alongside the E010 home-directory guard | No |
 
-Note: this table is **generated** — do not hand-edit it. It is produced by `node scripts/gen-health-docs.cjs --write` from `src/health-diagnostic.cts`'s `RULES` table (31 rules as of #3309, each carrying a static `description`/`repairable` on its `Rule` entry — see `src/health-diagnostic-types.cts`) plus the 3 pre-checks that stay outside the rule table by design (`E001`, `E010`, `I010` — safety rails in `cmdValidateHealth`, `src/verify.cts`, never `.planning/` findings). `scripts/lint-health-diagnostic-rule-table.cjs` already enforces the 1:1 code invariant this table depends on (no duplicate codes; severity is always a `Rule` property, never set per emit call) — before assigning a new code, add a `Rule` entry under `src/health-diagnostic-rules/` (its `code` is simply the next free number the lint guard has not yet seen) and run `node scripts/gen-health-docs.cjs --write` to regenerate this table; `npm run lint:generated-sync` fails if it drifts. `W025` (the `workflow.use_worktrees`/`dispatch.isolation` check, #2486) is a workflow-layer diagnostic emitted directly by this file's own `run_health_check` step, not by `cmdValidateHealth` — it stays documented in that step, not in this generated table.
+Note: this table is **generated**. Do not hand-edit it. `node scripts/gen-health-docs.cjs --write` produces it from the `RULES` table in `src/health-diagnostic.cts` and 3 pre-checks.
+
+The table has 31 rules as of #3309. Each `Rule` entry has a static `description`/`repairable`. See `src/health-diagnostic-types.cts`.
+
+The pre-checks stay outside the rule table by design. They are `E001`, `E010`, and `I010`. They are safety rails in `cmdValidateHealth`, `src/verify.cts`, and never `.planning/` findings.
+
+`scripts/lint-health-diagnostic-rule-table.cjs` already enforces the 1:1 code invariant that this table depends on. There are no duplicate codes. Severity is always a `Rule` property and is never set per emit call.
+
+Before you assign a new code, add a `Rule` entry under `src/health-diagnostic-rules/`. Its `code` is the next free number that the lint guard has not yet seen. Run `node scripts/gen-health-docs.cjs --write` to regenerate this table. If the table drifts, `npm run lint:generated-sync` fails.
+
+`W025` is the `workflow.use_worktrees`/`dispatch.isolation` check (#2486). It is a workflow-layer diagnostic that this file's own `run_health_check` step emits directly, not `cmdValidateHealth`. Its documentation stays in that step, not in this generated table.
 
 </error_codes>
 
@@ -265,8 +278,8 @@ Note: this table is **generated** — do not hand-edit it. It is produced by `no
 | regenerateState | Create STATE.md from ROADMAP structure when it is missing | Loses session history |
 | addNyquistKey | Add workflow.nyquist_validation: true to config.json | None — matches existing default |
 | addAiIntegrationPhaseKey | Add workflow.ai_integration_phase: true to config.json | None — matches existing default |
-| backfillMilestones | Synthesize missing MILESTONES.md entries from `.planning/milestones/vX.Y-ROADMAP.md` snapshots | None — additive only; triggered by `--backfill` flag |
-| repairVerificationStatus | Rewrite a known legacy verification `status` (`pass_with_caveats`) to `passed`, keeping the original as `legacy_status` | None — only the `status` line changes; unknown statuses are never touched |
+| backfillMilestones | Synthesize missing MILESTONES.md entries from `.planning/milestones/vX.Y-ROADMAP.md` snapshots | None — additive only. Triggered by `--backfill` flag |
+| repairVerificationStatus | Rewrite a known legacy verification `status` (`pass_with_caveats`) to `passed`, keeping the original as `legacy_status` | None — only the `status` line changes. Unknown statuses are never touched |
 
 **Not repairable (too risky):**
 - PROJECT.md, ROADMAP.md content
@@ -276,10 +289,9 @@ Note: this table is **generated** — do not hand-edit it. It is produced by `no
 </repair_actions>
 
 <stale_task_cleanup>
-**Windows-specific:** Check for stale Claude Code task directories that accumulate on crash/freeze.
-These are left behind when subagents are force-killed and consume disk space.
+**Windows-specific:** Examine Claude Code task directories for stale directories that accumulate on crash/freeze. When subagents are force-killed, these directories remain and consume disk space.
 
-When `--repair` is active, detect and clean up:
+When `--repair` is active, find and remove them:
 
 ```bash
 # Check for stale task directories (older than 24 hours)

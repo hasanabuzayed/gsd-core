@@ -1,13 +1,16 @@
 <purpose>
-Cross-AI plan convergence loop — automates the manual chain:
+The cross-AI plan convergence loop automates this manual chain:
 gsd-plan-phase N → gsd-review N --codex → gsd-plan-phase N --reviews → gsd-review N --codex → ...
-Plan-phase runs inline (bare Skill at depth 0) so it can spawn gsd-planner/gsd-plan-checker at depth 1.
-Review runs inside an isolated Agent (leaf skill — Bash only, no sub-agents needed).
-Orchestrator only does: init, loop control, parse CYCLE_SUMMARY for HIGH and actionable non-HIGH counts, stall detection, escalation.
+
+Plan-phase runs inline as a bare Skill at depth 0. It can spawn gsd-planner/gsd-plan-checker at depth 1.
+Review runs inside an isolated Agent. It is a leaf skill that uses Bash only and needs no sub-agents.
+
+The orchestrator only does these tasks: init, loop control, stall detection, and escalation.
+It also parses CYCLE_SUMMARY for HIGH and actionable non-HIGH counts.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 
 @$HOME/.claude/gsd-core/references/revision-loop.md
 @$HOME/.claude/gsd-core/references/gates.md
@@ -42,9 +45,8 @@ echo "$GSD_ARGS" | grep -qE '\-\-ws\s+\S+' && GSD_WS=$(echo "$GSD_ARGS" | grep -
 
 ## 1.5. Config Gate (feature disabled by default)
 
-An explicit dispatch from `/gsd:autonomous --converge` carries `--override-gate` (#4600): the
-operator's explicit flag overrides this gate for that run. Standalone invocation carries no such
-flag and remains gated by the config below.
+An explicit dispatch from `/gsd:autonomous --converge` carries `--override-gate` (#4600). The operator's explicit flag overrides this gate for that run.
+A standalone invocation carries no such flag. The config below still gates it.
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -62,7 +64,7 @@ fi
 ```
 
 **If `CONVERGENCE_ENABLED` is `"override"`:** note it and continue — "Convergence was requested
-explicitly (`--converge` on the autonomous command); the `workflow.plan_review_convergence` gate
+explicitly (`--converge` on the autonomous command). The `workflow.plan_review_convergence` gate
 is bypassed for this run (#4600)."
 
 **If `CONVERGENCE_ENABLED` is not `"true"`:** Display and exit:
@@ -149,7 +151,8 @@ Parse JSON for: `phase_dir`, `phase_number`, `padded_phase`, `phase_name`, `has_
 
 **If `response_language` is set:** All user-facing output — narration between tool calls, status updates, progress notes, findings, questions, and report prose — should be in `{response_language}`.
 
-Set `TEXT_MODE=true` if `--text` is present in $ARGUMENTS OR `text_mode` from init JSON is `true`. When `TEXT_MODE` is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number.
+If `--text` is present in $ARGUMENTS OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`.
+When `TEXT_MODE` is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number.
 
 ## 3. Validate Phase + Pre-flight Gate
 
@@ -180,12 +183,15 @@ Display: `◆ No plans found — running initial planning inline... (plan-phase 
 Skill(skill="gsd-plan-phase", args="{PHASE} {GSD_WS}")
 ```
 
-Run plan-phase **inline** (do NOT wrap it in Agent()). The convergence orchestrator runs at depth 0 with Agent available, so inline plan-phase can spawn gsd-planner and gsd-plan-checker at depth 1 — the one level of nesting that works on Claude Code. Wrapping plan-phase in Agent() would push it to depth 1 where the Agent tool is absent, preventing it from spawning any sub-agents. Wait until plan-phase completes and PLAN.md files are committed before continuing.
+Run plan-phase **inline**. Do NOT wrap it in Agent().
+The convergence orchestrator runs at depth 0 with Agent available. Inline plan-phase can spawn gsd-planner and gsd-plan-checker at depth 1. Claude Code supports this one level of nesting.
 
-After plan-phase completes, verify plans were created. This asks "did initial
-planning write files to disk" — a planner-produced-nothing check, not
-outstanding-work counting — so it takes the PHYSICAL set (`plan_count_all`,
-`status: superseded` INCLUDED, #3218):
+If you wrap plan-phase in Agent(), it moves to depth 1. The Agent tool is absent there, so plan-phase cannot spawn sub-agents.
+Wait until plan-phase completes and the PLAN.md files are committed before you continue.
+
+After plan-phase completes, make sure that it created plans. This asks "did initial
+planning write files to disk". It checks for a planner that produced nothing, not for outstanding work.
+Use the PHYSICAL set (`plan_count_all`, `status: superseded` INCLUDED, #3218):
 ```bash
 PLAN_COUNT=$(gsd_run query find-phase "${PHASE}" | jq -r '.plan_count_all // 0')
 ```
@@ -300,14 +306,20 @@ These two sections MUST be the final content of your response, in this exact ord
 
 ### Source-grounding pass (config: `plan_review.source_grounding`, default on)
 
-Run this pass unless `plan_review.source_grounding` is `false`. It verifies every symbol the plan cites against the project source before approval, catching hallucinated symbols at review time instead of execution time.
+Unless `plan_review.source_grounding` is `false`, run this pass. It checks every symbol that the plan cites against the project source before approval. It finds hallucinated symbols at review time instead of execution time.
 
-1. **Enumerate cited symbols.** List every referenced symbol by kind, quoting the plan line for each (coverage must be auditable): decorators (`@name`), classes/methods (`Class.method`), functions (`module.function`), CLI flags (`--name`), file paths, dataclass/struct fields.
-2. **Exclude new artifacts.** Do NOT verify symbols the plan declares under its "Artifacts this phase produces" section — those are created by this phase, not references to existing code.
+1. **Enumerate cited symbols.** List every referenced symbol by kind. Quote the plan line for each symbol so coverage is auditable. Include decorators (`@name`), classes/methods (`Class.method`), functions (`module.function`), CLI flags (`--name`), file paths, and dataclass/struct fields.
+2. **Exclude new artifacts.** Do NOT verify symbols the plan declares under its "Artifacts this phase produces" section. This phase creates those symbols. They are not references to existing code.
 3. **Resolve each remaining symbol** using the effective authority adapter (resolved deterministically — see step 4a):
-   - `grep` — ripgrep / Read the source; confirm the name appears as a real declaration.
+   - `grep` — ripgrep / Read the source. Confirm the name appears as a real declaration.
    - `intel` — consult `.planning/intel/API-SURFACE.md` / `api-map.json` (only when `intel.enabled`).
-   Record one verdict per symbol: **VERIFIED** (quote `file:line`), **MISSING** (adapter can check this language/kind and the symbol is absent), **AMBIGUOUS** (multiple candidates), or **UNCHECKABLE** (adapter cannot analyze this language/kind — e.g. non-JS under `intel`, or any signature under `grep`). Never treat UNCHECKABLE as verified or missing.
+   Record one verdict per symbol:
+   - **VERIFIED**: Quote `file:line`.
+   - **MISSING**: The adapter can check this language/kind and the symbol is absent.
+   - **AMBIGUOUS**: Multiple candidates exist.
+   - **UNCHECKABLE**: The adapter cannot analyze this language/kind. Examples include non-JS under `intel`, or any signature under `grep`.
+
+   Never treat UNCHECKABLE as verified or missing.
 4a. **Resolve effective authority** (deterministic — replaces manual `intel.enabled` reasoning):
    ```bash
    EFFECTIVE_AUTHORITY=$(gsd_run drift-guard authority --raw)
@@ -318,15 +330,19 @@ Run this pass unless `plan_review.source_grounding` is `false`. It verifies ever
    RESULT=$(gsd_run drift-guard severity --status <verdict> --authority "$EFFECTIVE_AUTHORITY")
    # $RESULT is JSON: {"severity":"…","hardBlock":true|false}
    ```
-   - `hardBlock: true` (HIGH at authority `lsp`/`scip`) — stops the review cycle immediately; do not proceed until the plan author resolves the missing symbol.
+   - `hardBlock: true` (HIGH at authority `lsp`/`scip`) — stops the review cycle immediately. Do not proceed until the plan author resolves the missing symbol.
    - `hardBlock: false`, severity `needs-acknowledgement` — plan proceeds only if the author confirms the symbol is genuinely new or dynamically resolved, and that acknowledgement is recorded.
    - `AMBIGUOUS` → MEDIUM. `UNCHECKABLE` → INFO.
-   - Signature mismatches cannot be asserted under `grep`/`intel`; report the signature as UNCHECKABLE.
+   - Signature mismatches cannot be asserted under `grep`/`intel`. Report the signature as UNCHECKABLE.
 5. **Coverage block.** Append a "Verification coverage" section to `REVIEWS.md` listing every UNCHECKABLE/skipped symbol and why — a clean review must never silently mean "nothing was checked."
 
 ### Cross-artifact fact-drift pass (same gate: `plan_review.source_grounding`)
 
-Run this pass whenever the source-grounding pass ran — it is the second axis of the same drift guard, gated by the same `plan_review.source_grounding` key and adding no config surface of its own. Where source-grounding asks *"does this symbol exist in the source?"*, this asks *"does the project state the same fact in two planning artifacts, and do the two disagree?"* Because each phase runs in a fresh context, an agent typically reads only one artifact and trusts it, so a stale duplicate silently steers it wrong.
+Run this pass whenever the source-grounding pass ran. It is the second axis of the same drift guard. The same `plan_review.source_grounding` key gates it. It adds no config surface of its own.
+
+Source-grounding asks *"does this symbol exist in the source?"* This pass asks whether the project states the same fact in two planning artifacts. It also asks whether the two disagree.
+
+Each phase runs in a fresh context. An agent typically reads only one artifact and trusts it, so a stale duplicate silently steers it wrong.
 
 **Key on knowledge, not on similar text.** DRY is about a single authoritative representation of a piece of *knowledge*. Two passages that merely read alike, or that restate one fact at different levels of detail, are NOT drift. Only a contradiction is.
 
@@ -337,10 +353,10 @@ Run this pass whenever the source-grounding pass ran — it is the second axis o
    # $DRIFT is JSON: {"verdict":"consistent|lag|drifted|uncheckable","stateStatus":…,"roadmapStatus":…}
    ```
 
-   - `drifted` — STATE.md and ROADMAP.md contradict each other. Report it; the authority is STATE.md.
+   - `drifted` — STATE.md and ROADMAP.md contradict each other. Report it. The authority is STATE.md.
    - `lag` — one lifecycle step apart between non-terminal statuses. NOT a finding.
    - `consistent` — nothing to report.
-   - `uncheckable` — a document was absent or carried a status outside both vocabularies. Record it in the coverage block; never read it as consistent.
+   - `uncheckable` — a document was absent or carried a status outside both vocabularies. Record it in the coverage block. Never read it as consistent.
 
    Completeness is terminal: when exactly one side says the phase is complete, the verdict is `drifted` and never `lag`, however few steps apart the two words look.
 
@@ -355,22 +371,28 @@ Run this pass whenever the source-grounding pass ran — it is the second axis o
 
 3. **Judge each judgment pair.** FLAG only when ALL THREE hold:
 
-   1. both sides name the *same* fact — same requirement ID, same success criterion, or the same defined term; and
-   2. the two representations *contradict*, one asserting what the other denies, rather than differing in wording or in level of detail; and
+   1. both sides name the *same* fact — same requirement ID, same success criterion, or the same defined term. And
+   2. the two representations *contradict*, one asserting what the other denies, rather than differing in wording or in level of detail. And
    3. the pair is one of the judgment pairs above.
 
-4. **Record.** Emit each finding into `REVIEWS.md` beside the source-grounding coverage block, quoting both locations and naming the divergence and the authority, so the author can collapse the two copies to a single source of truth.
+4. **Record.** Emit each finding into `REVIEWS.md` beside the source-grounding coverage block. Quote both locations. Name the divergence and the authority, so the author can collapse the two copies to a single source of truth.
 
-**Do NOT flag:** a wording-only difference that asserts the same thing; a fact that appears in one artifact only — single-source is the target state, not a finding; a PLAN that ADDS a truth beyond the roadmap Success Criteria, which is sanctioned (plans may add, never subtract); a `lag` verdict from step 1 — two non-terminal statuses a single lifecycle step apart, in either direction, since STATE.md is written at planning time independently of ROADMAP.md and can lead as readily as trail (a disagreement about *completion* is never lag, and step 1 already reports it as `drifted`); anything under CONTEXT.md's `Claude's Discretion` or `Deferred Ideas`, which are non-authoritative by design.
+**Do NOT flag:**
+- A wording-only difference that asserts the same thing.
+- A fact that appears in one artifact only — single-source is the target state, not a finding.
+- A PLAN that ADDS a truth beyond the roadmap Success Criteria, which is sanctioned (plans may add, never subtract).
+- A `lag` verdict from step 1 — two non-terminal statuses a single lifecycle step apart, in either direction. STATE.md is written at planning time independently of ROADMAP.md. It can lead as readily as trail. A disagreement about *completion* is never lag. Step 1 already reports it as `drifted`.
+- Anything under CONTEXT.md's `Claude's Discretion` or `Deferred Ideas`, which are non-authoritative by design.
 
-**Report once, not twice — these belong to `gsd-plan-checker`:** a PLAN that omits a roadmap Success Criterion is scope reduction (Dimension 7b); a requirement ID the ROADMAP never defines is requirement coverage (Dimension 1); two PLAN.md files in one phase disagreeing is cross-plan data contracts (Dimension 9).
+**Report once, not twice — these belong to `gsd-plan-checker`:** a PLAN that omits a roadmap Success Criterion is scope reduction (Dimension 7b). A requirement ID the ROADMAP never defines is requirement coverage (Dimension 1). Two PLAN.md files in one phase disagreeing is cross-plan data contracts (Dimension 9).
 
-**Severity: advisory, never a blocker.** This pass never sets `hardBlock`, and its findings contribute to neither `HIGH_COUNT` nor `ACTIONABLE_COUNT` — a project carrying pre-existing drift must still be able to converge, or an advisory check becomes an endless replan loop.
+**Severity: advisory, never a blocker.** This pass never sets `hardBlock`. Its findings contribute to neither `HIGH_COUNT` nor `ACTIONABLE_COUNT`.
+A project with pre-existing drift must still be able to converge. Otherwise, an advisory check becomes an endless replan loop.
 
 **Coverage, never silence.** If STATE.md or CONTEXT.md is absent, that axis is skipped and the skip is recorded in the same "Verification coverage" block. A clean pass must never mean "nothing was compared."
 
-After agent returns, verify REVIEWS.md exists. Assign the path directly and quote it — an unquoted
-`${phase_dir}` inside `$(ls …)` word-splits and glob-expands, and a discarded stderr hides it (#3899):
+After the agent returns, make sure that REVIEWS.md exists. Assign the path directly and quote it.
+An unquoted `${phase_dir}` inside `$(ls …)` word-splits and glob-expands. A discarded stderr hides this (#3899):
 ```bash
 if [ -z "${phase_dir}" ]; then
   echo "ERROR: phase_dir is empty — cannot resolve the expected REVIEWS.md path." >&2
@@ -385,7 +407,7 @@ fi
 
 ### 5b. Extract unresolved counts from CYCLE_SUMMARY Contract
 
-**Do NOT grep REVIEWS.md for HIGH or actionable counts.** REVIEWS.md accumulates history across cycles — resolved findings from prior cycles remain in the file as audit trail, inflating a raw grep count and causing false stall detection.
+**Do NOT grep REVIEWS.md for HIGH or actionable counts.** REVIEWS.md accumulates history across cycles. Resolved findings from before cycles remain in the file as an audit trail. They increase a raw grep count and cause false stall detection.
 
 Parse HIGH_COUNT and ACTIONABLE_COUNT from the review agent's return message via the CYCLE_SUMMARY contract:
 
@@ -426,11 +448,12 @@ fi
 ```
 
 **Open plan-revision conflicts are part of the converged condition (#3771).** An entry under
-`## Plan-Revision Conflicts` in REVIEWS.md is a checker `fix_hint` that contradicted a locked
-decision, capability guidance, or an existing plan constraint, recorded by `/gsd:plan-phase`
-together with the alternatives the planner considered. It is NOT counted by `CYCLE_SUMMARY`, so
-it must be read from the file directly — evaluate this BEFORE the converged branch below, or a
-run would write `planned-phase` and print the success banner over a conflict nobody resolved:
+`## Plan-Revision Conflicts` in REVIEWS.md is a checker `fix_hint`. It contradicted a locked
+decision, capability guidance, or an existing plan constraint. `/gsd:plan-phase` recorded it
+together with the alternatives the planner considered.
+
+`CYCLE_SUMMARY` does NOT count it. It must be read from the file directly. Evaluate this BEFORE the converged branch below.
+Otherwise, a run would write `planned-phase` and print the success banner over a conflict nobody resolved:
 
 ```bash
 if [ ! -f "${REVIEWS_FILE}" ]; then
@@ -475,15 +498,15 @@ conflict as a `- [ ] REVISION_CONFLICT` checklist line and flips it to
 `- [x] REVISION_CONFLICT` when resolved. The reader counts only the first fixed slot at that
 position and stops at its explicit end delimiter. Reviewer output is rendered after the slot, so
 raw reviewer text containing either the heading or an exact conflict-shaped checklist line cannot
-forge blocking state. There is deliberately no fallback to the prior global line-shape scan: that
+forge blocking state. There is deliberately no fallback to the before global line-shape scan: that
 shape never merged to `next`, and accepting both grammars would recreate the reviewer collision.
 
 **Only `/gsd:plan-phase` mutates the contents of this slot.** The review agent preserves the
-existing `## Plan-Revision Conflicts` block byte-for-byte between its delimiters; every other
+existing `## Plan-Revision Conflicts` block byte-for-byte between its delimiters. Every other
 agent with write access to REVIEWS.md must leave it alone. Appending, editing, reordering or
 deleting a line there forges the state of a blocking gate. Readers read. If `OPEN_CONFLICTS` > 0, convergence has NOT been
 achieved regardless of the counts: skip the converged branch and continue to 5c so the next cycle
-arbitrates. Escalation at `MAX_CYCLES` is unchanged and still terminates the loop, so an
+arbitrates. Escalation at `MAX_CYCLES` is unchanged and still stop the loop, so an
 unresolvable conflict escalates rather than deadlocking.
 
 **If HIGH_COUNT == 0 and ACTIONABLE_COUNT == 0 and OPEN_CONFLICTS == 0 (converged):**
@@ -521,9 +544,10 @@ Display: `◆ Cycle {cycle}/{MAX_CYCLES} — {HIGH_COUNT} HIGH, {ACTIONABLE_COUN
 **Max cycles check:** If `cycle >= MAX_CYCLES`:
 
 **If `OPEN_CONFLICTS` > 0 (#3771): "Proceed anyway" is never offered.** An open plan-revision
-conflict is a blocker — this loop's whole purpose is to surface it rather than let a success
-banner paper over it, so escalation cannot end in the same silent acceptance a HIGH/actionable
-concern can. Only "Manual review" is available:
+conflict is a blocker. This loop's whole purpose is to surface it rather than let a success
+banner paper over it.
+
+Escalation cannot end in the same silent acceptance a HIGH/actionable concern can. Only "Manual review" is available:
 
 If `TEXT_MODE` is true, present as plain text:
 ```text
@@ -597,21 +621,30 @@ Display: `◆ Replanning inline with review feedback... (plan-phase runs here in
 Skill(skill="gsd-plan-phase", args="{PHASE} --reviews --skip-research {GSD_WS}")
 ```
 
-Run plan-phase **inline** (do NOT wrap it in Agent()). Same rationale as step 4: the convergence orchestrator runs at depth 0 with Agent available, so inline plan-phase can spawn gsd-planner and gsd-plan-checker at depth 1. Wrapping in Agent() pushes plan-phase to depth 1 where the Agent tool is absent — the replan loop can never produce a revised plan when HIGHs are found. This is the root cause of bug #936. Actionable MEDIUM/LOW findings must be incorporated into executable PLAN.md content or explicitly deferred/rejected in the relevant PLAN.md before convergence can complete. The same holds for any open `## Plan-Revision Conflicts` entry (#3771): the replan must resolve it by adopting one of its recorded alternatives, overriding the named constraint, or amending the constraint — and mark the entry resolved. Re-running the planner against an unchanged conflict cannot resolve it and only burns a cycle. Wait until plan-phase completes (outputs '## PLANNING COMPLETE') and updated PLAN.md files are committed before continuing.
+Run plan-phase **inline**. Do NOT wrap it in Agent(). The reason is the same as in step 4.
+The convergence orchestrator runs at depth 0 with Agent available. Inline plan-phase can spawn gsd-planner and gsd-plan-checker at depth 1.
 
-After plan-phase completes → go back to **step 5a** (review again).
+If you wrap plan-phase in Agent(), it moves to depth 1, where the Agent tool is absent. When HIGHs are found, the replan loop can never produce a revised plan. This is the root cause of bug #936.
+
+Before convergence can complete, actionable MEDIUM/LOW findings must be incorporated into executable PLAN.md content. Alternatively, they must be explicitly deferred/rejected in the relevant PLAN.md.
+
+The same holds for any open `## Plan-Revision Conflicts` entry (#3771). The replan must resolve it by adopting one of its recorded alternatives, overriding the named constraint, or amending the constraint. Mark the entry resolved.
+
+Re-running the planner against an unchanged conflict cannot resolve it. It only uses a cycle. Wait until plan-phase completes (outputs '## PLANNING COMPLETE') and updated PLAN.md files are committed before you continue.
+
+After plan-phase completes, return to **step 5a** (review again).
 
 </process>
 
 <success_criteria>
-- [ ] Config gate checked before running — exits with enable instructions if workflow.plan_review_convergence is false (an explicit `--override-gate` dispatch — how `/gsd:autonomous --converge` invokes this workflow — bypasses it for that run, #4600)
+- [ ] Config gate checked before running — exits with enable instructions if workflow.plan_review_convergence is false. An explicit `--override-gate` dispatch bypasses it for that run, as when `/gsd:autonomous --converge` invokes this workflow (#4600).
 - [ ] Initial planning via inline Skill("gsd-plan-phase") if no plans exist — NOT wrapped in Agent() (bug #936: depth-1 Agent has no Agent tool)
-- [ ] Review via Agent → Skill("gsd-review") — isolated Agent is correct; gsd-review is a Bash leaf with no sub-agent spawns; {GSD_WS} forwarded
-- [ ] Replan via inline Skill("gsd-plan-phase --reviews") — NOT wrapped in Agent(); inline lets plan-phase spawn gsd-planner/gsd-plan-checker at depth 1
+- [ ] Review via Agent → Skill("gsd-review") — isolated Agent is correct. Gsd-review is a Bash leaf with no sub-agent spawns. {GSD_WS} forwarded
+- [ ] Replan via inline Skill("gsd-plan-phase --reviews") — NOT wrapped in Agent(). Inline lets plan-phase spawn gsd-planner/gsd-plan-checker at depth 1
 - [ ] Orchestrator only does: init, config gate, loop control, parse CYCLE_SUMMARY for HIGH and actionable non-HIGH counts, stall detection, escalation
 - [ ] HIGH and actionable non-HIGH counts extracted from review agent's CYCLE_SUMMARY return message (not by grepping REVIEWS.md)
 - [ ] Review agent prompt defines CYCLE_SUMMARY: current_high=<N> current_actionable=<M> contract with PARTIALLY/FULLY RESOLVED/ACTIONABLE definitions
-- [ ] Abort with clear error if CYCLE_SUMMARY is absent; distinguish malformed from absent
+- [ ] Abort with clear error if CYCLE_SUMMARY is absent. Distinguish malformed from absent
 - [ ] Warn if HIGH_COUNT > 0 but ## Current HIGH Concerns section is absent from return message
 - [ ] Abort with clear error if current_actionable is absent or malformed
 - [ ] Warn if ACTIONABLE_COUNT > 0 but ## Current Actionable Non-HIGH Concerns section is absent from return message
