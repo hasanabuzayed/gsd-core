@@ -2,17 +2,18 @@
 
 # Add Backlog Item Workflow
 
-Invoked by `/gsd:capture --backlog` (`commands/gsd/capture.md`).
+`/gsd:capture --backlog` (`commands/gsd/capture.md`) starts this workflow.
 
-Adds an idea to the ROADMAP.md backlog parking lot using 999.x numbering. Backlog items
-are unsequenced ideas that aren't ready for active planning — they live outside the normal
-phase sequence and accumulate context over time.
+This workflow adds an idea to the ROADMAP.md backlog parking lot. It uses 999.x numbering.
+
+Backlog items are ideas without a sequence that are not ready for active planning.
+They are outside the normal phase sequence and collect context over time.
 
 <process>
 
 ## Step 1: Read ROADMAP.md
 
-Check for existing backlog entries:
+Find existing backlog entries:
 
 ```bash
 cat .planning/ROADMAP.md
@@ -25,17 +26,21 @@ _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-pars
 NEXT=$(gsd_run query phase.next-decimal 999 --raw)
 ```
 
-If no 999.x phases exist yet, `phase.next-decimal` returns `999.1`. Sparse numbering
-is fine (e.g. 999.1, 999.3) — always use `phase.next-decimal`, never guess.
+If no 999.x phases exist yet, `phase.next-decimal` returns `999.1`.
+
+Sparse numbering is acceptable, for example 999.1, 999.3.
+
+Always use `phase.next-decimal` and never guess.
 
 ## Step 3: Write ROADMAP entry
 
-**Write the ROADMAP entry BEFORE creating the directory.** Directory existence is a
-reliable indicator that the phase is already registered, which prevents false duplicate
-detection in any hook that checks for existing 999.x directories (#2280).
+**Write the ROADMAP entry BEFORE you create the directory.**
 
-Add under a `## Backlog` section. If the section doesn't exist, create it at the end
-of ROADMAP.md:
+The directory shows reliably that the phase is already registered.
+This prevents false duplicate detection in any hook that checks for existing 999.x directories (#2280).
+
+Add the entry under a `## Backlog` section.
+If the section does not exist, create it at the end of ROADMAP.md:
 
 ```markdown
 ## Backlog
@@ -52,7 +57,9 @@ Plans:
 
 ## Step 4: Create the phase directory
 
-Apply the `project_code` prefix (if set in `.planning/config.json`) so the backlog directory name is consistent with all other phase-creation paths:
+If `.planning/config.json` sets the `project_code` prefix, apply it.
+
+This makes the backlog directory name consistent with all other phase-creation paths:
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -93,9 +100,9 @@ Use /gsd:review-backlog to promote items to active milestone.
 </process>
 
 <notes>
-- 999.x numbering keeps backlog items out of the active phase sequence
-- Phase directories are created immediately so /gsd:discuss-phase and /gsd:plan-phase work on them
-- No `Depends on:` field — backlog items are unsequenced by definition
-- Sparse numbering is fine (999.1, 999.3) — always uses next-decimal
-- Promote backlog items to the active milestone with /gsd:review-backlog
+- 999.x numbering keeps backlog items outside the active phase sequence.
+- The workflow creates phase directories immediately so /gsd:discuss-phase and /gsd:plan-phase work on them.
+- There is no `Depends on:` field. Backlog items have no sequence by definition.
+- Sparse numbering is acceptable (999.1, 999.3). The workflow always uses next-decimal.
+- Use /gsd:review-backlog to promote backlog items to the active milestone.
 </notes>
