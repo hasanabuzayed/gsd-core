@@ -1,11 +1,11 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Create structured `.planning/HANDOFF.json` and `.continue-here.md` handoff files to preserve complete work state across sessions. The JSON provides machine-readable state for `/gsd:resume-work`; the markdown provides human-readable context.
+Create structured handoff files `.planning/HANDOFF.json` and `.continue-here.md` to keep the complete work state across sessions. The JSON gives machine-readable state to `/gsd:resume-work`. The markdown gives human-readable context.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -13,7 +13,7 @@ Read all files referenced by the invoking prompt's execution_context before star
 <step name="detect">
 ## Context Detection
 
-Determine what kind of work is being paused and set the handoff destination accordingly:
+Find the type of work that you will pause. Set the handoff destination for that type:
 
 ```bash
 # Check for active phase
@@ -39,28 +39,28 @@ deliberation=$(ls .planning/deliberations/*.md 2>/dev/null | head -1 || true)
 - **Research work**: research notes exist but no phase/spike/sketch/deliberation → handoff to `.planning/.continue-here.md`
 - **Default**: no detectable context → handoff to `.planning/.continue-here.md`, note the ambiguity in `<current_state>`
 
-If phase is detected, proceed with phase handoff path. Otherwise use the first matching non-phase path above.
+If you detect a phase, use the phase handoff path. Otherwise, use the first matching non-phase path above.
 </step>
 
 <step name="gather">
 **Collect complete state for handoff:**
 
 1. **Current position**: Which phase, which plan, which task
-2. **Work completed**: What got done this session
-3. **Work remaining**: What's left in current plan/phase
-4. **Decisions made**: Key decisions and rationale
-5. **Blockers/issues**: Anything stuck
-6. **Human actions pending**: Things that need manual intervention (MCP setup, API keys, approvals, manual testing)
-7. **Background processes**: Any running servers/watchers that were part of the workflow
-8. **Files modified**: What's changed but not committed
-9. **Outstanding async external jobs**: any `.planning/async-jobs/*.json` manifests for non-terminal jobs — record job id, backend, status, expected artifacts, verification + resume commands, and any watcher/daemon state. Do NOT cancel the external job; it keeps running across the pause.
-10. **Blocking constraints**: Anti-patterns or methodological failures encountered during this session that a resuming agent MUST be aware of before proceeding. Only include items discovered through actual failure — not warnings or predictions. Assign each constraint a `severity`:
-   - `blocking` — The resuming agent MUST demonstrate understanding before proceeding. The discuss-phase and execute-phase workflows will enforce a mandatory understanding check.
+2. **Work completed**: What you completed this session
+3. **Work remaining**: What remains in the current plan/phase
+4. **Decisions made**: Key decisions and reasons
+5. **Blockers/issues**: Anything that blocks work
+6. **Human actions pending**: Things that need manual action (MCP setup, API keys, approvals, manual testing)
+7. **Background processes**: Any servers/watchers that ran as part of the workflow
+8. **Files change**: What changed but is not committed
+9. **Outstanding async external jobs**: Find any `.planning/async-jobs/*.json` manifests for non-terminal jobs. Record the job id, backend, status, expected artifacts, verification and resume commands, and any watcher/daemon state. Do NOT cancel the external job. It continues across the pause.
+10. **Blocking constraints**: Record anti-patterns or methodological failures from this session that a resuming agent MUST know before work continues. Include only items that you discovered through actual failure. Do not include warnings or predictions. Assign each constraint a `severity`:
+   - `blocking` — The resuming agent MUST show understanding before work continues. The discuss-phase and execute-phase workflows will enforce a mandatory understanding check.
    - `advisory` — Important context but does not gate resumption.
 
-Ask user for clarifications if needed via conversational questions.
+If necessary, ask the user conversational questions for clarification.
 
-**Also inspect SUMMARY.md files for false completions:**
+**Also examine SUMMARY.md files for false completions:**
 ```bash
 # Check for placeholder content in existing summaries
 grep -l "To be filled\|placeholder\|TBD" .planning/phases/*/*.md 2>/dev/null || true
@@ -114,11 +114,9 @@ timestamp=$(gsd_run query current-timestamp full --raw)
 }
 ```
 
-Any recorded `async_jobs` entries are the primary resume context on the next session — check them first before treating a PLAN-without-SUMMARY as incomplete work.
+Any recorded `async_jobs` entries are the primary resume context in the next session. Examine them first, before you treat a PLAN-without-SUMMARY as incomplete work.
 
-**`uncommitted_files` is measured, never asserted (#3968).** Populate it from an actual call,
-not from memory — a narrated `[]` over a dirty tree is how 14 plans' worth of uncommitted
-code went invisible in the wild:
+**Measure `uncommitted_files`, never assert it (#3968).** Populate it from an actual call, not from memory. A narrated `[]` over a dirty tree caused uncommitted code for 14 plans to go unnoticed:
 ```bash
 UNCOMMITTED=$(git status --porcelain)
 # One array entry per line ("XY path"); truncate the list at 50 entries and note the
@@ -128,7 +126,9 @@ UNCOMMITTED=$(git status --porcelain)
 </step>
 
 <step name="write">
-**Write handoff to the path determined in the detect step** (e.g. `.planning/phases/XX-name/.continue-here.md`, `.planning/spikes/SPIKE-NNN/.continue-here.md`, or `.planning/.continue-here.md`):
+**Write the handoff to the path that you found in the detect step.**
+
+Examples include `.planning/phases/XX-name/.continue-here.md`, `.planning/spikes/SPIKE-NNN/.continue-here.md`, and `.planning/.continue-here.md`:
 
 ```markdown
 ---
@@ -219,9 +219,9 @@ Start with: [specific first action when resuming]
 </next_action>
 ```
 
-Be specific enough for a fresh Claude to understand immediately.
+Give enough detail for a fresh Claude to understand immediately.
 
-Use `current-timestamp` for last_updated field. You can use init todos (which provides timestamps) or call directly:
+Use `current-timestamp` for the last_updated field. You can use init todos, which provides timestamps, or call it directly:
 ```bash
 timestamp=$(gsd_run query current-timestamp full --raw)
 ```
@@ -258,8 +258,8 @@ To resume: /gsd:resume-work
 <success_criteria>
 - [ ] Context detected (phase/spike/deliberation/research/default)
 - [ ] .continue-here.md created at correct path for detected context
-- [ ] Required Reading, Anti-Patterns, and Infrastructure State sections filled
-- [ ] Pre-Execution Critique section filled if pausing between design and execution
+- [ ] Need Reading, Anti-Patterns, and Infrastructure State sections filled
+- [ ] If you pause between design and execution, fill the Pre-Execution Critique section
 - [ ] Committed handoff
 - [ ] User knows location and how to resume
 </success_criteria>

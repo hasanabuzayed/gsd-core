@@ -1,30 +1,32 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Power user mode for discuss-phase. Generates ALL questions upfront into a JSON state file and an HTML companion UI, then waits for the user to answer at their own pace. When the user signals readiness, processes all answers in one pass and generates CONTEXT.md.
+Power user mode for discuss-phase generates ALL questions first. It writes the questions to a JSON state file and an HTML companion UI. It then waits for the user to answer at their own pace. When the user signals readiness, it processes all answers in one pass. It then generates CONTEXT.md.
 
-**When to use:** Large phases with many gray areas, or when users prefer to answer questions offline / asynchronously rather than interactively in the chat session.
+**When to use:** Use this mode for large phases with many gray areas. Also use it when users prefer to answer questions offline or asynchronously instead of in the chat session.
 </purpose>
 
 <trigger>
-This workflow executes when `--power` flag is present in ARGUMENTS to `/gsd:discuss-phase`.
+This workflow runs when the `--power` flag is present in ARGUMENTS to `/gsd:discuss-phase`.
 
-The caller (discuss-phase.md) has already:
-- Validated the phase exists
-- Provided init context: `phase_dir`, `padded_phase`, `phase_number`, `phase_name`, `phase_slug`, `has_spec`, `spec_path`
+The caller (discuss-phase.md) already did these actions:
+- Made sure that the phase exists
+- Supplied init context: `phase_dir`, `padded_phase`, `phase_number`, `phase_name`, `phase_slug`, `has_spec`, `spec_path`
 
-Begin at **Step 1** immediately.
+Start at **Step 1** immediately.
 </trigger>
 
 <step name="check_spec">
-Check whether the phase has a SPEC.md (from the spec-phase workflow). SPEC.md locks requirements before implementation decisions. Init already resolved it: use `has_spec` and `spec_path`, which come from one shared definition of "the phase SPEC" (a plain `*-SPEC.md`, never `*-AI-SPEC.md` or `*-UI-SPEC.md`). Do not glob for it.
+Find out whether the phase has a SPEC.md from the spec-phase workflow. SPEC.md locks requirements before implementation decisions. Init already resolved this. Use `has_spec` and `spec_path`.
+
+Both use one shared definition of "the phase SPEC": a plain `*-SPEC.md`, never `*-AI-SPEC.md` or `*-UI-SPEC.md`. Do not glob for it.
 
 **If `has_spec` is true:**
 1. Read the SPEC.md file at `spec_path`.
-2. Count requirements (numbered items in `## Requirements`).
-3. Display: `Found SPEC.md — {N} requirements locked. Focusing on implementation decisions.`
+2. Count the requirements (numbered items in `## Requirements`).
+3. Show: `Found SPEC.md — {N} requirements locked. Focusing on implementation decisions.`
 4. Set `spec_loaded = true`.
-5. Store requirements, boundaries, and acceptance criteria as `<locked_requirements>` — these flow directly into CONTEXT.md without re-asking.
+5. Store requirements, boundaries, and acceptance criteria as `<locked_requirements>`. Put these directly into CONTEXT.md without asking again.
 
 **If `has_spec` is false:** Continue with `spec_loaded = false`.
 
@@ -32,17 +34,17 @@ Check whether the phase has a SPEC.md (from the spec-phase workflow). SPEC.md lo
 </step>
 
 <step name="analyze">
-Run the same gray area identification as standard discuss-phase mode.
+Identify gray areas as in standard discuss-phase mode.
 
-1. Load prior context (PROJECT.md, REQUIREMENTS.md, STATE.md, prior CONTEXT.md files)
-2. Scout codebase for reusable assets and patterns relevant to this phase
-3. Read the phase goal from ROADMAP.md
-4. Identify ALL gray areas — specific implementation decisions the user should weigh in on. If `spec_loaded = true`, the locked requirements are pre-answered: identify gray areas about HOW to implement only, never about WHAT to build or WHY
-5. For each gray area, generate 2–4 concrete options with tradeoff descriptions
+1. Load before context (PROJECT.md, REQUIREMENTS.md, STATE.md, before CONTEXT.md files).
+2. Examine the codebase for reusable assets and patterns relevant to this phase.
+3. Read the phase goal from ROADMAP.md.
+4. Identify ALL gray areas: specific implementation decisions the user should consider. If `spec_loaded = true`, the locked requirements are already answered. Identify gray areas only about HOW to implement, never about WHAT to build or WHY.
+5. For each gray area, generate 2–4 concrete options with tradeoff descriptions.
 
-Group questions by topic into sections (e.g., "Visual Style", "Data Model", "Interactions", "Error Handling"). Each section should have 2–6 questions.
+Group questions by topic into sections. Examples are "Visual Style", "Data Model", "Interactions", and "Error Handling". Each section should have 2–6 questions.
 
-Do NOT ask the user anything at this stage. Capture everything internally, then proceed to generate.
+Do NOT ask the user anything at this stage. Record everything internally. Then continue to generate.
 </step>
 
 <step name="generate_json">
@@ -101,13 +103,13 @@ Write all questions to:
 ```
 
 **Field rules:**
-- `stats.total`: count of all questions across all sections
-- `stats.answered`: count where `answer` is not null and not empty string
-- `stats.chat_more`: count where `chat_more` has content
+- `stats.total`: count all questions across all sections.
+- `stats.answered`: count questions where `answer` is not null and not an empty string.
+- `stats.chat_more`: count questions where `chat_more` has content.
 - `stats.remaining`: `total - answered`
-- `question.id`: sequential across all sections — Q-01, Q-02, Q-03, ...
-- `question.context`: concrete codebase or prior-decision annotation (not generic)
-- `question.answer`: null until user sets it; once answered, the selected option id or free-text
+- `question.id`: use sequential IDs across all sections — Q-01, Q-02, Q-03, ...
+- `question.context`: use a concrete annotation about the codebase or an earlier decision, not a generic annotation.
+- `question.answer`: use null until the user sets it. After the user answers, use the selected option id or free-text.
 - `question.status`: "unanswered" | "answered" | "chat-more" (has chat_more but no answer yet)
 </step>
 
@@ -118,7 +120,7 @@ Write a self-contained HTML companion file to:
 {phase_dir}/{padded_phase}-QUESTIONS.html
 ```
 
-The file must be a single self-contained HTML file with inline CSS and JavaScript. No external dependencies.
+The file must be a single self-contained HTML file with inline CSS and JavaScript. Do not use external dependencies.
 
 **Layout:**
 
@@ -141,28 +143,28 @@ The file must be a single self-contained HTML file with inline CSS and JavaScrip
 ```
 
 **Stats bar:**
-- Total questions, answered count, remaining count
-- A simple CSS progress bar (green fill = answered / total)
+- Show total questions, answered count, and remaining count.
+- Show a simple CSS progress bar (green fill = answered / total).
 
 **Section headers:**
-- Collapsible via click — show/hide questions in the section
-- Show answered count for the section (e.g., "2/4 answered")
+- Let a click show/hide questions in the section.
+- Show the answered count for the section, for example "2/4 answered".
 
 **Question cards (3-column grid):**
 Each card contains:
-- Question ID badge (e.g., "Q-01") and title
-- Context annotation (gray italic text)
-- Option list: radio buttons with bold label + description text
-- Chat more textarea (orange border when content present)
-- Card highlighted green when answered
+- Show a question ID badge, for example "Q-01", and the title.
+- Show a context annotation in gray italic text.
+- Show an option list with radio buttons, bold labels, and description text.
+- Show a Chat more textarea with an orange border when content is present.
+- Highlight the card green when the question is answered.
 
 **JavaScript behavior:**
-- On radio button select: mark question as answered in page state; update stats bar
-- On textarea input: update chat_more content in page state; show orange border if content present
-- "Save answers" button at top and bottom: serializes page state back to the JSON file path
+- When the user selects a radio button, mark the question as answered in page state. Update the stats bar.
+- When the user enters text in the textarea, update chat_more content in page state. If content is present, show an orange border.
+- Put a "Save answers" button at the top and bottom. Each button serializes page state back to the JSON file path.
 
 **Save mechanism:**
-The Save button writes the updated JSON back using the File System Access API if available, otherwise generates a downloadable JSON file the user can save over the original. Include clear instructions in the UI:
+If the File System Access API is available, the Save button uses it to write the updated JSON back. Otherwise, the button generates a downloadable JSON file. The user can save this file over the original. Include clear instructions in the UI:
 
 ```
 After answering, click "Save answers" — or download the JSON and replace the original file.
@@ -184,7 +186,7 @@ Then return to Claude and say "refresh" to process your answers.
 </step>
 
 <step name="notify_user">
-After writing both files, print this message to the user:
+After you write both files, print this message to the user:
 
 ```
 Questions ready for Phase {N}: {phase_name}
@@ -205,17 +207,17 @@ When ready, tell me:
 </step>
 
 <step name="wait_loop">
-Enter wait mode. Claude listens for user commands and handles each:
+Enter wait mode. Claude listens for user commands and handles each command:
 
 ---
 
 **"refresh"** (or "process answers", "update", "re-read"):
 
-1. Read `{phase_dir}/{padded_phase}-QUESTIONS.json`
-2. Recalculate stats: count answered, chat_more, remaining
-3. Write updated stats back to the JSON
-4. Re-generate the HTML file with the updated state (answered cards highlighted green, progress bar updated)
-5. Report to user:
+1. Read `{phase_dir}/{padded_phase}-QUESTIONS.json`.
+2. Recalculate stats: count answered, chat_more, and remaining.
+3. Write the updated stats back to the JSON.
+4. Generate the HTML file again with the updated state. Highlight answered cards green and update the progress bar.
+5. Report to the user:
 
 ```
 Refreshed. Updated state:
@@ -238,23 +240,23 @@ Proceed to the **finalize** step.
 
 **"explain Q-{N}"** (or "more info on Q-{N}", "elaborate Q-{N}"):
 
-1. Find the question by ID in the JSON
-2. Provide a detailed explanation: why this decision matters, how it affects the downstream plan, what additional context from the codebase is relevant
-3. Return to wait mode
+1. Find the question by ID in the JSON.
+2. Explain why this decision matters. Explain how it affects the downstream plan. Include more relevant context from the codebase.
+3. Return to wait mode.
 
 ---
 
 **"exit power mode"** (or "switch to interactive"):
 
-1. Read all currently answered questions from JSON
-2. Load answers into the internal accumulator as if they were answered interactively
-3. Continue with standard `discuss_areas` step from discuss-phase.md for any unanswered questions
-4. Generate CONTEXT.md as normal
+1. Read all currently answered questions from JSON.
+2. Load answers into the internal accumulator as if the user answered them interactively.
+3. For any unanswered questions, continue with the standard `discuss_areas` step from discuss-phase.md.
+4. Generate CONTEXT.md as normal.
 
 ---
 
 **Any other message:**
-Respond helpfully, then remind the user of available commands:
+Respond helpfully. Then remind the user of available commands:
 ```
 (Power mode active — say "refresh", "finalize", "explain Q-N", or "exit power mode")
 ```
@@ -263,22 +265,22 @@ Respond helpfully, then remind the user of available commands:
 <step name="finalize">
 Process all answered questions from the JSON file and generate CONTEXT.md.
 
-1. Read `{phase_dir}/{padded_phase}-QUESTIONS.json`
-2. Filter to questions where `answer` is not null/empty
-3. Group decisions by section
-4. For each answered question, format as a decision entry:
-   - Decision: the selected option label (or custom text if free-form answer)
+1. Read `{phase_dir}/{padded_phase}-QUESTIONS.json`.
+2. Filter to questions where `answer` is not null/empty.
+3. Group decisions by section.
+4. For each answered question, format a decision entry:
+   - Decision: the selected option label, or custom text for a free-form answer
    - Rationale: the option description, plus `chat_more` content if present
    - Status: "Decided" if fully answered, "Needs clarification" if only chat_more with no option selected
 
-5. Write CONTEXT.md using the standard context template format:
-   - `<spec_lock>` section immediately after `<domain>` when `spec_loaded = true` (template: `discuss-phase/templates/context.md`); do NOT copy SPEC.md requirements into `<decisions>`
-   - the SPEC.md file in `<canonical_refs>` with the note "Locked requirements — MUST read before planning" when `spec_loaded = true`
-   - `<decisions>` section with all answered questions grouped by section
-   - `<deferred_ideas>` section for unanswered questions (carry forward for future discussion)
-   - `<specifics>` section for any chat_more content that adds nuance
-   - `<code_context>` section with reusable assets found during analysis
-   - `<canonical_refs>` section (MANDATORY — paths to relevant specs/docs)
+5. Write CONTEXT.md in the standard context template format. Include these sections and references:
+   - If `spec_loaded = true`, put the `<spec_lock>` section immediately after `<domain>` (template: `discuss-phase/templates/context.md`). Do NOT copy SPEC.md requirements into `<decisions>`.
+   - If `spec_loaded = true`, put the SPEC.md file in `<canonical_refs>` with the note "Locked requirements — MUST read before planning".
+   - Put all answered questions in the `<decisions>` section. Group them by section.
+   - Put unanswered questions in the `<deferred_ideas>` section for future discussion.
+   - Put any chat_more content that adds nuance in the `<specifics>` section.
+   - Put reusable assets found during analysis in the `<code_context>` section.
+   - Include the `<canonical_refs>` section (MANDATORY — paths to relevant specs/docs).
 
 6. If fewer than 50% of questions were answered, warn the user:
 ```
@@ -299,12 +301,12 @@ Next step: /gsd:plan-phase {N}
 </step>
 
 <success_criteria>
-- Questions generated into well-structured JSON covering all identified gray areas
-- HTML companion file is self-contained and usable without a server
-- Stats bar accurately reflects answered/remaining counts after each refresh
-- Answered questions highlighted green in HTML
-- CONTEXT.md generated in the same format as standard discuss-phase output
-- Unanswered questions preserved as deferred items (not silently dropped)
-- `canonical_refs` section always present in CONTEXT.md (MANDATORY)
-- User knows how to refresh, finalize, explain, or exit power mode
+- The generated JSON has a clear structure and covers all identified gray areas.
+- The HTML companion file is self-contained and usable without a server.
+- The stats bar shows accurate answered/remaining counts after each refresh.
+- The HTML highlights answered questions green.
+- The generated CONTEXT.md uses the same format as standard discuss-phase output.
+- Unanswered questions stay as deferred items. The workflow does not silently discard them.
+- The `canonical_refs` section is always present in CONTEXT.md (MANDATORY).
+- The user knows how to refresh, finalize, explain, or exit power mode.
 </success_criteria>
