@@ -1,9 +1,9 @@
 <purpose>
-Initialize a new project through unified flow: questioning, research (optional), requirements, roadmap. This is the most leveraged moment in any project — deep questioning here means better plans, better execution, better outcomes. One workflow takes you from idea to ready-for-planning.
+Initialize a new project through one workflow: questioning, optional research, requirements, and roadmap. Deep questioning at this point leads to better plans, execution, and outcomes. This workflow takes the project from an idea to readiness for planning.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
@@ -23,7 +23,9 @@ If `section_manifest` is `null` or `"auto-mode-detection"` is in its `included` 
 
 <process>
 
-**Compact Content Gate.** Read and follow `gsd-core/references/compact-content-gate.md` now — it states the `workflow.compact_content` check and the resolution rule this spine defers to. When it directs a Read, read `gsd-core/workflows/new-project/detail/elaboration.md` in full before continuing past this point; its content elaborates on two sections below (Step 2b's prior spike/sketch detection, and Step 6's researcher/synthesizer prompts).
+**Compact Content Gate.** Read and follow `gsd-core/references/compact-content-gate.md` now. It states the `workflow.compact_content` check and the resolution rule that this spine uses.
+
+If it directs a Read, read `gsd-core/workflows/new-project/detail/elaboration.md` in full before you continue. That file gives more detail for two sections below: Step 2b's earlier spike/sketch detection and Step 6's researcher/synthesizer prompts.
 
 ## 1. Setup
 
@@ -45,7 +47,9 @@ AGENT_SKILLS_ROADMAPPER=$(gsd_run query agent-skills gsd-roadmapper)
 
 Parse JSON for: `researcher_model`, `synthesizer_model`, `roadmapper_model`, `commit_docs`, `project_exists`, `has_codebase_map`, `planning_exists`, `has_existing_code`, `has_package_file`, `is_brownfield`, `needs_codebase_map`, `has_git`, `git_worktree_root`, `in_nested_subdir`, `project_path`, `agents_installed`, `missing_agents`, `agent_runtime`, `agents_dir`, `required_agents`, `required_agents_installed`, `missing_required_agents`, `agent_skill_payloads_available`, `agent_skill_payload_agents`, `requirements_exists`, `init_incomplete`, `requirements_path`, `roadmap_path`, `config_path`, `research_dir`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
+
+Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 **If `agents_installed` is false:** Display a warning before proceeding:
 ```text
@@ -96,15 +100,17 @@ Set the instruction file variable via the shared runtime-name policy adapter (`g
 INSTRUCTION_FILE=$(gsd_run query project-instruction-file --runtime "$RUNTIME")
 ```
 
-All subsequent references to the project instruction file use `$INSTRUCTION_FILE`.
+All next references to the project instruction file use `$INSTRUCTION_FILE`.
 
-**If `project_exists` is true and `init_incomplete` is true (#4040 — interrupted bootstrap):** Resume initialization instead of erroring. `.planning/` exists but initialization stopped before all core artifacts landed. Keep the existing `PROJECT.md` and any already-created artifacts (`REQUIREMENTS.md` if present, `config.json`); skip the steps that would recreate them and continue the flow from the first missing artifact in init order — `REQUIREMENTS.md` → `ROADMAP.md` + `STATE.md` — until all exist. Do not error and do not bounce the user back to `/gsd:progress` (that routing loop is the #4040 bug).
+**If `project_exists` is true and `init_incomplete` is true (#4040 — interrupted bootstrap):** Resume initialization instead of reporting an error. `.planning/` exists, but initialization stopped before it created all core artifacts. Keep the existing `PROJECT.md` and any artifacts already created (`REQUIREMENTS.md` if present, `config.json`).
+
+Skip the steps that recreate them. Continue from the first missing artifact in init order: `REQUIREMENTS.md` → `ROADMAP.md` + `STATE.md`. Continue until all exist. Do not report an error. Do not send the user back to `/gsd:progress`. That routing loop is the #4040 bug.
 
 **If `project_exists` is true and `init_incomplete` is false:** Error — project already initialized. Use `/gsd:progress`.
 
 **Git init (#3491 — never nest `.git` inside an existing worktree):**
 
-- If `has_git` true and `in_nested_subdir` true: skip `git init`; warn `⚠ Initializing inside existing worktree (${git_worktree_root}); planning files will track to outer repo.`
+- If `has_git` true and `in_nested_subdir` true: skip `git init`. Warn `⚠ Initializing inside existing worktree (${git_worktree_root}); planning files will track to outer repo.`
 - If `has_git` true and `in_nested_subdir` false: skip `git init` (already at worktree root).
 - If `has_git` false: `git init`.
 
@@ -122,9 +128,11 @@ If `section_manifest` is `null` or `"codebase-map-offer"` is in its `included` l
 If `section_manifest` is `null` or `"auto-mode-config"` is in its `included` list: read and execute `gsd-core/workflows/new-project/steps/auto-mode-config.md`. Otherwise skip — do not read the file.
 <!-- /gsd:section -->
 
-## 2b. Prior Spike/Sketch Detection
+## 2b. Before Spike/Sketch Detection
 
-Check for a spike/sketch findings skill or raw `.planning/{spikes,sketches}/MANIFEST.md` files. If any exist, surface them before questioning (which findings-skill, if any, and any raw un-wrapped spikes/sketches worth `/gsd:spike --wrap-up` / `/gsd:sketch --wrap-up`), and if a findings skill exists, read its SKILL.md to inform the questioning phase — it carries validated patterns, constraints, and design decisions that should shape the project definition.
+Look for a spike/sketch findings skill or raw `.planning/{spikes,sketches}/MANIFEST.md` files. If any exist, show them before questioning. Identify the findings-skill, if any. Show any raw un-wrapped spikes/sketches worth `/gsd:spike --wrap-up` / `/gsd:sketch --wrap-up`.
+
+If a findings skill exists, read its SKILL.md to inform the questioning phase. It contains validated patterns, constraints, and design decisions that should shape the project definition.
 
 Exact detection commands and the surfaced-findings banner: `gsd-core/workflows/new-project/detail/elaboration.md` § 1.
 
@@ -144,27 +152,27 @@ Ask inline (freeform, NOT AskUserQuestion):
 
 "What do you want to build?"
 
-Wait for their response. This gives you the context needed to ask intelligent follow-up questions.
+Wait for their response. The response gives you context for follow-up questions.
 
 **Research-before-questions mode:** Check if `workflow.research_before_questions` is enabled in `.planning/config.json` (or the config from init context). When enabled, before asking follow-up questions about a topic area:
 
 1. Do a brief web search for best practices related to what the user described
-2. Mention key findings naturally as you ask questions (e.g., "Most projects like this use X — is that what you're thinking, or something different?")
+2. Mention key findings naturally as you ask questions (e.g., "Most projects like this use X — is that what you think, or something different?")
 3. This makes questions more informed without changing the conversational flow
 
 When disabled (default), ask questions directly as before.
 
 **Follow the thread:**
 
-Based on what they said, ask follow-up questions that dig into their response. Use AskUserQuestion with options that probe what they mentioned — interpretations, clarifications, concrete examples.
+Use their response to ask follow-up questions. Use AskUserQuestion with options that examine their interpretations, clarifications, and concrete examples.
 
-Keep following threads. Each answer opens new threads to explore. Ask about:
+Continue to follow threads. Each answer opens new threads to explore. Ask about:
 
 - What excited them
 - What problem sparked this
 - What they mean by vague terms
 - What it would actually look like
-- What's already decided
+- What is already decided
 
 Consult `questioning.md` for techniques:
 
@@ -176,25 +184,25 @@ Consult `questioning.md` for techniques:
 
 **Check context (background, not out loud):**
 
-As you go, mentally check the context checklist from `questioning.md`. If gaps remain, weave questions naturally. Don't suddenly switch to checklist mode.
+During the conversation, mentally examine the context checklist from `questioning.md`. If gaps remain, include questions naturally. Do not suddenly switch to checklist mode.
 
 **Decision gate:**
 
-When you could write a clear PROJECT.md, use AskUserQuestion:
+If you could write a clear PROJECT.md, use AskUserQuestion:
 
 - header: "Ready?"
-- question: "I think I understand what you're after. Ready to create PROJECT.md?"
+- question: "I think I understand what you are after. Ready to create PROJECT.md?"
 - options:
-  - "Create PROJECT.md" — Let's move forward
+  - "Create PROJECT.md" — Let us move forward
   - "Keep exploring" — I want to share more / ask me more
 
-If "Keep exploring" — ask what they want to add, or identify gaps and probe naturally.
+If "Keep exploring" is selected, ask what they want to add, or identify gaps and ask questions naturally.
 
-Loop until "Create PROJECT.md" selected.
+Repeat until the user selects "Create PROJECT.md".
 
 ## 4. Write PROJECT.md
 
-**If auto mode:** Synthesize from provided document. No "Ready?" gate was shown — proceed directly to commit.
+**If auto mode:** Synthesize from the provided document. No "Ready?" gate was shown. Continue directly to commit.
 
 Synthesize all context into `.planning/PROJECT.md` using the template from `templates/project.md`.
 
@@ -301,7 +309,7 @@ gsd_run query commit "docs: initialize project" --files .planning/PROJECT.md
 
 ## 5. Workflow Preferences
 
-**If auto mode:** Skip — config was collected in Step 2a. Proceed to Step 5.5.
+**If auto mode:** Skip this step. Step 2a collected config. Continue to Step 5.5.
 
 **Check for global defaults** at `${GSD_HOME:-$HOME}/.gsd/defaults.json` (`~/.gsd/defaults.json` unless `GSD_HOME` is set). If the file exists, read and display its contents before asking:
 
@@ -354,9 +362,9 @@ AskUserQuestion([
 
 **If "Use as-is":** use the defaults values for config.json and skip directly to **Commit config.json** below.
 
-**If "Modify some settings":** present a selection of every setting with its current saved value.
+**If "Change some settings":** present a selection of every setting with its current saved value.
 
-**If TEXT_MODE is active** (non-Claude runtimes): display a numbered list and ask the user to type the numbers of settings they want to change (comma-separated). Parse the response and proceed.
+**If TEXT_MODE is active** (non-Claude runtimes): show a numbered list. Ask the user to type the numbers of settings they want to change (comma-separated). Parse the response and continue.
 
 ```text
 Which settings do you want to change? (enter numbers, comma-separated)
@@ -457,12 +465,11 @@ AskUserQuestion([
 ])
 ```
 
-For each selected setting across both blocks, ask only that question using the
-option set from Round 1 / Round 2 below. Merge user answers over the saved
-defaults — unchanged settings retain their saved values. Then skip to
-**Commit config.json**.
+For each selected setting across both blocks, ask only that question. Use the option set from Round 1 / Round 2 below.
 
-**If "Configure fresh" or `~/.gsd/defaults.json` doesn't exist:** proceed with the questions below.
+Merge user answers over the saved defaults. Unchanged settings retain their saved values. Then skip to **Commit config.json**.
+
+**If "Configure fresh" or `~/.gsd/defaults.json` does not exist:** proceed with the questions below.
 
 **Round 1 — Core workflow settings (4 questions):**
 
@@ -510,7 +517,7 @@ questions: [
 
 **Round 2 — Workflow agents:**
 
-These spawn additional agents during planning/execution. They add tokens and time but improve quality.
+These spawn more agents during planning/execution. They add tokens and time but improve quality.
 
 | Agent | When it runs | What it does |
 |-------|--------------|--------------|
@@ -520,9 +527,8 @@ These spawn additional agents during planning/execution. They add tokens and tim
 
 All recommended for important projects. Skip for quick experiments.
 
-A fourth question in this same round covers Compact Content (#4139) — not a spawned agent,
-but grouped here because it's the last general workflow-behavior toggle before the more
-involved AI-models round below.
+A fourth question in this same round covers Compact Content (#4139). It is not a spawned agent. It is grouped here because it is the last general workflow-behavior toggle before the more involved AI-models round below.
+
 
 ```
 questions: [
@@ -634,7 +640,7 @@ gsd_run query config-new-project '{"mode":"[yolo|interactive]","granularity":"[s
 
 **If commit_docs = Yes:**
 
-- No additional gitignore entries needed
+- No more gitignore entries needed
 
 **Commit config.json:**
 
@@ -646,9 +652,8 @@ gsd_run query commit "chore: add project config" --files .planning/config.json
 
 **Detect multi-repo workspace:**
 
-Check for directories with their own `.git` (separate repos within the workspace —
-this also finds linked git worktree children, whose `.git` is a file rather than a
-directory, unlike a plain `find -type d` predicate would):
+Check for directories with their own `.git` (separate repos within the workspace). This also finds linked git worktree children, whose `.git` is a file rather than a directory. A plain `find -type d` predicate would not find them:
+
 
 ```bash
 gsd_run query init.new-project
@@ -711,10 +716,10 @@ mkdir -p .planning/research
 
 **Determine milestone context:**
 
-Check if this is greenfield or subsequent milestone:
+Check if this is greenfield or next milestone:
 
 - If no "Validated" requirements in PROJECT.md → Greenfield (building from scratch)
-- If "Validated" requirements exist → Subsequent milestone (adding to existing app)
+- If "Validated" requirements exist → Next milestone (adding to existing app)
 
 Display spawning indicator:
 
@@ -726,12 +731,16 @@ Display spawning indicator:
   → Pitfalls research
 ```
 
-Spawn 4 parallel gsd-project-researcher agents — one per dimension (Stack, Features, Architecture, Pitfalls) — each given the domain and greenfield/subsequent milestone context, a dimension-specific question, a downstream-consumer note (what the next stage needs from this file), and a quality gate; each writes its own file (STACK.md / FEATURES.md / ARCHITECTURE.md / PITFALLS.md) under `{research_dir}/` from its template.
+Spawn 4 parallel gsd-project-researcher agents. Assign one per dimension (Stack, Features, Architecture, Pitfalls). Give each the domain and `greenfield/subsequent` milestone context. Give each a dimension-specific question, a downstream-consumer note, and a quality gate. The downstream-consumer note states what the next stage needs from the file. Each writes its own file (STACK.md / FEATURES.md / ARCHITECTURE.md / PITFALLS.md) under `{research_dir}/` from its template.
+
 
 <!-- gsd:protected -->
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling all 4 researcher Agent() calls above, do NOT read research files or synthesize content independently while the subagents are active. Wait for all 4 researchers to complete before spawning the synthesizer. This prevents duplicate work and wasted context.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After all 4 researcher Agent() calls, do NOT read research files or synthesize content independently while the subagents are active. Wait for all 4 researchers to complete before spawning the synthesizer. This prevents duplicate work and wasted context.
 
-**Model omission (#2517) applies to every one of these 5 spawns** (4 researchers + synthesizer): omit the `model=` parameter entirely when the value it would carry (`researcher_model`, `synthesizer_model`) is `"inherit"` or empty — passing it literally 404s on runtimes without native tier aliases (the default on non-Claude runtimes). Omitting `model=` inherits the orchestrator's model.
+
+**Model omission (#2517) applies to every one of these 5 spawns** (4 researchers + synthesizer). If the value for `model=` (`researcher_model`, `synthesizer_model`) is `"inherit"` or empty, omit the parameter entirely.
+
+Passing it literally causes a 404 on runtimes without native tier aliases. This is the default on non-Claude runtimes. If you omit `model=`, the agent inherits the orchestrator's model.
 
 After all 4 agents complete, spawn synthesizer to create SUMMARY.md:
 
@@ -761,13 +770,20 @@ Commit after writing.
 <!-- gsd:protected -->
 > **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
 
-**Synthesizer output self-heal (#222) — verify SUMMARY.md materialized:** The synthesizer's canonical output is `.planning/research/SUMMARY.md` on disk; its brief structured return (`## SYNTHESIS COMPLETE` plus a few `###` confirmation lines) is NOT the file content. The restriction is not always fabricated: Claude Code refuses a subagent's `Write` to a few exact basenames — `SUMMARY.md` among them — with `Subagents should return findings as text, not write report files` (observed on Claude Code 2.1.301), and the synthesizer is told to return the full document inline when its `Write` hits that error; the refusal is real, not fabricated. It depends on the exact basename (`SUMMARY.md`, `REPORT.md`, `FINDINGS.md`, `ANALYSIS.md`, case-insensitive; a prefixed name such as `01-01-SUMMARY.md` and other agents' files write fine), so do not tell other agents to avoid `Write`. Either cause lands in step 2. A known LLM false-refusal (issue #222) sometimes makes the agent return the full SUMMARY.md document inline — fabricating a write restriction (e.g. "the runtime is blocking file writes") — instead of writing the file. Prompt hardening alone does not fully eliminate it, so the orchestrator MUST absorb either cause deterministically before spawning `gsd-roadmapper`:
+**Synthesizer output self-heal (#222) — verify SUMMARY.md materialized:** The synthesizer's canonical output is `.planning/research/SUMMARY.md` on disk. Its brief structured return (`## SYNTHESIS COMPLETE` plus a few `###` confirmation lines) is NOT the file content. The restriction is not always fabricated. Claude Code refuses a subagent's `Write` to a few exact basenames — `SUMMARY.md` among them. It returns `Subagents should return findings as text, not write report files` (observed on Claude Code 2.1.301).
+
+The synthesizer is told to return the full document inline when its `Write` hits that error. The refusal is real, not fabricated. It depends on the exact basename (`SUMMARY.md`, `REPORT.md`, `FINDINGS.md`, `ANALYSIS.md`, case-insensitive. A prefixed name such as `01-01-SUMMARY.md` and other agents' files write fine), so do not tell other agents to avoid `Write`. Either cause lands in step 2.
+
+A known LLM false-refusal (issue #222) sometimes makes the agent return the full SUMMARY.md document inline instead of writing the file. It fabricates a write restriction (e.g. "the runtime blocks file writes"). Prompt hardening alone does not fully eliminate it, so the orchestrator MUST absorb either cause deterministically before spawning `gsd-roadmapper`:
 
 1. Verify `.planning/research/SUMMARY.md` exists AND is substantive — non-empty, and free of any leftover `<!-- gsd:write-continue -->` continuation sentinel (which marks a truncated/incomplete write). You may validate with `gsd_run verify-summary .planning/research/SUMMARY.md` — it exits 0 regardless, so check its JSON `passed` field (`"passed": false` means missing or invalid), not the process exit code. If it passes, continue normally.
-2. If it is MISSING or invalid AND the synthesizer's return message contains the FULL SUMMARY.md document — recognizable by the template's top-level markers `# Project Research Summary`, `## Key Findings`, `## Implications for Roadmap`, and `## Sources`, not merely the brief `## SYNTHESIS COMPLETE` confirmation — the synthesizer returned the document inline (the #222 false-refusal, or the runtime's real refusal of the name `SUMMARY.md`): write that returned document to `.planning/research/SUMMARY.md` with the Write tool, then commit ALL research artifacts the synthesizer owns (it commits on behalf of the four researchers) with `gsd_run query commit "docs: complete project research" --files .planning/research/` unless they are already committed. Log `⚠ #222 self-heal: synthesizer returned SUMMARY.md inline without writing it; orchestrator persisted the file.`
-3. If it is MISSING or invalid AND the return is only a brief confirmation (no full SUMMARY document to recover), the synthesizer genuinely failed — surface the error and stop; do NOT spawn `gsd-roadmapper` against a missing or incomplete SUMMARY.md.
+2. If it is MISSING or invalid AND the synthesizer's return message contains the FULL SUMMARY.md document, the synthesizer returned the document inline. This can result from the #222 false-refusal or the runtime's real refusal of the name `SUMMARY.md`. Recognize the full document by the template's top-level markers `# Project Research Summary`, `## Key Findings`, `## Implications for Roadmap`, and `## Sources`. The brief `## SYNTHESIS COMPLETE` confirmation alone is not the full document.
 
-This guarantees `gsd-roadmapper` (which lists SUMMARY.md as required reading) never runs against a missing or truncated SUMMARY.md.
+   Write the returned document to `.planning/research/SUMMARY.md` with the Write tool. Unless they are already committed, commit ALL research artifacts the synthesizer owns with `gsd_run query commit "docs: complete project research" --files .planning/research/`. The synthesizer commits on behalf of the four researchers. Log `⚠ #222 self-heal: synthesizer returned SUMMARY.md inline without writing it; orchestrator persisted the file.`
+
+3. If it is MISSING or invalid AND the return is only a brief confirmation, the synthesizer genuinely failed. There is no full SUMMARY document to recover. Surface the error and stop. Do NOT spawn `gsd-roadmapper` against a missing or incomplete SUMMARY.md.
+
+This guarantees `gsd-roadmapper` (which lists SUMMARY.md as need reading) never runs against a missing or truncated SUMMARY.md.
 
 Exact agent prompts (all four researcher dimensions): `gsd-core/workflows/new-project/detail/elaboration.md` § 2.
 
@@ -881,7 +897,7 @@ Use AskUserQuestion:
 
 **Validate core value:**
 
-Cross-check requirements against Core Value from PROJECT.md. If gaps detected, surface them.
+Compare requirements against Core Value from PROJECT.md. If you find gaps, show them.
 
 **Generate REQUIREMENTS.md:**
 
@@ -950,9 +966,9 @@ Ask the user how they want to structure the project. Use `AskUserQuestion` with 
 - **Vertical MVP** — get a working app fast, add features slice by slice. Each phase delivers an end-to-end user capability. *(Recommended for new products and rapid-iteration MVPs.)*
 - **Horizontal Layers** — build complete technical layers (DB → API → UI → wiring) and assemble at the end. *(Better for infrastructure-heavy projects with multiple developers.)*
 
-Set `PROJECT_MODE=mvp` if the user picks Vertical MVP, otherwise `PROJECT_MODE=standard`.
+If the user picks Vertical MVP, set `PROJECT_MODE=mvp`. Otherwise, set `PROJECT_MODE=standard`.
 
-When `TEXT_MODE=true` (per the workflow's existing TEXT_MODE handling for non-Claude runtimes), present the same two options as a plain-text numbered list and ask the user to type their choice number.
+If `TEXT_MODE=true`, show the same two options as a plain-text numbered list. Ask the user to type their choice number. Use the workflow's existing TEXT_MODE handling for non-Claude runtimes.
 
 ## 8. Create Roadmap
 
@@ -964,10 +980,10 @@ Display stage banner:
 ◆ Spawning roadmapper... (runs in a subagent — no output until it returns, ~1–5 min; expected, not a freeze)
 ```
 
-**ROADMAP.md template — mode-aware emit.** When generating the initial ROADMAP.md:
+**ROADMAP.md template — mode-aware emit.** Generate the initial ROADMAP.md as follows:
 
-- If `PROJECT_MODE=mvp`: under each `### Phase N:` header, emit `**Mode:** mvp` on the line immediately following `**Goal:**`. This sets every initial phase to MVP mode (per Phase-4-Persistence decision: per-phase mode, not project-wide config).
-- If `PROJECT_MODE=standard`: emit the standard ROADMAP.md template with no `**Mode:**` lines (Horizontal Layers standard template — no behavioral change for users who pick Horizontal Layers).
+- If `PROJECT_MODE=mvp`, emit `**Mode:** mvp` under each `### Phase N:` header. Put it on the line immediately after `**Goal:**`. This sets every initial phase to MVP mode. The Phase-4-Persistence decision specifies per-phase mode, not project-wide config.
+- If `PROJECT_MODE=standard`, emit the standard ROADMAP.md template with no `**Mode:**` lines. This is the Horizontal Layers standard template. It does not change behavior for users who pick Horizontal Layers.
 
 Example MVP-mode emit for Phase 1:
 
@@ -1113,7 +1129,7 @@ Use AskUserQuestion:
 gsd_run query generate-claude-md --output "$INSTRUCTION_FILE"
 ```
 
-This ensures new projects get the default GSD workflow-enforcement guidance and current project context in `$INSTRUCTION_FILE`.
+This gives new projects the default GSD workflow-enforcement guidance and current project context in `$INSTRUCTION_FILE`.
 
 **Commit roadmap (after approval or auto mode):**
 
@@ -1239,7 +1255,7 @@ PHASE1_HAS_UI=$(echo "$PHASE1_SECTION" | grep -qi "UI hint.*yes" && echo "true" 
 - [ ] ROADMAP.md created with phases, requirement mappings, success criteria
 - [ ] STATE.md initialized
 - [ ] REQUIREMENTS.md traceability updated
-- [ ] `$INSTRUCTION_FILE` generated with GSD workflow guidance (runtime-derived via the shared `getProjectInstructionFile` policy — `AGENTS.md` for codex/opencode/kilo/kimi, `.github/copilot-instructions.md` for copilot, `GEMINI.md` for antigravity, `.claude/CLAUDE.md` for claude; an existing hand-crafted file without GSD markers is left untouched unless `--force`)
+- [ ] `$INSTRUCTION_FILE` generated with GSD workflow guidance (runtime-derived via the shared `getProjectInstructionFile` policy — `AGENTS.md` for codex/opencode/kilo/kimi, `.github/copilot-instructions.md` for copilot, `GEMINI.md` for antigravity, `.claude/CLAUDE.md` for claude. An existing hand-crafted file without GSD markers is left untouched unless `--force`)
 - [ ] User knows next step is `/gsd:discuss-phase 1`
 
 **Atomic commits:** Each phase commits its artifacts immediately. If context is lost, artifacts persist.
