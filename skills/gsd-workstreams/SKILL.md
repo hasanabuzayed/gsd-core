@@ -30,42 +30,51 @@ Manage parallel workstreams for concurrent milestone work.
 
 ## Step 1: Parse Subcommand
 
-Parse the user's input to determine which workstream operation to perform.
-If no subcommand given, default to `list`.
+Read the user's input to find the workstream operation to do.
+If the input has no subcommand, use `list` by default.
+
 
 ## Step 2: Execute Operation
 
 ### list
 Run: `gsd_run query workstream.list --raw --cwd "$CWD"`
-Display the workstreams in a table format showing name, status, current phase, and progress.
+Show the workstreams in a table with name, status, current phase, and progress.
+
 
 ### create
 Run: `gsd_run query workstream.create <name> --raw --cwd "$CWD"`
-After creation, display the new workstream path and suggest next steps:
-- `/gsd-new-milestone --ws <name>` to set up the milestone
+After creation, show the path of the new workstream.
+Suggest this next step:
+- Use `/gsd-new-milestone --ws <name>` to set up the milestone.
+
 
 ### status
 Run: `gsd_run query workstream.status <name> --raw --cwd "$CWD"`
-Display detailed phase breakdown and state information.
+Show a detailed breakdown of the phases and information about the state.
+
 
 ### switch
 Run: `gsd_run query workstream.set <name> --raw --cwd "$CWD"`
-Also set `GSD_WORKSTREAM` for the current session when the runtime supports it.
-If the runtime exposes a session identifier, GSD also stores the active workstream
-session-locally so concurrent sessions do not overwrite each other.
+If the runtime supports it, also set `GSD_WORKSTREAM` for the current session.
+If the runtime exposes a session identifier, GSD also stores the active workstream for that session.
+This prevents concurrent sessions from overwriting each other.
+
 
 ### progress
 Run: `gsd_run query workstream.progress --raw --cwd "$CWD"`
-Display a progress overview across all workstreams.
+Show an overview of progress across all workstreams.
+
 
 ### complete
 Run: `gsd_run query workstream.complete <name> --raw --cwd "$CWD"`
 Archive the workstream to milestones/.
 
 ### resume
-Set the workstream as active and suggest `/gsd-resume-work --ws <name>`.
+Set the workstream as active.
+Suggest `/gsd-resume-work --ws <name>`.
+
 
 ## Step 3: Display Results
 
-Format the JSON output from gsd-tools query into a human-readable display.
+Format the JSON output from gsd-tools query so a person can read it.
 Include the `${GSD_WS}` flag in any routing suggestions.
