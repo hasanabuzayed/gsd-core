@@ -2,13 +2,15 @@
 
 <purpose>
 
-Drive milestone phases autonomously — all remaining phases, a range via `--from N`/`--to N`, or a single phase via `--only N`. For each incomplete phase: discuss → plan → execute using Skill() flat invocations. When `--converge` or `--cross-ai` is set, route the planning step through plan-review convergence before execution. Pauses only for explicit user decisions (grey area acceptance, blockers, validation requests). Re-reads ROADMAP.md after each phase to catch dynamically inserted phases.
+Run milestone phases autonomously. Run all remaining phases, a range via `--from N`/`--to N`, or a single phase via `--only N`. For each incomplete phase, discuss → plan → execute with flat Skill() invocations.
+
+If `--converge` or `--cross-ai` is set, route the planning step through plan-review convergence before execution. The workflow pauses only for explicit user decisions: grey area acceptance, blockers, and validation requests. It re-reads ROADMAP.md after each phase to find dynamically inserted phases.
 
 </purpose>
 
 <required_reading>
 
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 
 </required_reading>
 
@@ -64,11 +66,15 @@ if echo "$GSD_ARGS" | grep -qE '(^|[[:space:]])\-\-cross-ai([[:space:]]|$)'; the
 fi
 ```
 
-When `--only` is set, also set `FROM_PHASE` to the same value so existing filter logic applies.
+If `--only` is set, also set `FROM_PHASE` to the same value. This lets the existing filter logic apply.
 
-When `--interactive` is set, discuss stays inline. If `dispatch-should-flatten` returns `false`, dispatch plan and execute as background agents; if it returns `true`, run them inline and keep phases sequential. Preserve user input on all design decisions.
+If `--interactive` is set, discuss stays inline. If `dispatch-should-flatten` returns `false`, dispatch plan and execute as background agents.
 
-When `PLAN_STRATEGY=converge`, the planning step MUST invoke the plan-review convergence workflow instead of `gsd-plan-phase`. `--cross-ai` is an alias for `--converge`. Forward `CONVERGENCE_ARGS` exactly as parsed so reviewer flags and `--max-cycles N` retain the same meaning as they have on `/gsd:plan-review-convergence`.
+If it returns `true`, run them inline. Keep phases sequential. Preserve user input on all design decisions.
+
+If `PLAN_STRATEGY=converge`, the planning step MUST invoke the plan-review convergence workflow instead of `gsd-plan-phase`. `--cross-ai` is an alias for `--converge`.
+
+Forward `CONVERGENCE_ARGS` exactly as parsed. This preserves the meaning of reviewer flags and `--max-cycles N` on `/gsd:plan-review-convergence`.
 
 Bootstrap via milestone-level init:
 
@@ -85,7 +91,7 @@ INIT_AUTONOMOUS=$(gsd_run query init.autonomous ${GSD_WS:+--ws=${GSD_WS##* }} $C
 if [[ "$INIT_AUTONOMOUS" == @file:* ]]; then INIT_AUTONOMOUS=$(cat "${INIT_AUTONOMOUS#@file:}"); fi
 ```
 
-Extract `section_manifest` from `INIT_AUTONOMOUS` (used by the `converge-*` sections below and in step 3).
+Extract `section_manifest` from `INIT_AUTONOMOUS`. The `converge-*` sections below and in step 3 use it.
 
 If `PLAN_STRATEGY` is `converge`, the dispatch below carries `--override-gate` (#4600): the operator's explicit `--converge`/`--cross-ai` overrides the convergence feature gate for this run. Without the flag, `PLAN_STRATEGY` is `local` and this block never appends it.
 
@@ -137,15 +143,16 @@ Display startup banner:
  Phases: {phase_count} total, {completed_phases} complete
 ```
 
-If `ONLY_PHASE` is set, display: `Single phase mode: Phase ${ONLY_PHASE}`
-Else if `FROM_PHASE` is set, display: `Starting from phase ${FROM_PHASE}`
-If `TO_PHASE` is set, display: `Stopping after phase ${TO_PHASE}`
-If `INTERACTIVE` is set, display: `Mode: Interactive (discuss inline, plan+execute inline — background on Codex only)`
+If `ONLY_PHASE` is set, display: `Single phase mode: Phase ${ONLY_PHASE}`.
+Else if `FROM_PHASE` is set, display: `Starting from phase ${FROM_PHASE}`.
+If `TO_PHASE` is set, display: `Stopping after phase ${TO_PHASE}`.
+
+If `INTERACTIVE` is set, display: `Mode: Interactive (discuss inline, plan+execute inline — background on Codex only)`.
 <!-- gsd:section id="converge-banner" when="state:plan-strategy-converge" -->
 If `section_manifest` is `null` or `"converge-banner"` is in its `included` list: read and execute `gsd-core/workflows/autonomous/steps/converge-banner.md`. Otherwise skip — do not read the file.
 <!-- /gsd:section -->
 
-**Agent skills (delegated agents self-load):** Plan/execute/review run as flat `Skill()` invocations, so this workflow does not resolve `agent_skills`; each consumer agent (`gsd-planner`, `gsd-executor`, `gsd-plan-checker`, `gsd-verifier`, …) self-loads its configured `.planning/config.json` `agent_skills` per `@~/.claude/gsd-core/references/agent-skills-bootstrap.md`. See open-gsd/gsd-core#1866.
+**Agent skills (delegated agents self-load):** Plan/execute/review run as flat `Skill()` invocations, so this workflow does not resolve `agent_skills`. Each consumer agent (`gsd-planner`, `gsd-executor`, `gsd-plan-checker`, `gsd-verifier`, …) self-loads its configured `.planning/config.json` `agent_skills` per `@~/.claude/gsd-core/references/agent-skills-bootstrap.md`. See open-gsd/gsd-core#1866.
 
 </step>
 
@@ -174,11 +181,11 @@ Parse the optional `## Deferred Verification` table from `STATE_CONTENT` into a 
 - `verification_deferred_human` -> `/gsd:verify-work <phase>`
 - `verification_deferred_gaps` -> `/gsd:plan-phase <phase> --gaps`
 
-**Skip deferred phases on autonomous re-entry:** drop any phase whose number appears in the deferred-phase map from this run's queue; resume it only through the recorded command.
+**Skip deferred phases on autonomous re-entry:** Remove from this run's queue any phase whose number appears in the deferred-phase map. Resume it only through the recorded command.
 
 **Filter to incomplete phases:** Keep `phase_complete !== true`, including implemented phases with `verification_status !== "passed"`.
 
-**Apply `--from N`:** If set, filter out phases where `number < FROM_PHASE` (numeric compare; handles "5.1").
+**Apply `--from N`:** If set, filter out phases where `number < FROM_PHASE` (numeric compare. Handles "5.1").
 
 **Apply `--to N`:** If set, filter out phases where `number > TO_PHASE` (numeric compare).
 
@@ -225,7 +232,7 @@ Exit cleanly.
 | 8 | Lifecycle Orchestration | Not Started |
 ```
 
-**If any deferred phases were skipped:** display `## Deferred Verification (Skipped on Re-entry)` with the skipped rows and resume commands, then omit them from this run's queue.
+**If any deferred phases were skipped:** Display `## Deferred Verification (Skipped on Re-entry)` with the skipped rows and resume commands. Omit them from this run's queue.
 
 **Fetch details for each phase:**
 
@@ -233,7 +240,7 @@ Exit cleanly.
 DETAIL=$(gsd_run query roadmap.get-phase ${PHASE_NUM})
 ```
 
-Extract `phase_name`, `goal`, `success_criteria` from each. Store for use in execute_phase and transition messages.
+Extract `phase_name`, `goal`, `success_criteria` from each. Store them for use in execute_phase and transition messages.
 
 </step>
 
@@ -336,7 +343,7 @@ Read and execute: `$HOME/.claude/gsd-core/references/autonomous-ui-design-contra
 
 **3b. Plan**
 
-**If `INTERACTIVE` is set:** Background dispatch is only safe on a runtime where a backgrounded agent can still nest the pipeline's subagents (plan-checker / worktree executors / verifier). This is determined from the documentation-sourced dispatch capability in the registry (#1708); Claude Code's backgrounded agents have no `Agent`/`Task` tool, and every other runtime either prohibits nested subagents or disables them by default. So run **inline** everywhere except where `dispatch-should-flatten` returns `false`. Resolve first:
+**If `INTERACTIVE` is set:** Background dispatch is only safe on a runtime where a backgrounded agent can still nest the pipeline's subagents (plan-checker / worktree executors / verifier). This is determined from the documentation-sourced dispatch capability in the registry (#1708). Claude Code's backgrounded agents have no `Agent`/`Task` tool, and every other runtime either prohibits nested subagents or disables them by default. So run **inline** everywhere except where `dispatch-should-flatten` returns `false`. Resolve first:
 
 ```bash
 FLATTEN=$(gsd_run query dispatch-should-flatten --raw 2>/dev/null || echo "true")
@@ -429,7 +436,7 @@ EXECUTE_POST_HOOKS_JSON=$(gsd_run loop render-hooks execute:post --raw)
 
 Resolve active step hooks from `EXECUTE_POST_HOOKS_JSON` where `kind == "step"` and `ref.skill == "code-review"`.
 
-If no active code-review step hook exists: display "Code review skipped (code-review capability inactive)" and proceed to 3d. This covers `workflow.code_review=false` through the Capability Registry; do not query the code-review toggle directly here.
+If no active code-review step hook exists: display "Code review skipped (code-review capability inactive)" and proceed to 3d. This covers `workflow.code_review=false` through the Capability Registry. Do not query the code-review toggle directly here.
 
 For each active code-review step hook, dispatch the skill using the registry-provided stem:
 
@@ -455,13 +462,13 @@ VERIFY_STATUS=$(gsd_run query verification.status "${PHASE_DIR}" --pick status) 
 
 If `PHASE_DIR` is absent, re-fetch `init.phase-op ${PHASE_NUM}` and parse `phase_dir`.
 
-If `VERIFY_ERROR` is set, handle_blocker with the error printed above — the report's `status` is outside the closed set (#5118); never read it as "no results".
+If `VERIFY_ERROR` is set, handle_blocker with the error printed above — the report's `status` is outside the closed set (#5118). Never read it as "no results".
 
 **If `passed`:**
 
-Display `Phase ${PHASE_NUM} ✅ ${PHASE_NAME} — Verification passed`, run `@~/.claude/gsd-core/workflows/transition.md`, then Proceed to iterate step.
+Display `Phase ${PHASE_NUM} ✅ ${PHASE_NAME} — Verification passed`. Run `@~/.claude/gsd-core/workflows/transition.md`, then proceed to iterate step.
 
-**Any status other than `passed`/`human_needed`/`gaps_found`:** execute-phase already ran, so a non-passed route after it is a real blocker — read `gsd_run query verification.status "${PHASE_DIR}" --pick next_action` and handle_blocker with it (#5118: branch on the owner's answer, never on a status word).
+**Any status other than `passed`/`human_needed`/`gaps_found`:** execute-phase already ran, so a non-passed route after it is a real blocker. Read `gsd_run query verification.status "${PHASE_DIR}" --pick next_action` and handle_blocker with it. For #5118, branch on the owner's answer, never on a status word.
 
 **If `human_needed`:**
 
@@ -493,13 +500,13 @@ Score: {N}/{M} must-haves verified
 
 Ask how to proceed: `Run gap closure` / `Continue without fixing` / `Stop autonomous mode`.
 
-On **"Run gap closure"**: one gap-closure attempt:
+On **"Run gap closure"**: one gap-closure try:
 
 ```
 Skill(skill="gsd-plan-phase", args="${PHASE_NUM} --gaps")
 ```
 
-Re-run `init phase-op ${PHASE_NUM}`; if `has_plans` is false, handle_blocker: "Gap closure planning for phase ${PHASE_NUM} did not produce plans."
+Re-run `init phase-op ${PHASE_NUM}`. If `has_plans` is false, handle_blocker: "Gap closure planning for phase ${PHASE_NUM} did not produce plans."
 
 Re-execute:
 ```
@@ -573,7 +580,9 @@ Display the review result summary and score from UI-REVIEW.md if produced. Conti
 
 > Full instructions are in `gsd-core/references/autonomous-smart-discuss.md`. Read that file now and follow it exactly.
 
-Smart discuss is an autonomous-optimized variant of `gsd-discuss-phase`. It proposes grey area answers in batch tables — the user accepts or overrides per area — and writes an identical CONTEXT.md to what discuss-phase produces.
+Smart discuss is an autonomous-optimized variant of `gsd-discuss-phase`. It proposes grey area answers in batch tables. The user accepts or overrides per area.
+
+It writes a CONTEXT.md identical to what discuss-phase produces.
 
 **Inputs:** `PHASE_NUM` from execute_phase.
 
@@ -600,7 +609,7 @@ Read and execute: `$HOME/.claude/gsd-core/references/autonomous-smart-discuss.md
 
 Proceed to lifecycle step (partial completion skips audit/complete/cleanup). Exit cleanly.
 
-**Otherwise:** After each phase, re-read manager projection, then read STATE.md fresh (same fence — a single `gsd_run query init.manager` fetch backs both the JSON re-filter below and the raw re-read, no double-fetch):
+**Otherwise:** After each phase, re-read manager projection, then read STATE.md fresh. Use the same fence for both reads. A single `gsd_run query init.manager` fetch backs both the JSON re-filter below and the raw re-read (no double-fetch):
 
 ```bash
 IFS= read -rd '' GSD_ARGS <<'GSD_ARGS_END' || true
@@ -622,14 +631,14 @@ Check for blockers in the Blockers/Concerns section. If blockers are found, go t
 
 If incomplete phases remain: proceed to next phase, loop back to execute_phase.
 
-If no runnable phases remain but deferred phases were skipped, display `Autonomous run stopped with deferred verification phases still pending. Resume them with the commands listed in Deferred Verification.` Proceed to lifecycle only if every non-deferred phase is complete; otherwise go to handle_blocker.
+If no runnable phases remain but deferred phases were skipped, display `Autonomous run stopped with deferred verification phases still pending. Resume them with the commands listed in Deferred Verification.` Proceed to lifecycle only if every non-deferred phase is complete. Otherwise go to handle_blocker.
 
-**Interactive mode overlap:** When `INTERACTIVE` is set, Codex can overlap discuss for Phase N+1 with background plan+execute for Phase N. Other runtimes keep plan/execute inline, so phases stay sequential:
+**Interactive mode overlap:** When `INTERACTIVE` is set, Codex can run background plan+execute for Phase N while discuss for Phase N+1 runs. Other runtimes keep plan/execute inline, so phases stay sequential.
 1. After discuss completes for Phase N, dispatch plan+execute as background agents
 2. Immediately start discuss for Phase N+1 (the next incomplete phase) while Phase N builds
-3. Before starting plan for Phase N+1, wait for Phase N's execute agent to complete and handle its post-execution routing (verification, gap closure, etc.)
+3. Before starting plan for Phase N+1, wait for Phase N's execute agent to complete. Handle its post-execution routing (verification, gap closure, etc.)
 
-The main context only accumulates discuss conversations; background plan/execute work stays isolated in its agents.
+The main context only accumulates discuss conversations. Background plan/execute work stays isolated in its agents.
 
 If all phases complete, proceed to lifecycle step.
 
@@ -749,7 +758,7 @@ If the archive file does not exist, go to handle_blocker: "Complete milestone di
 Skill(skill="gsd-cleanup")
 ```
 
-Cleanup shows its own dry-run and asks user for approval internally — this is an acceptable pause per CTRL-01 since it's an explicit decision about file deletion.
+Cleanup shows its own dry-run. It asks the user for approval internally. This is an acceptable pause per CTRL-01 because it is an explicit decision about file deletion.
 
 **5d. Final Completion**
 
@@ -771,7 +780,7 @@ Display final completion banner:
 
 ## 6. Handle Blocker
 
-When any phase operation fails or a blocker is detected, present 3 options via AskUserQuestion:
+If any phase operation fails or a blocker is detected, show 3 options via AskUserQuestion:
 
 **Prompt:** "Phase {N} ({Name}) encountered an issue: {description}"
 
@@ -780,7 +789,9 @@ When any phase operation fails or a blocker is detected, present 3 options via A
 2. **"Skip this phase"** — Mark phase as skipped, continue to the next incomplete phase
 3. **"Stop autonomous mode"** — Display summary of progress so far and exit cleanly
 
-**On "Fix and retry":** Loop back to the failed step within execute_phase. Track the retry count per phase + step (`RETRY_COUNT`, kept in memory for the run). If the same step fails again after retry, re-present these options. **Retry ceiling (#3210):** once the same phase step has failed 3 "Fix and retry" attempts, do NOT re-present the options — escalate to a terminal `needs_human` halt: display `Phase {N} ⛔ {Name} — needs_human`, list the unmet items (the blocker description from each attempt), append/update a `## Needs Human` section in STATE.md (`| ${PHASE_NUM} | needs_human | resolve blocker, then /gsd:autonomous --from ${PHASE_NUM} |`), and stop autonomous mode with the standard stopped-summary banner. A blocker that survives 3 fix attempts is an operator gate, not an executable gap.
+**On "Fix and retry":** Loop back to the failed step within execute_phase. Track the retry count per phase + step (`RETRY_COUNT`, kept in memory for the run). If the same step fails again after retry, re-present these options. **Retry ceiling (#3210):** Once the same phase step fails 3 "Fix and retry" try, do NOT re-present the options. Escalate to a terminal `needs_human` halt.
+
+Display `Phase {N} ⛔ {Name} — needs_human`. List the unmet items (the blocker description from each try). Then append/update a `## Needs Human` section in STATE.md (`| ${PHASE_NUM} | needs_human | resolve blocker, then /gsd:autonomous --from ${PHASE_NUM} |`). Stop autonomous mode with the standard stopped-summary banner. A blocker that survives 3 fix try is an operator gate, not an executable gap.
 
 **On "Skip this phase":** Log `Phase {N} ⏭ {Name} — Skipped by user` and proceed to iterate.
 
@@ -842,8 +853,8 @@ When any phase operation fails or a blocker is detected, present 3 options via A
 - [ ] `--to N` handle_blocker resume message preserves --to flag
 - [ ] `--to N` skips lifecycle when not all milestone phases complete
 - [ ] `--interactive` runs discuss inline via gsd-discuss-phase (asks questions, waits for user)
-- [ ] `--interactive` dispatches plan and execute as background agents on Codex (the only runtime where a backgrounded agent can nest subagents); runs them inline on all other runtimes
-- [ ] `--interactive` enables pipeline parallelism (discuss Phase N+1 while Phase N builds) on Codex; phases run sequentially on all other runtimes
+- [ ] `--interactive` dispatches plan and execute as background agents on Codex (the only runtime where a backgrounded agent can nest subagents). Runs them inline on all other runtimes
+- [ ] `--interactive` enables pipeline parallelism (discuss Phase N+1 while Phase N builds) on Codex. Phases run sequentially on all other runtimes
 - [ ] `--interactive` main context only accumulates discuss conversations on Codex (on all other runtimes, inline plan/execute also accumulate)
 - [ ] `--interactive` waits for background agents before post-execution routing
 - [ ] `--interactive` compatible with `--only`, `--from`, and `--to` flags
