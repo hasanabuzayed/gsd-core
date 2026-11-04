@@ -1,7 +1,7 @@
 <purpose>
-Generate a UI design contract (UI-SPEC.md) for frontend phases. Orchestrates gsd-ui-researcher and gsd-ui-checker with a revision loop. Inserts between discuss-phase and plan-phase in the lifecycle.
+Generate a UI design contract (UI-SPEC.md) for frontend phases. Coordinate gsd-ui-researcher and gsd-ui-checker in a revision loop. Run this workflow between discuss-phase and plan-phase in the lifecycle.
 
-UI-SPEC.md locks spacing, typography, color, copywriting, and design system decisions before the planner creates tasks. This prevents design debt caused by ad-hoc styling decisions during execution.
+UI-SPEC.md locks decisions about spacing, typography, color, copywriting, and the design system before the planner creates tasks. This prevents design debt from ad-hoc styling decisions during execution.
 </purpose>
 
 <required_reading>
@@ -9,7 +9,7 @@ UI-SPEC.md locks spacing, typography, color, copywriting, and design system deci
 </required_reading>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
+Use these exact GSD subagent type names. Do not use 'general-purpose' as a fallback:
 - gsd-ui-researcher — Researches UI/UX approaches
 - gsd-ui-checker — Reviews UI implementation quality
 </available_agent_types>
@@ -33,7 +33,7 @@ AGENT_SKILLS_UI_CHECKER=$(gsd_run query agent-skills gsd-ui-checker ${GSD_WS:+--
 
 Parse JSON for: `phase_dir`, `phase_number`, `phase_name`, `phase_slug`, `padded_phase`, `has_context`, `has_research`, `commit_docs`, `response_language`.
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST use `{response_language}` for all user-facing output of this workflow. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
 **File paths:** `state_path`, `roadmap_path`, `requirements_path`, `context_path`, `research_path`.
 
@@ -65,7 +65,7 @@ Exit workflow.
 
 ## 2. Parse and Validate Phase
 
-Extract phase number from $ARGUMENTS. If not provided, detect next unplanned phase.
+Extract the phase number from $ARGUMENTS. If the user does not provide a phase number, detect the next unplanned phase.
 
 ```bash
 PHASE_INFO=$(gsd_run query roadmap.get-phase "${PHASE}")
@@ -103,15 +103,12 @@ Continue (non-blocking).
 UI_SPEC_FILE=$(ls "${PHASE_DIR}"/*-UI-SPEC.md 2>/dev/null | head -1)
 ```
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `$ARGUMENTS` contains `--text` OR init JSON sets `text_mode` to `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type the number of their choice. Non-Claude runtimes, such as OpenAI Codex and Antigravity, need this because `AskUserQuestion` is not available.
 **If exists:**
 
-**If `--auto`:** Auto-select "Skip" — keep the existing UI-SPEC untouched and proceed to step 7
-(checker). Log: `[auto] UI-SPEC exists — reusing as-is, proceeding to verification.` Skip is the
-auto choice because it is the only non-destructive one: "Update" re-runs the researcher, which
-rewrites the whole contract and drops answers a person already recorded in it, and "View" exits
-without verifying anything. A `--auto` run most often meets this file as an unverified draft from
-a run that ended before its checker ran, which is exactly the state the checker should now see.
+**If `--auto`:** Auto-select "Skip". Keep the existing UI-SPEC unchanged and proceed to step 7 (checker). Log: `[auto] UI-SPEC exists — reusing as-is, proceeding to verification.`
+
+Skip is the only auto choice that does not change the contract. "Update" re-runs the researcher, which rewrites the whole contract and removes answers already recorded by a person. "View" exits without verification. A `--auto` run most often finds this file as an unverified draft from a run that ended before the checker ran. The checker should now see that draft.
 
 **Otherwise:** Use AskUserQuestion:
 - header: "Existing UI-SPEC"
@@ -171,7 +168,7 @@ Omit null file paths from `<required_reading>`.
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged. On kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
 
 <!-- #2517 model-omit-on-inherit -->
 
@@ -278,15 +275,17 @@ Do NOT re-ask the user questions that are already answered.
 
 - **If the researcher returns `## REVISION_CONFLICT`:** do NOT increment `revision_count` and do
   NOT re-spawn the checker — a conflict is not resolvable by re-running the same loop. Present the
-  conflict and its alternatives to the user and ask which to take: adopt a named alternative /
-  override the named constraint and apply the hint / amend the constraint itself. Every option
-  resolves the conflict — accepting the spec with the BLOCK still open is NOT offered here, because
-  the blocking `required_property` still fails; that choice belongs to the cap escalation below.
+  conflict and its alternatives to the user. Ask which to take: adopt a named alternative /
+  override the named constraint and apply the hint / amend the constraint itself.
+
+  Every option
+  resolves the conflict. Accepting the spec with the BLOCK still open is NOT offered here, because
+  the blocking `required_property` still fails. That choice belongs to the cap escalation below.
   Re-spawn the researcher with the chosen resolution and return to this step.
 
-  **Bounded:** a conflict naming the SAME `required_property` twice in a row (no successful revision in between) is a stall, and so is
-  the THIRD conflict return of this loop whatever property it names — alternating property names
-  would otherwise never trip the repeat rule. Stop re-spawning and route it to the same cap
+  **Bounded:** a conflict naming the SAME `required_property` twice in a row (no successful revision in between) is a stall.
+  The THIRD conflict return of this loop is also a stall, whatever property it names.
+  Alternating property names would otherwise never trip the repeat rule. Stop re-spawning and route it to the same cap
   escalation below, so declining to spend an iteration cannot make this path unbounded.
 - **On any other return:** increment `revision_count`, then re-spawn checker (step 7)
 
@@ -304,40 +303,49 @@ Options:
 
 Use AskUserQuestion for the choice.
 
-**On "Force approve":** proceed to step 9.5 (the UI-consideration probe still runs on the accepted UI-SPEC, so state coverage is recorded even when quality FLAGs were accepted), then step 10. **On "Edit manually" / "Abandon":** exit without running the probe.
+**On "Force approve":** proceed to step 9.5, then step 10. The UI-consideration probe still runs on the accepted UI-SPEC.
+It records state coverage even when quality FLAGs were accepted. **On "Edit manually" / "Abandon":** exit without running the probe.
 
 ## 9.5. UI-Consideration Probe (post-verification)
 
-Run AFTER the checker approves the UI-SPEC (VERIFIED, or force-approved at step 9) — never inline
-during authoring, so a revision-loop researcher rewrite (step 9) cannot clobber the section and the
-`## UI Considerations` block is committed with the FINAL UI-SPEC. This is the visual analog of
+Run AFTER the checker approves the UI-SPEC (VERIFIED, or force-approved at step 9). Never run inline
+during authoring. This prevents a revision-loop researcher rewrite (step 9) from clobbering the section.
+It also makes sure the `## UI Considerations` block is committed with the FINAL UI-SPEC. This is the visual analog of
 spec-phase Step 5.5's edge probe, retargeted to the UI element/state axis. Reference:
 @~/.claude/gsd-core/references/ui-consideration-probe.md.
 
 **Skip conditions:** if `--auto` and the UI-SPEC already carries a resolved `## UI Considerations`
-section (re-run), the write-back is idempotent (it REPLACES that section, never appends). If the
-runtime is non-Claude and the probe engine cannot be resolved, the shim FAILS LOUD (below) — it
-never silently no-ops (a silent skip would drop the whole state-coverage axis).
+section (re-run), the write-back is idempotent (it REPLACES that section, never appends).
 
-**Non-English projects — `text_en` carries the classifier-facing translation; the UI-SPEC is
-not.** The element cues the classifier matches are **English** word-boundary patterns, so
-element prose written in another language matches nothing, classifies to zero kinds, and lands
-every element in `unclassified` (#1110) — the taxonomy contributes nothing and `--auto` leaves
-it all `unresolved`. When this project has `response_language` set, add an optional `text_en`
+If the
+runtime is non-Claude and the probe engine cannot be resolved, the shim FAILS LOUD (below).
+It never silently no-ops (a silent skip would drop the whole state-coverage axis).
+
+**Non-English projects — `text_en` carries the classifier-facing translation. The UI-SPEC is
+not.** The element cues the classifier matches are **English** word-boundary patterns.
+Element prose written in another language matches nothing and classifies to zero kinds.
+It lands every element in `unclassified` (#1110). The taxonomy contributes nothing and `--auto` leaves
+it all `unresolved`.
+
+When this project sets `response_language`, add an optional `text_en`
 key to each `$ELEMENTS_JSON` entry: a faithful **English** translation of that element's
-`text`. `text_en` is **engine input, never user-facing output**, so the `response_language`
-rule at the top of this workflow does not govern it — but `text` itself is NOT translated:
-write it as the element's own wording, exactly as it appears in the UI-SPEC. The UI-SPEC keeps
+`text`.
+
+`text_en` is **engine input, never user-facing output**.
+The `response_language` rule at the top of this workflow does not govern it. But `text` itself is NOT translated.
+Write it as the element's own wording, exactly as it appears in the UI-SPEC. The UI-SPEC keeps
 the original language — only `text_en` is translated, and element `id`s are never translated
-or renumbered (coverage rows join back on `id`). Populate `text_en` for **every** element, not
-only the ones that look UI-relevant: the zero-applicable guard below fires when `$APPLICABLE`
-is `0` and again on the all-unclassified case (`$UNCLASSIFIED = $APPLICABLE`, #4656), so a
-partly-classified surface slips through both arms with no signal at all. When
+or renumbered (coverage rows join back on `id`).
+
+Populate `text_en` for **every** element, not only the ones that look UI-relevant.
+The zero-applicable guard below fires when `$APPLICABLE` is `0` and on the all-unclassified case (`$UNCLASSIFIED = $APPLICABLE`, #4656).
+A partly-classified surface slips through both arms with no signal at all. When
 `response_language` is unset (an English-language project), omit `text_en` —
 `text` is already English and the engine falls back to it automatically (`text_en ?? text`).
-If an element still classifies to zero kinds with `text_en` populated, it carries no cue in
-any language (the recorded recall gap — ADR-857 §98 / ADR-550 D7b, not a translation failure);
-author an explicit `elements` array on that element instead of relying on the prose classifier.
+
+If an element still classifies to zero kinds with `text_en` populated, it carries no cue in any language.
+This is the recorded recall gap (ADR-857 §98 / ADR-550 D7b), not a translation failure.
+In that case, author an explicit `elements` array on that element instead of relying on the prose classifier.
 (#4657)
 
 **Runtime coverage compute — resolve and invoke ui-consideration-probe.cjs:**
@@ -431,49 +439,57 @@ if [ "$APPLICABLE" = "0" ] || [ "$UNCLASSIFIED" = "$APPLICABLE" ]; then
 fi
 ```
 
-If the guard above fired (`$APPLICABLE` is `0`, or every element is unclassified — `$UNCLASSIFIED = $APPLICABLE`, #4656), do NOT proceed silently: ask via AskUserQuestion ("The UI probe found no
+If the guard above fired (`$APPLICABLE` is `0`, or every element is unclassified — `$UNCLASSIFIED = $APPLICABLE`, #4656), do NOT proceed silently.
+Ask via AskUserQuestion ("The UI probe found no
 applicable state considerations — is this genuinely a state-free surface, or should we revisit the
 element descriptions?"). Only write an empty section after explicit confirmation.
 
 **Propose-then-confirm (the partial-cue mitigation — load-bearing).** For each element, the engine
 reports the DETECTED element kinds (`classifyElement` over the built `.cjs`). The prose classifier
-is heuristic and LOSSY: a surface that is genuinely both a form and a list, but whose prose trips
-only the form cue, under-covers — and because SOMETHING classified, no `unclassified` signal fires.
+is heuristic and LOSSY. A surface that is genuinely both a form and a list under-covers if its prose trips
+only the form cue. Because SOMETHING classified, no `unclassified` signal fires.
+
 So SURFACE the detected kinds to the user (AskUserQuestion) and ask whether any real element kind
 was missed. If the user ADDs a kind, re-run that element with an authored `elements` override
 (the union of detected + added) so the missed categories are raised. A single tripped cue is a
-SIGNAL, not proof the element is only that kind — the confirm step, not the heuristic, is what makes
+SIGNAL, not proof the element is only that kind. The confirm step, not the heuristic, makes
 coverage sound.
 
-**Resolution loop** (mirror spec-phase 5.5): resolve each applicable consideration via
-AskUserQuestion — **Specify** (→ `resolved`, verification: explicit; write a concrete truth) / **Dismiss (reason required)** /
-**Backstop** (→ `resolved`, verification: backstop; a held-out/visual UI-state test) / **Defer** (→ `unresolved`). An `unclassified` row is
-a manual-review nudge, not a hard block. Text mode (`workflow.text_mode` / `--text`) → numbered lists.
+**Resolution loop** (mirror spec-phase 5.5): resolve each applicable consideration via AskUserQuestion.
+Choose **Specify** (→ `resolved`, verification: explicit. Write a concrete truth) or **Dismiss (reason need)**.
+Or choose **Backstop** (→ `resolved`, verification: backstop. A held-out/visual UI-state test) or **Defer** (→ `unresolved`).
+
+An `unclassified` row is a manual-review nudge, not a hard block. Text mode (`workflow.text_mode` / `--text`) → numbered lists.
 
 **Kind-confirmation under `--auto`.** The propose-then-confirm step above is an AskUserQuestion, so
 under `--auto` it follows the spec-phase 5.5 convention (replace AskUserQuestion with Claude's
-recommended choice): Claude re-reads each element's prose and authors the `elements` override (the
-union of the detected kinds + any kind it identifies as missed) instead of prompting — so `--auto`
-recall rests on Claude's kind-identification, not the heuristic cue-match alone. This matters because
-`autoResolve` (below) is a RESOLUTION floor only: it resolves the *detected* categories and cannot
-recover a kind that was never surfaced, so recall is fixed HERE, at kind-confirmation, before
+recommended choice). Claude re-reads each element's prose instead of prompting.
+Claude authors the `elements` override as the union of the detected kinds + any kind it identifies as missed.
+So `--auto` recall rests on Claude's kind-identification, not the heuristic cue-match alone.
+
+This matters because
+`autoResolve` (below) is a RESOLUTION floor only. It resolves the *detected* categories and cannot
+recover a kind that was never surfaced. So recall is fixed HERE, at kind-confirmation, before
 resolution runs.
 
-**`--auto` mode (two layers).** The adapter's `autoResolve` is the CODE floor: every applicable
-consideration auto-resolves with `verification: backstop` (carrying the taxonomy question as its
-resolution) and an `unclassified` candidate stays `unresolved` — it NEVER auto-`dismiss`es and never
+**`--auto` mode (two layers).** The adapter's `autoResolve` is the CODE floor.
+Every applicable consideration auto-resolves with `verification: backstop` (carrying the taxonomy question as its resolution).
+An `unclassified` candidate stays `unresolved`. It NEVER auto-`dismiss`es and never
 auto-resolves an unclassified item with backstop (#1110). On top of that floor the workflow MAY
 upgrade an item to `resolved` (verification: explicit) when a
-defensible acceptance criterion can be written (the same judgment spec-phase 5.5 applies in prose).
-An auto `--auto` run therefore leaves un-upgraded items as `resolved` (verification: backstop): at verify time each one
-with no wired evidence routes to `insufficient_spec → human_needed` — never a silent pass (#1154).
+defensible acceptance criterion can be written. This is the same judgment spec-phase 5.5 applies in prose.
+
+An auto `--auto` run so leaves un-upgraded items as `resolved` (verification: backstop).
+At verify time each one with no wired evidence routes to `insufficient_spec → human_needed` — never a silent pass (#1154).
 That surfacing is the intended honest-verifier behavior, not over-flagging.
 
 **Write-back.** Populate a `## UI Considerations` section in the UI-SPEC from the resolved
 considerations, in the format the shipped plan-phase `## UI Considerations` lift rule reads:
-`resolved` (explicit) → a truth string; `resolved` (backstop) → a flat scalar `{ statement, verification: backstop }`;
-`unresolved` → an explicit `⚠ unresolved — planner must treat as assumption` row. Empty-state and
-error-state COPY stays in `## Copywriting Contract` — the considerations section covers shape-rooted
+`resolved` (explicit) → a truth string. `resolved` (backstop) → a flat scalar `{ statement, verification: backstop }`.
+`unresolved` → an explicit `⚠ unresolved — planner must treat as assumption` row.
+
+Empty-state and
+error-state COPY stays in `## Copywriting Contract`. The considerations section covers shape-rooted
 STATE coverage and REFERENCES those rows rather than restating the copy (de-dup). IDEMPOTENT: if a
 `## UI Considerations` section already exists, REPLACE it — never append a duplicate.
 

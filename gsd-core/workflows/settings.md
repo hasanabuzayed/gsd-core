@@ -1,15 +1,15 @@
 <purpose>
-Interactive configuration of GSD workflow agents (research, plan_check, verifier) and model profile selection via multi-question prompt. Updates .planning/config.json with user preferences. Optionally saves settings as global defaults (~/.gsd/defaults.json) for future projects.
+This workflow uses a multi-question prompt to configure GSD workflow agents (research, plan_check, verifier) and select a model profile. It updates .planning/config.json with user preferences. It can also save settings as global defaults (~/.gsd/defaults.json) for future projects.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
 
 <step name="ensure_and_load_config">
-Ensure config exists and load current state:
+Make sure that config exists. Load the current state:
 
 ```bash
 _GSD_SHIM_NAME="gsd-tools.cjs"; _GSD_RUNTIME_ROOT="${RUNTIME_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"; GSD_TOOLS="${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}"; _gsd_at() { for _p; do if [ -f "$_p" ]; then GSD_TOOLS="$_p"; return 0; fi; done; return 1; }; _gsd_id_ok() { case "$("$1" runtime-identity --raw 2>/dev/null || true)" in '{"packageName":"@opengsd/gsd-core"'*'}') return 0;; *) return 1;; esac; }; _gsd_homes() { set -- "${CLAUDE_CONFIG_DIR:-$HOME/.claude}" "${ANTIGRAVITY_CONFIG_DIR:-$HOME/.gemini/antigravity}" "$HOME/.gemini/antigravity-ide" "$HOME/.gemini/antigravity-cli" "${AUGMENT_CONFIG_DIR:-$HOME/.augment}" "${CLINE_CONFIG_DIR:-$HOME/.cline}" "${CODEBUDDY_CONFIG_DIR:-$HOME/.codebuddy}" "${CODEX_HOME:-$HOME/.codex}" "${COPILOT_CONFIG_DIR:-${COPILOT_HOME:-$HOME/.copilot}}" "${CURSOR_CONFIG_DIR:-$HOME/.cursor}" "${HERMES_HOME:-$HOME/.hermes}" "${KILO_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/kilo}" "${KIMI_CONFIG_DIR:-$HOME/.config/agents}" "$HOME/.agents" "${KIMI_CODE_HOME:-$HOME/.kimi-code}" "${OPENCODE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/opencode}" "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" "${QWEN_CONFIG_DIR:-$HOME/.qwen}" "${TRAE_CONFIG_DIR:-$HOME/.trae}" "${WINDSURF_CONFIG_DIR:-$HOME/.codeium/windsurf}" "${ZCODE_CONFIG_DIR:-$HOME/.zcode}" "${GROK_AGENTS_HOME:-$HOME/.agents}"; for _h; do _gsd_at "$_h/gsd-core/bin/${_GSD_SHIM_NAME}" && return 0; done; return 1; }; if _gsd_at "${_GSD_RUNTIME_ROOT}/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.claude/gsd-core/bin/${_GSD_SHIM_NAME}" "${_GSD_RUNTIME_ROOT}/.codex/gsd-core/bin/${_GSD_SHIM_NAME}"; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif _gsd_homes; then gsd_run() { node "$GSD_TOOLS" "$@"; }; elif unset -f gsd_run; _G="$(command -v gsd_run)"; [ -n "$_G" ] && _gsd_id_ok "$_G"; then GSD_TOOLS="$_G"; gsd_run() { "$GSD_TOOLS" "$@"; }; else echo "ERROR: gsd-tools.cjs not found at $GSD_TOOLS and no identity-proving gsd_run is on PATH. Run: npx -y @opengsd/gsd-core@latest --claude --local" >&2; exit 1; fi; GSD_IDENTITY_STATUS=unverified; _gsd_id_ok gsd_run && GSD_IDENTITY_STATUS=ok; export GSD_IDENTITY_STATUS; [ "$GSD_IDENTITY_STATUS" = ok ] || echo "WARNING: \"$GSD_TOOLS\" did not prove it is @opengsd/gsd-core - it is either a different package or an @opengsd/gsd-core older than the runtime-identity verb. See docs/how-to/diagnose-a-foreign-gsd-tools.md" >&2; if [ -n "${CLAUDE_ENV_FILE:-}" ] && [ -n "${GSD_TOOLS:-}" ]; then printf "export PATH='%s':\"\$PATH\"\n" "${GSD_TOOLS%/*}" >> "$CLAUDE_ENV_FILE" 2>/dev/null || true; fi
@@ -28,10 +28,11 @@ if [[ -z "${GSD_CONFIG_PATH:-}" ]]; then
 fi
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** You MUST show all user-facing output of this workflow in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations. Keep technical terms, code, file paths, and subagent prompts in English. Translate only user-facing output.
 
-Creates `config.json` (at the resolved path) with defaults if missing. `INIT` still holds `state.load` output for any step that needs STATE fields.
-Store `$GSD_CONFIG_PATH` — all subsequent reads and writes use this path, not a hardcoded `.planning/config.json`, so active-workstream installs target the correct file (#2282).
+If `config.json` is missing at the resolved path, the command creates it with defaults. `INIT` still holds `state.load` output for any step that needs STATE fields.
+
+Store `$GSD_CONFIG_PATH`. Use this path for all next reads and writes, not a hardcoded `.planning/config.json`. This makes active-workstream installs target the correct file (#2282).
 </step>
 
 <step name="read_current">
@@ -43,7 +44,7 @@ Parse current values (default to `true` if not present):
 - `workflow.research` — spawn researcher during plan-phase
 - `workflow.plan_check` — spawn plan checker during plan-phase
 - `workflow.verifier` — spawn verifier during execute-phase
-- `plan_review.source_grounding` — verify plan symbols against live source during plan review (default: true if absent; set `plan_review.source_grounding_authority` to select the resolver adapter: `grep` (default), `intel`, `treesitter`, `lsp`, or `scip`)
+- `plan_review.source_grounding` — verify plan symbols against live source during plan review (default: true if absent. Set `plan_review.source_grounding_authority` to select the resolver adapter: `grep` (default), `intel`, `treesitter`, `lsp`, or `scip`)
 - `workflow.nyquist_validation` — validation architecture research during plan-phase (default: true if absent)
 - `workflow.pattern_mapper` — run gsd-pattern-mapper between research and planning (default: true if absent)
 - `workflow.ui_phase` — generate UI-SPEC.md design contracts for frontend phases (default: true if absent)
@@ -51,7 +52,7 @@ Parse current values (default to `true` if not present):
 - `workflow.ai_integration_phase` — framework selection + eval strategy for AI phases (default: true if absent)
 - `workflow.tdd_mode` — enforce RED/GREEN/REFACTOR gate sequence during execute-phase (default: false if absent)
 - `workflow.code_review` — enable /gsd:code-review and /gsd:code-review --fix commands (default: true if absent)
-- `workflow.code_review_depth` — default depth for /gsd:code-review: `quick`, `standard`, or `deep` (default: `"standard"` if absent; only relevant when `code_review` is on)
+- `workflow.code_review_depth` — default depth for /gsd:code-review: `quick`, `standard`, or `deep` (default: `"standard"` if absent. Only relevant when `code_review` is on)
 - `workflow.ui_review` — run visual quality audit (/gsd:ui-review) in autonomous mode (default: true if absent)
 - `commit_docs` — whether `.planning/` files are committed to git (default: true if absent)
 - `intel.enabled` — enable queryable codebase intelligence (/gsd:map-codebase --query) (default: false if absent)
@@ -59,19 +60,19 @@ Parse current values (default to `true` if not present):
 - `graphify.auto_update` — opt-in: auto-rebuild graph after main HEAD advances (#3347) (default: `false`)
 - `model_profile` — which model each agent uses (default: `balanced`)
 - `git.branching_strategy` — branching approach (default: `"none"`)
-- `git.repo_tagging` — milestone tagging mode: `"single"` (one `v[X.Y]` tag, default) or `"per_repo"` (record a release map and tag each `planning.sub_repos` repository separately; set via `gsd_run query config-set git.repo_tagging per_repo`, #3628)
-- `workflow.use_worktrees` — whether parallel executor agents run in worktree isolation (honored when the runtime declares a `dispatch.isolation` primitive — `harness-worktree` or `orchestrator-worktree`; runtimes declaring `none` default it to `false` and fail closed on an explicit `true` — #1521, #2486, #2584)
-- `workflow.compact_content` — load token-minimized instruction variants where they exist, trading rarely-needed elaboration for a smaller always-loaded instruction window (default: false if absent; #4139)
-- `model_policy.provider` — provider slug for model policy (default: `null`; known values: anthropic, openai, google, qwen; set via /gsd:config --advanced)
-- `model_policy.budget` — budget level for model policy (default: `null`; known values: high, medium, low; set via /gsd:config --advanced)
-- `model_policy.high` — model ID for high-cost tier (default: `null`; set via /gsd:config --advanced)
-- `model_policy.medium` — model ID for medium-cost tier (default: `null`; set via /gsd:config --advanced)
-- `model_policy.low` — model ID for low-cost tier (default: `null`; set via /gsd:config --advanced)
+- `git.repo_tagging` — milestone tagging mode: `"single"` (one `v[X.Y]` tag, default) or `"per_repo"` (record a release map and tag each `planning.sub_repos` repository separately. Set via `gsd_run query config-set git.repo_tagging per_repo`, #3628)
+- `workflow.use_worktrees` — whether parallel executor agents run in worktree isolation (honored when the runtime declares a `dispatch.isolation` primitive — `harness-worktree` or `orchestrator-worktree`. Runtimes declaring `none` default it to `false` and fail closed on an explicit `true` — #1521, #2486, #2584)
+- `workflow.compact_content` — load token-minimized instruction variants where they exist, trading rarely-needed elaboration for a smaller always-loaded instruction window (default: false if absent. #4139)
+- `model_policy.provider` — provider slug for model policy (default: `null`. Known values: anthropic, openai, google, qwen. Set via /gsd:config --advanced)
+- `model_policy.budget` — budget level for model policy (default: `null`. Known values: high, medium, low. Set via /gsd:config --advanced)
+- `model_policy.high` — model ID for high-cost tier (default: `null`. Set via /gsd:config --advanced)
+- `model_policy.medium` — model ID for medium-cost tier (default: `null`. Set via /gsd:config --advanced)
+- `model_policy.low` — model ID for low-cost tier (default: `null`. Set via /gsd:config --advanced)
 </step>
 
 <step name="present_settings">
 
-**Text mode (`workflow.text_mode: true` in config or `--text` flag):** Set `TEXT_MODE=true` if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is `true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list and ask the user to type their choice number. This is required for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
+**Text mode (`workflow.text_mode: true` in config or `--text` flag):** If `--text` is in `$ARGUMENTS` OR `text_mode` from init JSON is `true`, set `TEXT_MODE=true`. When TEXT_MODE is active, replace every `AskUserQuestion` call with a plain-text numbered list. Ask the user to type their choice number. This is necessary for non-Claude runtimes (OpenAI Codex, Antigravity, etc.) where `AskUserQuestion` is not available.
 
 **Non-Claude runtime note:** If `TEXT_MODE` is active (i.e. the runtime is non-Claude), prepend the following notice before the model profile question:
 
@@ -89,12 +90,15 @@ configure `model_overrides` manually in .planning/config.json to target specific
 models per agent.
 ```
 
-**Isolation resolution for the Worktrees question (#2486):** resolve the runtime's declared executor-isolation primitive and the current worktrees value before presenting the questions. Use `inspect-dispatch-isolation`, the **sentinel-free** inspection verb — never `dispatch-isolation`, whose #3045 contract records the resolved decision to the executor-dispatch sentinel as an unconditional side effect; a settings menu must not be able to stamp a sentinel the isolation guards then enforce against real dispatches. Sentinel-free is the exact claim: the shared CLI bootstrap still runs, but nothing it does can block a dispatch. The worktrees read deliberately carries no `--default`/fallback: an absent key must stay distinguishable from an explicit `false` (empty output = key absent), which the pre-selection rule below depends on.
+**Isolation resolution for the Worktrees question (#2486):** Before you show the questions, resolve the runtime's declared executor-isolation primitive and the current worktrees value. Use `inspect-dispatch-isolation`, the **sentinel-free** inspection verb. Never use `dispatch-isolation`. Its #3045 contract records the resolved decision to the executor-dispatch sentinel as an unconditional side effect.
 
-A failed query is not a capability verdict, so track the two apart: settings still fails closed, but
-says so instead of claiming the runtime declares no primitive. The verb fail-closes an unknown runtime — or an
-internal resolution error — to `none` and exits 0, so `INSPECTED_RESOLVED=false` means only "the query did not answer"
-(#2486 review):
+A settings menu must not be able to stamp a sentinel that isolation guards then enforce against real dispatches. Sentinel-free is the exact claim. The shared CLI bootstrap still runs, but nothing it does can block a dispatch.
+
+The worktrees read has no `--default`/fallback. An absent key must stay distinguishable from an explicit `false` (empty output = key absent). The pre-selection rule below depends on this distinction.
+
+A failed query is not a capability verdict. Track the two separately. Settings still fails closed, but says so instead of claiming that the runtime declares no primitive.
+
+The verb fails closed to `none` for an unknown runtime or an internal resolution error, and exits 0. So `INSPECTED_RESOLVED=false` means only "the query did not answer" (#2486 review):
 
 ```bash
 _INSPECTED_RAW=$(gsd_run query inspect-dispatch-isolation --raw 2>/dev/null)
@@ -113,7 +117,7 @@ esac
 USE_WORKTREES_CURRENT=$(gsd_run query config-get workflow.use_worktrees --raw 2>/dev/null)
 ```
 
-Use AskUserQuestion with current values pre-selected. Questions are grouped into six visual sections; the first question in each section carries the section-denoting `header` field (AskUserQuestion renders abbreviated section tags for grouping, max 12 chars).
+Use AskUserQuestion with current values pre-selected. The questions form six visual sections. The first question in each section has the section-denoting `header` field. AskUserQuestion shows abbreviated section tags for grouping, max 12 chars.
 
 Section layout:
 
@@ -135,14 +139,20 @@ Model Profile, Auto-Advance, Branching
 ### Misc
 Context Warnings, Compact Content, Research Qs
 
-**Conditional visibility — code_review_depth:** This question is shown only when the user's chosen `code_review` value (after they answer that question, or the pre-selected value if unchanged) is on. If `code_review` is off, omit the `code_review_depth` question from the AskUserQuestion block and preserve the existing `workflow.code_review_depth` value in config (do not overwrite). Implementation: ask the Model + Planning + Execution-up-to-Code-Review questions first; if `code_review=on`, include `code_review_depth` in the same batch; otherwise skip it. Conceptually this is a one-branch split on the `code_review` answer.
+**Conditional visibility — code_review_depth:** Show this question only when the user's chosen `code_review` value is on. Use the answer to that question, or the pre-selected value if unchanged. If `code_review` is off, omit the `code_review_depth` question from the AskUserQuestion block. Preserve the existing `workflow.code_review_depth` value in config. Do not overwrite it.
 
-**Conditional visibility — graphify.auto_update:** This question is shown only when the user's chosen `graphify.enabled` value is on. If `graphify.enabled` is off, omit the `graphify.auto_update` question and preserve the existing `graphify.auto_update` value in config (do not overwrite). Implementation: ask Graphify first; only ask Graph auto-update when Graphify is enabled.
+For implementation, ask the Model + Planning + Execution-up-to-Code-Review questions first. If `code_review=on`, include `code_review_depth` in the same batch. Otherwise skip it. This is a one-branch split on the `code_review` answer.
 
-**Conditional options — Worktrees (#2486):** whether a runtime can honor `workflow.use_worktrees: true` depends on its **declared `dispatch.isolation` capability, not its name** (#2584): `harness-worktree` (the host isolates each executor) and `orchestrator-worktree` (GSD drives the worktrees) both run parallel; `none` fails closed on an explicit `true`. Branch on the same negotiation the execution gate resolves, via the sentinel-free `inspect-dispatch-isolation` verb, which fail-closes unknown/undeclared/`undocumented` to `none`. The rule is one-directional: **never persist a value the isolation gate would fail closed on.** **Do not add a runtime-name test here.** Branch on `$INSPECTED_ISOLATION`:
+**Conditional visibility — graphify.auto_update:** Show this question only when the user's chosen `graphify.enabled` value is on. If `graphify.enabled` is off, omit the `graphify.auto_update` question. Preserve the existing `graphify.auto_update` value in config. Do not overwrite it.
+
+For implementation, ask Graphify first. Only ask Graph auto-update when Graphify is enabled.
+
+**Conditional options — Worktrees (#2486):** A runtime can honor `workflow.use_worktrees: true` based on its **declared `dispatch.isolation` capability, not its name** (#2584). With `harness-worktree`, the host isolates each executor. With `orchestrator-worktree`, GSD drives the worktrees. Both run parallel. `none` fails closed on an explicit `true`.
+
+Use the sentinel-free `inspect-dispatch-isolation` verb to branch on the same negotiation that the execution gate resolves. The verb fails closed to `none` for unknown/undeclared/`undocumented`. The rule is one-directional: **never persist a value the isolation gate would fail closed on.** **Do not add a runtime-name test here.** Branch on `$INSPECTED_ISOLATION`:
 
 - **If `INSPECTED_ISOLATION` ≠ `none`** (`harness-worktree` or `orchestrator-worktree`): present the Worktrees question exactly as written below — unchanged behavior. The `none` branch is the entirety of the #2486 change.
-- **If `INSPECTED_ISOLATION` = `none`:** replace the question's options with the two below — do NOT offer an enabling option, and NEVER write `workflow.use_worktrees: true` from this workflow when the runtime declares no isolation primitive, regardless of the user's answer:
+- **If `INSPECTED_ISOLATION` = `none`:** replace the question's options with the two below. Do NOT offer an enabling option. When the runtime declares no isolation primitive, NEVER write `workflow.use_worktrees: true` from this workflow, regardless of the user's answer:
 
 ```
 {
@@ -156,7 +166,7 @@ Context Warnings, Compact Content, Research Qs
 }
 ```
 
-**The three placeholders** carry the only difference between a capability GSD resolved and one it could not, so no text in this branch ever asserts a verdict that was not reached. Substitute them everywhere they appear — the two `description`s above, the pre-selection rationale, and the notice — from whichever column applies:
+**The three placeholders** carry the only difference between a capability GSD resolved and one it could not resolve. No text in this branch asserts a verdict that GSD did not reach. Substitute the placeholders everywhere they appear from the applicable column. They appear in the two `description`s above, the pre-selection rationale, and the notice:
 
 | | `INSPECTED_RESOLVED=true` | `INSPECTED_RESOLVED=false` |
 |---|---|---|
@@ -164,13 +174,19 @@ Context Warnings, Compact Content, Research Qs
 | `{CONSEQUENCE}` | execution fails closed on an explicit true | GSD cannot tell whether execution will accept an explicit true |
 | `{ABSENCE}` | absent, it resolves to false wherever this emit stamped that default | absent, it is the safe state until the capability resolves |
 
-Failing closed is right in both columns — never write `workflow.use_worktrees: true` from this branch either way. Only the explanation changes.
+Failing closed is right in both columns. Never write `workflow.use_worktrees: true` from this branch in either case. Only the explanation changes.
 
-  Persistence: "No (Recommended)" → write `workflow.use_worktrees: false`; "Leave unchanged" → do not write `workflow.use_worktrees` at all (preserve the existing value or absence).
+  Persistence: "No (Recommended)" → write `workflow.use_worktrees: false`. "Leave unchanged" → do not write `workflow.use_worktrees` at all (preserve the existing value or absence).
 
-  Pre-selection: the generic "current values pre-selected" rule does not apply when `INSPECTED_ISOLATION` is `none` — an explicit `true` has no matching option by design. Pre-select "No (Recommended)" in every case, including an absent key (`$USE_WORKTREES_CURRENT` empty, the no-`--default` read's absent signal): absence resolves to `false` only where this emit stamped that default and to `true` otherwise, so leaving it absent can preserve the very state this branch prevents, while an explicit `false` is correct under either emit (#2486 review). The same applies when it is an explicit non-false value — the broken-inheritance case the notice below covers. "Leave unchanged" remains available for the deliberate shared-config case, but is never the default here. The default must be the repair the "(Recommended)" label points to, so accepting it never keeps a value this branch could not justify. In TEXT_MODE, mark that option as the default in the numbered list.
+  Pre-selection: When `INSPECTED_ISOLATION` is `none`, the generic "current values pre-selected" rule does not apply. An explicit `true` has no matching option by design. Pre-select "No (Recommended)" in every case, including an absent key. `$USE_WORKTREES_CURRENT` is empty for an absent key because the read has no `--default`.
 
-  Additionally, if `$USE_WORKTREES_CURRENT` is non-empty and not `false` (the config carries an explicit `true` — e.g. inherited from a worktree-capable install sharing the repo; empty means the key is absent, which needs no notice), prepend this notice before the question:
+  Absence resolves to `false` only where this emit stamped that default. Otherwise, absence resolves to `true`. An absent key can preserve the state that this branch prevents. An explicit `false` is correct under either emit (#2486 review).
+
+  The same rule applies to an explicit non-false value. The notice below covers that broken-inheritance case. "Leave unchanged" remains available for the deliberate shared-config case, but is never the default here.
+
+  The default must be the repair that the "(Recommended)" label points to. Accepting it never keeps a value this branch could not justify. In TEXT_MODE, mark that option as the default in the numbered list.
+
+  If `$USE_WORKTREES_CURRENT` is non-empty and not `false`, prepend this notice before the question. The config then carries an explicit `true`. For example, it can come from a worktree-capable install that shares the repo. Empty means the key is absent, which needs no notice:
 
 ```
 Note: the project config currently sets workflow.use_worktrees: true.
@@ -461,7 +477,7 @@ AskUserQuestion([
 </step>
 
 <step name="update_config">
-Merge new settings into existing config.json:
+Merge the new settings into the existing config.json:
 
 ```json
 {
@@ -520,7 +536,7 @@ Merge new settings into existing config.json:
 }
 ```
 
-**Safe merge:** Apply each chosen value so unrelated keys are never clobbered. Use the appropriate write path per key:
+**Safe merge:** Apply each chosen value without overwriting unrelated keys. Use the applicable write path for each key:
 
 - **Capability hook-gate keys** (owned by a capability in the registry — see `registry.configSchema`): write via the capability writer:
   ```bash
@@ -542,11 +558,13 @@ Merge new settings into existing config.json:
   | `intel.enabled` | `intel` |
   | `graphify.enabled` | `graphify` |
 
-  `code_review_depth` is written only if the `code_review` question was answered `on`; otherwise leave the existing value in place.
+  If the answer to the `code_review` question was `on`, write `code_review_depth`. Otherwise leave the existing value in place.
 
 - **Non-capability keys** (`model_profile`, `commit_docs`, `workflow.plan_check`, `workflow.verifier`, `workflow.auto_advance`, `workflow.text_mode`, `workflow.compact_content`, `workflow.research_before_questions`, `workflow.discuss_mode`, `workflow.skip_discuss`, `workflow.use_worktrees`, `plan_review.source_grounding`, `graphify.auto_update`, `git.*`, `hooks.*`, `model_policy.*`): write via `gsd_run query config-set <key.path> <value>` as before.
 
-`model_profile` is written on Q1 "Adaptive (Recommended)" (→ adaptive) or Q1 "Inherit" (→ inherit) immediately; for Q1 "Standard tier…", `model_profile` is written from Q2's answer. If Q1 = "Standard tier…" but Q2 is cancelled, leave the existing `model_profile` value unchanged — do not write any new value.
+If Q1 is "Adaptive (Recommended)" (→ adaptive) or "Inherit" (→ inherit), write `model_profile` immediately. If Q1 is "Standard tier…", write `model_profile` from Q2's answer.
+
+If Q1 = "Standard tier…" but Q2 is cancelled, leave the existing `model_profile` value unchanged. Do not write any new value.
 
 Write updated config to `$GSD_CONFIG_PATH` (the workstream-aware path resolved in `ensure_and_load_config`). Never hardcode `.planning/config.json` — workstream installs route to `.planning/workstreams/<slug>/config.json`.
 </step>
@@ -616,7 +634,7 @@ Write `${GSD_HOME:-$HOME}/.gsd/defaults.json` with:
 </step>
 
 <step name="confirm">
-Display:
+Show:
 
 ```
 ### GSD ► SETTINGS UPDATED
@@ -664,7 +682,9 @@ Quick commands:
 
 <success_criteria>
 - [ ] Current config read
-- [ ] User presented with 25 settings (profile + workflow toggles + features + git branching + git tagging + ctx warnings + compact content), grouped into six sections: Planning, Execution, Docs & Output, Features, Model & Pipeline, Misc. `code_review_depth` is conditional on `code_review=on`. Model profile uses a two-question split (Q1: Adaptive / Standard tier / Inherit; Q2: Quality / Balanced / Budget — only when Standard tier chosen) to stay within the 4-option AskUserQuestion cap while exposing all 5 valid profiles (#3784). Drift Guard (`plan_review.source_grounding`) is in the Planning section.
+- [ ] User presented with 25 settings (profile + workflow toggles + features + git branching + git tagging + ctx warnings + compact content). These settings are grouped into six sections: Planning, Execution, Docs & Output, Features, Model & Pipeline, Misc. `code_review_depth` is conditional on `code_review=on`.
+
+  Model profile uses a two-question split to stay within the 4-option AskUserQuestion cap while exposing all 5 valid profiles (#3784). Q1: Adaptive / Standard tier / Inherit. Q2: Quality / Balanced / Budget — only when Standard tier chosen. Drift Guard (`plan_review.source_grounding`) is in the Planning section.
 - [ ] Config updated with model_profile, workflow, and git sections
 - [ ] User offered to save as global defaults (~/.gsd/defaults.json)
 - [ ] Changes confirmed to user
