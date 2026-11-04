@@ -139,12 +139,12 @@ Project state updated: .planning/STATE.md
 
 <anti_patterns>
 
-- Don't use this for planned work at end of milestone (use /gsd:phase without --insert)
-- Don't insert before Phase 1 (decimal 0.1 makes no sense)
-- Don't renumber existing phases
-- Don't modify the target phase content
-- Don't create plans yet (that's /gsd:plan-phase)
-- Don't commit changes (user decides when to commit)
+- Do not use this for planned work at end of milestone (use /gsd:phase without --insert)
+- Do not insert before Phase 1 (decimal 0.1 makes no sense)
+- Do not renumber existing phases
+- Do not change the target phase content
+- Do not create plans yet (that is /gsd:plan-phase)
+- Do not commit changes (user decides when to commit)
 </anti_patterns>
 
 <success_criteria>

@@ -1,16 +1,16 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Lightweight codebase assessment. Spawns a single gsd-codebase-mapper agent for one focus area,
-producing targeted documents in `.planning/codebase/`.
+This workflow gives a lightweight assessment of the codebase. It starts a single gsd-codebase-mapper agent for one focus area.
+The agent produces documents for that area in `.planning/codebase/`.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <available_agent_types>
-Valid GSD subagent types (use exact names — do not fall back to 'general-purpose'):
+Valid GSD subagent types follow. Use the exact names. Do not use 'general-purpose' as a fallback.
 - gsd-codebase-mapper — Maps project structure and dependencies
 </available_agent_types>
 
@@ -28,11 +28,11 @@ Valid GSD subagent types (use exact names — do not fall back to 'general-purpo
 
 ## Step 1: Parse arguments and resolve focus
 
-Parse the user's input for `--focus <area>`. Default to `tech+arch` if not specified.
+Parse the user's input for `--focus <area>`. If the input does not specify a focus, use `tech+arch`.
 
-Validate that the focus is one of: `tech`, `arch`, `quality`, `concerns`, `tech+arch`.
+Make sure that the focus is one of these values: `tech`, `arch`, `quality`, `concerns`, `tech+arch`.
 
-If invalid:
+If the focus is invalid, show:
 ```
 Unknown focus area: "{input}". Valid options: tech, arch, quality, concerns, tech+arch
 ```
@@ -53,14 +53,14 @@ if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 
 Parse JSON for: `mapper_model`, `commit_docs`, `search_gitignored`, `parallelization`, `subagent_timeout`, `date`, `codebase_dir`, `existing_maps`, `has_maps`, `planning_exists`, `codebase_dir_exists`.
 
-Look up which documents would be produced for the selected focus (from the mapping table above).
+Use the mapping table above to find which documents the selected focus would produce.
 
-For each target document, check if it already exists in `.planning/codebase/`:
+For each target document, use this command to find an existing file in `.planning/codebase/`:
 ```bash
 ls -la .planning/codebase/{DOCUMENT}.md 2>/dev/null
 ```
 
-If any exist, show their modification dates and ask:
+If any target documents exist, show their modification dates and ask:
 ```
 Existing documents found:
   - STACK.md (modified 2026-04-03)
@@ -69,7 +69,7 @@ Existing documents found:
 Overwrite with fresh scan? [y/N]
 ```
 
-If user says no, exit.
+If the user says no, exit.
 
 ## Step 3: Create output directory
 
@@ -85,9 +85,22 @@ Print: `◆ Spawning scanner... (runs in a subagent — no output until it retur
 
 <!-- #2508 runtime-aware-dispatch -->
 
-> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role. Before dispatching on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in via `gsd_run query resolve-dispatch-type --requested <role> --raw`. On named-dispatch runtimes (Claude/OpenCode/…) the role is returned unchanged; on kimi-code it maps to `coder`/`explore`/`plan` by role-suffix. The persona rides `${AGENT_SKILLS_<ROLE>}` (Phase 3) regardless. See @gsd-core/references/runtime-aware-dispatch.md.
+> **Runtime-aware dispatch (#2508 Phase 4).** GSD workflows dispatch specialized subagents by role.
 
-**#2517 model resolution:** `mapper_model` is the field `init.map-codebase` emits (parsed in Step 2) — this is the same binding `map-codebase.md` uses. **Omit the `model=` parameter entirely when `mapper_model` is `"inherit"` or empty**; do NOT pass `model=""` or `model="inherit"`, which 404s on non-Claude runtimes. Omitting inherits the orchestrator's model.
+> Before dispatch on a built-in-only runtime (kimi-code — three built-ins only), resolve the role to a built-in.
+> Use `gsd_run query resolve-dispatch-type --requested <role> --raw`.
+
+> On named-dispatch runtimes (Claude/OpenCode/…), the command returns the role unchanged.
+> On kimi-code, the command maps the role to `coder`/`explore`/`plan` by role-suffix.
+> In both cases, `${AGENT_SKILLS_<ROLE>}` carries the persona (Phase 3).
+
+> See @gsd-core/references/runtime-aware-dispatch.md.
+
+**#2517 model resolution:** `init.map-codebase` emits the `mapper_model` field. Step 2 parses this field. `map-codebase.md` uses the same binding.
+
+**When `mapper_model` is `"inherit"` or empty, omit the `model=` parameter entirely**.
+Do NOT pass `model=""` or `model="inherit"`. These values cause a 404 on non-Claude runtimes.
+If you omit the parameter, the agent inherits the orchestrator's model.
 
 ```
 Agent(
@@ -97,7 +110,12 @@ Agent(
 )
 ```
 
-> **ORCHESTRATOR RULE — CODEX RUNTIME**: After calling Agent() above, stop working on this task immediately. Do not read more files, edit code, or run tests related to this task while the subagent is active. Wait for the subagent to return its result. This prevents duplicate work, conflicting edits, and wasted context. Only resume when the subagent result is available.
+> **ORCHESTRATOR RULE — CODEX RUNTIME**: After you call Agent() above, stop work on this task immediately.
+> While the subagent is active, do not read more files, edit code, or run tests related to this task.
+> Wait for the subagent to return its result.
+
+> This prevents duplicate work, conflicting edits, and wasted context.
+> Resume only when the subagent result is available.
 
 ## Step 5: Report
 
@@ -114,9 +132,9 @@ Use `/gsd:map-codebase` for a comprehensive 4-area parallel scan.
 </process>
 
 <success_criteria>
-- [ ] Focus area correctly parsed (default: tech+arch)
-- [ ] Existing documents detected with modification dates shown
-- [ ] User prompted before overwriting
-- [ ] Single mapper agent spawned with correct focus
-- [ ] Output documents written to .planning/codebase/
+- [ ] The workflow correctly parsed the focus area (default: tech+arch)
+- [ ] The workflow found existing documents and showed their modification dates
+- [ ] The workflow prompted the user before it overwrote documents
+- [ ] The workflow spawned a single mapper agent with the correct focus
+- [ ] The agent wrote output documents to .planning/codebase/
 </success_criteria>
