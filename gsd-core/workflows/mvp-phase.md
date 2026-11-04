@@ -1,5 +1,7 @@
 <purpose>
-Guide the user through MVP-mode planning for a phase. Prompts for an "As a / I want to / So that" user story, runs SPIDR splitting check on the story, writes the result to ROADMAP.md, and delegates to `/gsd:plan-phase` (which auto-detects MVP via the roadmap mode field shipped in PRD Phase 1).
+Guide the user through MVP-mode planning for a phase. Ask for an "As a / I want to / So that" user story. Run the SPIDR splitting check on the story.
+
+Write the result to ROADMAP.md. Delegate to `/gsd:plan-phase`. It automatically detects MVP through the roadmap mode field shipped in PRD Phase 1.
 </purpose>
 
 <required_reading>
@@ -11,14 +13,14 @@ Guide the user through MVP-mode planning for a phase. Prompts for an "As a / I w
 <runtime_note>
 **Copilot (VS Code):** Use `vscode_askquestions` wherever this workflow calls `AskUserQuestion`. They are equivalent.
 
-**TEXT_MODE fallback:** Set TEXT_MODE=true if `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is true. When TEXT_MODE is active, replace every AskUserQuestion call with a plain-text numbered list and ask the user to type their choice number.
+**TEXT_MODE fallback:** If `--text` is present in `$ARGUMENTS` OR `text_mode` from init JSON is true, set TEXT_MODE=true. When TEXT_MODE is active, replace every AskUserQuestion call with a plain-text numbered list. Ask the user to type their choice number.
 </runtime_note>
 
 <process>
 
 ## 1. Parse and validate phase argument
 
-Extract the phase number from `$ARGUMENTS` (integer or decimal like `2.1`). Optional flag: `--force` (allow operating on `in_progress` / `completed` phases).
+Extract the phase number from `$ARGUMENTS`. It is an integer or a decimal like `2.1`. The optional flag `--force` lets the workflow operate on `in_progress` / `completed` phases.
 
 If no argument:
 ```
@@ -29,7 +31,7 @@ Example: /gsd:mvp-phase 2.1
 ```
 Exit.
 
-Normalize per `@~/.claude/gsd-core/references/phase-argument-parsing.md` (zero-pad integer phases to two digits).
+Normalize the phase number as specified in `@~/.claude/gsd-core/references/phase-argument-parsing.md`. Add leading zeros to integer phases to make two digits.
 
 ## 2. Validate phase exists and check status
 
@@ -58,11 +60,13 @@ else
 fi
 ```
 
-**If `response_language` is set:** All user-facing output of this workflow — narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations — MUST be presented in `{response_language}`. Technical terms, code, file paths, and subagent prompts stay in English — only user-facing output is translated.
+**If `response_language` is set:** All user-facing output of this workflow MUST be presented in `{response_language}`. This includes narration between tool calls, status updates, progress notes, findings, questions, prompts, and explanations.
 
-If `PHASE_FOUND` is `false`: error and exit. Suggest `/gsd:phase "<description>"` or `/gsd:phase --insert <after-phase> "<description>"` to create the phase first.
+Technical terms, code, file paths, and subagent prompts stay in English. Only user-facing output is translated.
 
-**Status guard.** If the phase is `in_progress` (has plans but not complete) or `completed`, refuse unless `--force` is in `$ARGUMENTS`:
+If `PHASE_FOUND` is `false`, show an error and exit. Suggest `/gsd:phase "<description>"` or `/gsd:phase --insert <after-phase> "<description>"` to create the phase first.
+
+**Status guard.** If the phase is `in_progress` (has plans but is not complete) or `completed`, refuse unless `--force` is in `$ARGUMENTS`:
 
 ```text
 ERROR: Phase ${PHASE} is currently ${STATUS}.
@@ -72,15 +76,15 @@ invalidate any existing plans and summaries.
 To proceed anyway: /gsd:mvp-phase ${PHASE} --force
 ```
 
-**Already-MVP guard.** If `PHASE_MODE` is already `mvp`, surface this and ask whether to re-prompt the user story or abort:
+**Already-MVP guard.** If `PHASE_MODE` is already `mvp`, tell the user. Ask whether to re-prompt for the user story or abort:
 
 > "Phase ${PHASE} is already in MVP mode with goal: «${PHASE_GOAL}». Re-run user-story prompts and SPIDR check?"
 
-Use `AskUserQuestion` with options [Re-prompt / Abort]. On Abort, exit cleanly. On Re-prompt, proceed.
+Use `AskUserQuestion` with options [Re-prompt / Abort]. If the user selects Abort, exit cleanly. If the user selects Re-prompt, proceed.
 
 ## 3. User story prompts
 
-Run three sequential `AskUserQuestion` calls. Each is free-text. After all three, assemble into the canonical sentence per `@~/.claude/gsd-core/references/user-story-template.md`:
+Run three `AskUserQuestion` calls in sequence. Each call accepts free-text. After all three, assemble the canonical sentence as specified in `@~/.claude/gsd-core/references/user-story-template.md`:
 
 **Prompt 1 — As a:**
 > "As a [user role]?"
@@ -92,7 +96,7 @@ Run three sequential `AskUserQuestion` calls. Each is free-text. After all three
 
 **Prompt 3 — So that:**
 > "So that [outcome]?"
-> (Examples: "I can access my account", "I can bulk-import contacts", "I can see at a glance what needs attention")
+> (Examples: "I can access my account". "I can bulk-import contacts". "I can see at a glance what needs attention")
 
 Assemble:
 
@@ -100,9 +104,9 @@ Assemble:
 USER_STORY="As a ${ROLE}, I want to ${CAPABILITY}, so that ${OUTCOME}."
 ```
 
-If any of the three answers is empty or whitespace-only, error and re-prompt that single field. Do NOT proceed with a partial story.
+If any of the three answers is empty or contains only whitespace, show an error. Re-prompt for that single field. Do NOT proceed with a partial story.
 
-**Validate via the centralized User Story validator.** The verb owns the canonical regex `/^As a .+, I want to .+, so that .+\.$/` and surfaces per-error guidance:
+**Validate with the centralized User Story validator.** The verb owns the canonical regex `/^As a .+, I want to .+, so that .+\.$/`. It shows guidance for each error:
 
 ```bash
 USER_STORY_RESULT=$(gsd_run query user-story.validate --story "$USER_STORY")
@@ -114,14 +118,21 @@ if [ "$(echo "$USER_STORY_RESULT" | jq -r '.valid')" != "true" ]; then
 fi
 ```
 
-This guarantees the goal stored in ROADMAP.md will satisfy the same guard the verifier applies later.
-If `RE_PROMPT_USER_STORY=true`, re-run only the offending prompt field(s), rebuild `USER_STORY`, and validate again before continuing.
+This guarantees that the goal stored in ROADMAP.md will satisfy the same guard that the verifier applies later.
+
+If `RE_PROMPT_USER_STORY=true`, re-run only the offending prompt field(s). Rebuild `USER_STORY`. Validate it again before you continue.
 
 ## 4. SPIDR splitting check
 
-Run the SPIDR rules from `@~/.claude/gsd-core/references/spidr-splitting.md`. Briefly:
+Run the SPIDR rules from `@~/.claude/gsd-core/references/spidr-splitting.md`. The summary follows.
 
-**Trigger evaluation.** Check the assembled `USER_STORY` against the four size signals from the reference (compound capabilities, multi-actor, length > 120 chars, vague capability). If none fire, **skip SPIDR** entirely — go to step 5.
+**Trigger evaluation.** Check the assembled `USER_STORY` against the four size signals from the reference:
+- Compound capabilities
+- Multi-actor
+- Length > 120 chars
+- Vague capability
+
+If none fire, **skip SPIDR** entirely. Go to step 5.
 
 **If SPIDR triggers.**
 
@@ -129,9 +140,9 @@ a) Restate the story to the user:
 
 > "Your story: «${USER_STORY}»
 >
-> This story has [signal description, e.g., 'two compound capabilities joined by and']. Splitting it into multiple phases will produce a cleaner Walking Skeleton and reduce the risk of mid-phase scope creep.
+> This story has [signal description, for example, 'two compound capabilities joined by and']. A split into multiple phases will produce a cleaner Walking Skeleton. It will also reduce the risk of mid-phase scope creep.
 >
-> Want to walk through SPIDR splitting?"
+> Do you want to use SPIDR splitting?"
 
 Use `AskUserQuestion` with options [Yes, walk through SPIDR / No, proceed with the story as-is].
 
@@ -143,13 +154,13 @@ b) Ask which SPIDR axis fits best:
 
 > "Which axis best fits how to split this story?"
 
-Use `AskUserQuestion` with the five options from `spidr-splitting.md` (Spike / Paths / Interfaces / Data / Rules). Each option includes its targeted question as the description so the user can pick by understanding what each axis means.
+Use `AskUserQuestion` with the five options from `spidr-splitting.md` (Spike / Paths / Interfaces / Data / Rules). Each option includes its targeted question as the description. This lets the user understand what each axis means before they pick an axis.
 
-c) Walk through the chosen axis with **one** targeted question (not all five). For example, if the user picked "Paths":
+c) Use **one** targeted question for the chosen axis, not all five. For example, if the user picked "Paths":
 
 > "Does this feature have a happy path and one or more error/edge paths?"
 
-Free-text response. Workflow parses to identify the split.
+Accept a free-text response. The workflow parses the response to identify the split.
 
 d) Produce a split proposal. Example:
 
@@ -159,11 +170,11 @@ d) Produce a split proposal. Example:
 >
 > Accept this split?"
 
-Use `AskUserQuestion` [Accept / Modify / Reject].
+Use `AskUserQuestion` [Accept / Change / Reject].
 
-- **Accept**: `USER_STORY` becomes the first split's story (`${HAPPY_STORY}` in the example). Surface the remaining splits as a list of `/gsd:phase` invocations the user can run after this command completes — do NOT auto-create the new phases (preserve user control over numbering).
-- **Modify**: re-prompt the splits one more time, then accept or reject.
-- **Reject**: revert `USER_STORY` to the original, proceed without splitting.
+- **Accept**: `USER_STORY` becomes the first split's story (`${HAPPY_STORY}` in the example). Show the remaining splits as a list of `/gsd:phase` invocations. The user can run them after this command completes. Do NOT auto-create the new phases. This preserves user control over numbering.
+- **Change**: re-prompt for the splits one more time. Then accept or reject.
+- **Reject**: revert `USER_STORY` to the original. Proceed without splitting.
 
 ## 5. Update ROADMAP.md
 
@@ -179,13 +190,13 @@ Replace with: `**Goal:** ${USER_STORY}`
 If `**Mode:**` already exists in the section (replacing or re-running), update it to `**Mode:** mvp`.
 If `**Mode:**` does not exist, insert `**Mode:** mvp` on the line immediately after `**Goal:**`.
 
-Show the user a unified diff (lines being changed) and ask:
+Show the user a unified diff of the lines that will change. Ask:
 
 > "Apply these changes to ROADMAP.md?"
 
-Use `AskUserQuestion` [Apply / Cancel]. On Cancel, exit without writing.
+Use `AskUserQuestion` [Apply / Cancel]. If the user selects Cancel, exit without writing.
 
-On Apply, write the updated `ROADMAP.md` atomically (read-edit-write).
+If the user selects Apply, write the updated `ROADMAP.md` atomically (read-edit-write).
 
 ## 6. Verify the write
 
@@ -198,13 +209,13 @@ Assert:
 - `NEW_MODE` equals `mvp`
 - `NEW_GOAL` equals the assembled user story
 
-If either assertion fails, surface the discrepancy to the user and exit. Do not proceed to plan-phase delegation with a half-applied write.
+If either assertion fails, show the discrepancy to the user. Exit. Do not proceed to plan-phase delegation with a half-applied write.
 
 ## 7. Delegate to /gsd:plan-phase
 
-Invoke `/gsd:plan-phase ${PHASE}` (no flags). Phase 1's MVP_MODE resolution chain (CLI flag → roadmap mode → config → false) will detect the new `**Mode:** mvp` line and run plan-phase in vertical-slice mode automatically.
+Invoke `/gsd:plan-phase ${PHASE}` (no flags). Phase 1's MVP_MODE resolution chain (CLI flag → roadmap mode → config → false) will detect the new `**Mode:** mvp` line. It will run plan-phase in vertical-slice mode automatically.
 
-The Walking Skeleton gate (also from Phase 1) will fire automatically if `${PHASE} == "01"` and there are zero prior phase summaries.
+If `${PHASE} == "01"` and there are zero before phase summaries, the Walking Skeleton gate will fire automatically. This gate also comes from Phase 1.
 
 ## 8. Surface deferred phase splits (if any)
 
@@ -223,6 +234,6 @@ If SPIDR produced a split in step 4, append a final user-facing message:
 
 ## 9. Exit
 
-Workflow ends. The phase is now in MVP mode with a planned PLAN.md, optionally with deferred follow-up phases surfaced for the user.
+The workflow ends. The phase is now in MVP mode with a planned PLAN.md. The workflow optionally shows deferred follow-up phases to the user.
 
 </process>

@@ -1,11 +1,13 @@
 @~/.claude/gsd-core/references/response-language-directive.md
 
 <purpose>
-Edit any field of an existing phase in ROADMAP.md in place. The phase number and position are always preserved. Guarded against in-progress and completed phases unless --force is passed. Validates depends_on references before writing. Shows a diff and requests confirmation before writing.
+Edit any field of an existing phase in ROADMAP.md in place. Always preserve the phase number and position.
+
+Do not edit in-progress or completed phases unless the user passes --force. Validate depends_on references before writing. Show a diff and ask for confirmation before writing.
 </purpose>
 
 <required_reading>
-Read all files referenced by the invoking prompt's execution_context before starting.
+Before you start, read all files that the invoking prompt's execution_context references.
 </required_reading>
 
 <process>
@@ -20,7 +22,7 @@ Examples:
   `/gsd-edit-phase 5 --force` → phase = 5, force = true
   `/gsd-edit-phase 12.1`    → phase = 12.1, force = false
 
-If no argument provided:
+If the user provides no argument:
 
 ```
 ERROR: Phase number required
@@ -46,7 +48,7 @@ INIT=$(gsd_run query init.phase-op ${GSD_WS:+--ws=${GSD_WS##* }} "${target}")
 if [[ "$INIT" == @file:* ]]; then INIT=$(cat "${INIT#@file:}"); fi
 ```
 
-Check `roadmap_exists` from init JSON. If false:
+Read `roadmap_exists` from the init JSON. If it is false:
 ```
 ERROR: No roadmap found (.planning/ROADMAP.md)
 Run /gsd:new-project to initialize.
@@ -75,15 +77,15 @@ Extract from the result:
 - `phase_name` — the phase title
 - `goal` — the phase goal/description
 - `success_criteria` — array of criteria
-- `section` — full raw section text (preserves depends_on, requirements, plans, etc.)
+- `section` — full raw section text (preserves depends_on, requirements, plans, and other content)
 
-Also parse the full section text to extract additional fields not in the SDK result:
+Also parse the full section text to extract more fields not in the SDK result:
 - `depends_on` — from `**Depends on:** ...` or `**Depends on**: ...` line
 - `requirements` — from `**Requirements:** ...` block if present
 </step>
 
 <step name="check_phase_status">
-Determine the phase status from disk. Compare against STATE.md current phase:
+Find the phase status from disk. Compare it with the current phase in STATE.md:
 
 ```bash
 ANALYZE=$(gsd_run query roadmap analyze)
@@ -109,7 +111,7 @@ To edit anyway, run:
 
 Exit.
 
-If `--force` was passed and status is `in_progress` or `completed`, continue with a warning printed to the user:
+If the user passed `--force` and status is `in_progress` or `completed`, show the user a warning and continue:
 
 ```
 WARNING: Editing Phase {target} which is {status}. Proceeding due to --force.
@@ -117,7 +119,7 @@ WARNING: Editing Phase {target} which is {status}. Proceeding due to --force.
 </step>
 
 <step name="present_current_values">
-Display the current phase fields clearly:
+Show the current phase fields clearly:
 
 ```
 Current values for Phase {target}: {phase_name}
@@ -153,7 +155,7 @@ Wait for user input.
 
 **If user chose [1] Edit specific fields:**
 
-Ask which fields to edit. For each field the user wants to change, prompt for the new value. Only fields the user explicitly answers become updates; empty answers preserve the existing value.
+Ask which fields to edit. For each field the user wants to change, ask for the new value. Update only fields for which the user gives an explicit answer. For empty answers, preserve the existing value.
 
 ```
 Which fields do you want to update? (comma-separated or "all")
@@ -179,13 +181,13 @@ Describe the revised intent for Phase {target} (replace the current description)
 Wait for user input. Use the clarified intent to rewrite all fields:
 - Generate a clear, concise `title` from the intent
 - Write a complete `goal` statement
-- Produce updated `requirements` if the original had them
+- If the original had `requirements`, produce updated `requirements`
 - Generate `success_criteria` (3-5 measurable criteria)
 - Preserve `depends_on` unless the user explicitly mentioned changing it
 </step>
 
 <step name="validate_depends_on">
-If `depends_on` is being updated (or preserved as non-empty), validate that every referenced phase number exists in ROADMAP.md:
+If you update `depends_on` or preserve it as non-empty, validate that every referenced phase number exists in ROADMAP.md:
 
 ```bash
 ALL_PHASES=$(gsd_run query roadmap analyze)
@@ -194,8 +196,8 @@ ALL_PHASES=$(gsd_run query roadmap analyze)
 Parse the `phases` array to get all valid phase numbers.
 
 For each phase number referenced in `depends_on`:
-- Normalize it (strip whitespace, "Phase" prefix if present)
-- Check it is in the valid phase numbers set
+- Normalize it (strip whitespace and the "Phase" prefix if present)
+- Make sure that it is in the valid phase numbers set
 - It must not reference itself (phase {target})
 
 If any reference is invalid:
@@ -212,7 +214,7 @@ Exit (do not write).
 </step>
 
 <step name="show_diff_and_confirm">
-Build the updated phase section by applying the changes to the original `section` text:
+Apply the changes to the original `section` text to build the updated phase section:
 
 - For `title`: replace the heading text after `Phase {N}:`
 - For `goal`: replace the `**Goal:**` line value
@@ -221,7 +223,7 @@ Build the updated phase section by applying the changes to the original `section
 - For `success_criteria`: replace the numbered list under `**Success Criteria**:`
 - For full regeneration: rebuild the entire section from the new field values
 
-Show a unified-style diff of old vs. new:
+Show a unified-style diff of the old and new sections:
 
 ```
 Proposed changes to Phase {target}:
@@ -240,7 +242,7 @@ Wait for confirmation. If the user says `n`, exit without writing.
 </step>
 
 <step name="write_updated_phase">
-Before writing, capture the current milestone scope (window scope + phase set) so the write can be verified against it:
+Before writing, capture the current milestone scope (window scope + phase set). Use it to verify the write:
 
 ```bash
 SCOPE_BEFORE=$(gsd_run query roadmap milestone-scope)
@@ -248,15 +250,19 @@ SCOPE_BEFORE=$(gsd_run query roadmap milestone-scope)
 
 Write the updated phase back in place in ROADMAP.md.
 
-Read the full ROADMAP.md content, locate the phase section by its header (`## Phase {N}:` or `### Phase {N}:`), and replace exactly the old section text with the new section text. All content before and after the section (including other phases, milestone headers, and the summary checklist) must be left unchanged.
+Read the full ROADMAP.md content. Find the phase section by its header (`## Phase {N}:` or `### Phase {N}:`). Replace exactly the old section text with the new section text.
 
-After writing, re-derive the milestone scope and compare it to the capture:
+All content before and after the section must stay unchanged. This includes other phases, milestone headers, and the summary checklist.
+
+After writing, derive the milestone scope again and compare it with the captured scope:
 
 ```bash
 SCOPE_AFTER=$(gsd_run query roadmap milestone-scope)
 ```
 
-If `scope` or `phases` differs from SCOPE_BEFORE, the replacement text introduced a heading that terminates the current milestone window (a level 1-3 heading carrying a version token, a ✅/📋/🚧/🔄 marker, or the word "Milestone"). Restore ROADMAP.md by replacing the new section text with the original section text, then report and stop — do NOT update STATE.md and do NOT retry the write:
+If `scope` or `phases` differs from SCOPE_BEFORE, the replacement text introduced a heading that stops the current milestone window. This is a level 1-3 heading with a version token, a ✅/📋/🚧/🔄 marker, or the word "Milestone".
+
+Restore ROADMAP.md by replacing the new section text with the original section text. Then report the error and stop. Do NOT update STATE.md and do NOT retry the write:
 
 ```
 ERROR: edit rejected — milestone scope changed
@@ -278,7 +284,7 @@ gsd_run query state.add-roadmap-evolution \
 </step>
 
 <step name="completion">
-Present completion summary:
+Show the completion summary:
 
 ```
 Phase {target} updated in ROADMAP.md.
@@ -300,27 +306,27 @@ Fields changed: {changed_field_list}
 </process>
 
 <anti_patterns>
-- Don't renumber the phase — number and position must be preserved exactly
-- Don't modify other phases when editing one
-- Don't skip depends_on validation (invalid references block writes)
-- Don't write without showing a diff and getting confirmation
-- Don't edit in_progress/completed phases without --force
-- Don't use raw Write on ROADMAP.md without reading it first; always replace section in place
-- Don't modify the phase directory structure — only ROADMAP.md changes
-- Don't introduce a milestone-scoping heading (level 1-3 with a version token, ✅/📋/🚧/🔄 marker, or "Milestone") in field values — it terminates the current milestone window; the post-write scope check rolls the edit back
-- Don't commit the change — that's the user's decision
+- Do not renumber the phase. The number and position must stay exactly the same
+- When you edit one phase, do not change other phases
+- Do not skip depends_on validation. Invalid references block writes
+- Do not write without showing a diff and getting confirmation
+- Do not edit in_progress/completed phases without --force
+- Do not use raw Write on ROADMAP.md without reading it first. Always replace the section in place
+- Do not change the phase directory structure. Only ROADMAP.md changes
+- Do not introduce a milestone-scoping heading in field values. This heading stops the current milestone window. The post-write scope check rolls back the edit. A milestone-scoping heading is level 1-3 with a version token, ✅/📋/🚧/🔄 marker, or "Milestone"
+- Do not commit the change. The user makes that decision
 </anti_patterns>
 
 <success_criteria>
 Edit-phase is complete when:
 
 - [ ] Phase {target} found and loaded from ROADMAP.md
-- [ ] Status check performed; in_progress/completed blocked without --force
+- [ ] Status check done. in_progress/completed blocked without --force
 - [ ] Current values presented to user
 - [ ] User chose edit mode (specific fields or full regeneration)
-- [ ] depends_on references validated; invalid references blocked
+- [ ] depends_on references validated. Invalid references blocked
 - [ ] Diff shown and confirmed by user
-- [ ] Updated phase written back in place; number, position, and status preserved
+- [ ] Updated phase written back in place. Number, position, and status preserved
 - [ ] Milestone scope verified unchanged after the write (rollback + error on mismatch)
 - [ ] STATE.md Roadmap Evolution updated
 - [ ] User informed of next steps
